@@ -1,0 +1,33 @@
+{
+  "name": "phase9-archive-callback",
+  "options": {
+    "timeout_ms": 5000,
+    "max_body_bytes": 1048576
+  },
+  "cases": [
+    {
+      "name": "archive callback verify request",
+      "method": "GET",
+      "path": "/api/v1/archive/callback/ent-1?msg_signature=sig&timestamp=123&nonce=n&echostr=encrypted"
+    },
+    {
+      "name": "archive callback event request",
+      "method": "POST",
+      "path": "/api/v1/archive/callback/ent-1?msg_signature=sig&timestamp=123&nonce=n",
+      "body": "<xml><Encrypt>encrypted</Encrypt></xml>"
+    },
+    {
+      "name": "archive callback receipts missing bearer",
+      "method": "GET",
+      "path": "/api/v1/archive/callback/receipts?enterprise_id=ent-1&event_name=change_external_contact&page=1&limit=50"
+    },
+    {
+      "name": "archive callback receipts invalid page",
+      "method": "GET",
+      "path": "/api/v1/archive/callback/receipts?page=0",
+      "headers": {
+        "Authorization": "Bearer test-token"
+      }
+    }
+  ]
+}

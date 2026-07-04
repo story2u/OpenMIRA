@@ -1,0 +1,31 @@
+{
+  "name": "phase1-runtime-probes",
+  "options": {
+    "timeout_ms": 5000,
+    "max_body_bytes": 1048576
+  },
+  "cases": [
+    {
+      "name": "root",
+      "method": "GET",
+      "path": "/"
+    },
+    {
+      "name": "healthz",
+      "method": "GET",
+      "path": "/healthz"
+    },
+    {
+      "name": "readyz",
+      "method": "GET",
+      "path": "/readyz",
+      "skip_body_compare": true
+    },
+    {
+      "name": "metrics",
+      "method": "GET",
+      "path": "/metrics",
+      "skip_body_compare": true
+    }
+  ]
+}

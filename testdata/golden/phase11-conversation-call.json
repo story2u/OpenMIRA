@@ -1,0 +1,69 @@
+{
+  "name": "phase11-conversation-call",
+  "options": {
+    "timeout_ms": 5000,
+    "max_body_bytes": 1048576
+  },
+  "cases": [
+    {
+      "name": "missing bearer token on conversation call",
+      "method": "POST",
+      "path": "/api/v1/conversations/conv-golden-0001/call",
+      "body": "{\"device_id\":\"zimo\",\"call_type\":\"voice\",\"source\":\"cloud-web\"}"
+    },
+    {
+      "name": "invalid bearer token on conversation call",
+      "method": "POST",
+      "path": "/api/v1/conversations/conv-golden-0001/call",
+      "headers": {
+        "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJ3ZXdvcmstY2xvdWQiLCJzdWIiOiJjcy0wMDEiLCJuYW1lIjoi5a6i5pyN5LiAIiwicm9sZSI6ImNzIiwiZXhwIjo0MTAyNDQ0ODAwLCJqdGkiOiJqd3QtaW52YWxpZC1nb2xkZW4ifQ.invalidsignature"
+      },
+      "body": "{\"device_id\":\"zimo\",\"call_type\":\"video\",\"source\":\"cloud-web\"}"
+    },
+    {
+      "name": "missing bearer token on conversation call hangup",
+      "method": "POST",
+      "path": "/api/v1/conversations/conv-golden-0001/call/hangup",
+      "body": "{\"device_id\":\"zimo\",\"source\":\"cloud-web\"}"
+    },
+    {
+      "name": "invalid bearer token on conversation call hangup",
+      "method": "POST",
+      "path": "/api/v1/conversations/conv-golden-0001/call/hangup",
+      "headers": {
+        "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJ3ZXdvcmstY2xvdWQiLCJzdWIiOiJjcy0wMDEiLCJuYW1lIjoi5a6i5pyN5LiAIiwicm9sZSI6ImNzIiwiZXhwIjo0MTAyNDQ0ODAwLCJqdGkiOiJqd3QtaW52YWxpZC1nb2xkZW4ifQ.invalidsignature"
+      },
+      "body": "{\"device_id\":\"zimo\",\"source\":\"cloud-web\"}"
+    },
+    {
+      "name": "missing bearer token on conversation call availability",
+      "method": "POST",
+      "path": "/api/v1/conversations/conv-golden-0001/call/availability",
+      "body": "{\"device_id\":\"zimo\",\"call_type\":\"voice\",\"source\":\"cloud-web\"}"
+    },
+    {
+      "name": "invalid bearer token on conversation call availability",
+      "method": "POST",
+      "path": "/api/v1/conversations/conv-golden-0001/call/availability",
+      "headers": {
+        "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJ3ZXdvcmstY2xvdWQiLCJzdWIiOiJjcy0wMDEiLCJuYW1lIjoi5a6i5pyN5LiAIiwicm9sZSI6ImNzIiwiZXhwIjo0MTAyNDQ0ODAwLCJqdGkiOiJqd3QtaW52YWxpZC1nb2xkZW4ifQ.invalidsignature"
+      },
+      "body": "{\"device_id\":\"zimo\",\"call_type\":\"video\",\"source\":\"cloud-web\"}"
+    },
+    {
+      "name": "missing bearer token on conversation call reservation release",
+      "method": "POST",
+      "path": "/api/v1/conversations/conv-golden-0001/call/reservation/release",
+      "body": "{\"device_id\":\"zimo\",\"reservation_id\":\"reservation-golden-0001\",\"source\":\"cloud-web\"}"
+    },
+    {
+      "name": "invalid bearer token on conversation call reservation release",
+      "method": "POST",
+      "path": "/api/v1/conversations/conv-golden-0001/call/reservation/release",
+      "headers": {
+        "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJ3ZXdvcmstY2xvdWQiLCJzdWIiOiJjcy0wMDEiLCJuYW1lIjoi5a6i5pyN5LiAIiwicm9sZSI6ImNzIiwiZXhwIjo0MTAyNDQ0ODAwLCJqdGkiOiJqd3QtaW52YWxpZC1nb2xkZW4ifQ.invalidsignature"
+      },
+      "body": "{\"device_id\":\"zimo\",\"reservation_id\":\"reservation-golden-0001\",\"source\":\"cloud-web\"}"
+    }
+  ]
+}

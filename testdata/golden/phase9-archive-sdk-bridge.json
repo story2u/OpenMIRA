@@ -1,0 +1,36 @@
+{
+  "name": "phase9-archive-sdk-bridge",
+  "options": {
+    "timeout_ms": 5000,
+    "max_body_bytes": 1048576
+  },
+  "cases": [
+    {
+      "name": "sdk pull default scope",
+      "method": "POST",
+      "path": "/api/v1/archive/sdk/pull",
+      "body": "{\"corp_id\":\"corp-1\",\"corp_secret\":\"secret-1\",\"limit\":200}"
+    },
+    {
+      "name": "sdk pull raw bridge token",
+      "method": "POST",
+      "path": "/api/v1/archive/sdk/pull",
+      "headers": {
+        "Authorization": "bridge-token"
+      },
+      "body": "{\"corp_id\":\"corp-1\",\"corp_secret\":\"secret-1\"}"
+    },
+    {
+      "name": "sdk media pull requires sdk file id",
+      "method": "POST",
+      "path": "/api/v1/archive/sdk/media/pull",
+      "body": "{\"corp_id\":\"corp-1\",\"corp_secret\":\"secret-1\"}"
+    },
+    {
+      "name": "sdk media pull default scope",
+      "method": "POST",
+      "path": "/api/v1/archive/sdk/media/pull",
+      "body": "{\"corp_id\":\"corp-1\",\"corp_secret\":\"secret-1\",\"sdk_file_id\":\"file-1\",\"index_buf\":\"\"}"
+    }
+  ]
+}

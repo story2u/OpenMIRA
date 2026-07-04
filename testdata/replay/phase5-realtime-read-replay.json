@@ -1,0 +1,22 @@
+{
+  "name": "phase5-realtime-read-replay",
+  "options": {
+    "ignore_json_fields": [
+      "trace_id",
+      "seq",
+      "name",
+      "event_type",
+      "after_cursor",
+      "created_at",
+      "time",
+      "cursor",
+      "media_id"
+  ]},
+  "cases": [
+    {
+      "name": "realtime read parity",
+      "python": "phase5-realtime-read-replay-python.json",
+      "go": "phase5-realtime-read-replay-go.json"
+    }
+  ]
+}

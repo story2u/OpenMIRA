@@ -1,0 +1,24 @@
+{
+  "name": "phase4-sop-platform-test",
+  "options": {
+    "timeout_ms": 5000,
+    "max_body_bytes": 1048576
+  },
+  "cases": [
+    {
+      "name": "missing bearer token",
+      "method": "POST",
+      "path": "/api/v1/admin/sop/platform/test",
+      "body": "{\"task_url\":\"https://platform.example/tasks\"}"
+    },
+    {
+      "name": "invalid bearer token",
+      "method": "POST",
+      "path": "/api/v1/admin/sop/platform/test",
+      "headers": {
+        "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJ3ZXdvcmstY2xvdWQiLCJzdWIiOiJhZG1pbi0wMDEiLCJuYW1lIjoiQWRtaW4iLCJyb2xlIjoiYWRtaW4iLCJleHAiOjQxMDI0NDQ4MDAsImp0aSI6Imp3dC1zb3AtcGxhdGZvcm0tdGVzdC1pbnZhbGlkIn0.invalidsignature"
+      },
+      "body": "{\"task_url\":\"https://platform.example/tasks\"}"
+    }
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "name": "phase6-task-create",
+  "options": {
+    "timeout_ms": 5000,
+    "max_body_bytes": 1048576,
+    "ignore_json_fields": ["created_at", "updated_at", "trace_id"]
+  },
+  "cases": [
+    {
+      "name": "missing auth on task create",
+      "method": "POST",
+      "path": "/api/v1/tasks",
+      "body": "{\"task_id\":\"task-golden-0001\",\"source\":\"cloud-web\",\"target\":{\"agent_id\":\"sdk:zimo\",\"device_id\":\"zimo\"},\"task_type\":\"send_text\",\"payload\":{\"username\":\"Qiu\",\"receiver\":\"Qiu\",\"text\":\"hello\",\"queue\":\"fast\"},\"created_at\":\"2026-06-29T09:00:00Z\",\"trace_id\":\"trace-golden-0001\"}"
+    },
+    {
+      "name": "invalid bearer on task create",
+      "method": "POST",
+      "path": "/api/v1/tasks",
+      "headers": {
+        "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJ3ZXdvcmstY2xvdWQiLCJzdWIiOiJjcy0wMDEiLCJuYW1lIjoi5a6i5pyN5LiAIiwicm9sZSI6ImNzIiwiZXhwIjo0MTAyNDQ0ODAwLCJqdGkiOiJqd3QtaW52YWxpZC1nb2xkZW4ifQ.invalidsignature"
+      },
+      "body": "{\"task_id\":\"task-golden-0002\",\"source\":\"cloud-web\",\"target\":{\"agent_id\":\"sdk:zimo\",\"device_id\":\"zimo\"},\"task_type\":\"send_text\",\"payload\":{\"username\":\"Qiu\",\"receiver\":\"Qiu\",\"text\":\"hello\",\"queue\":\"fast\"},\"created_at\":\"2026-06-29T09:00:00Z\",\"trace_id\":\"trace-golden-0002\"}"
+    },
+    {
+      "name": "missing auth on retry",
+      "method": "POST",
+      "path": "/api/v1/tasks/task-golden-0001/retry"
+    }
+  ]
+}

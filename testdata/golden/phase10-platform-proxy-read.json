@@ -1,0 +1,79 @@
+{
+  "name": "phase10-platform-proxy-read",
+  "options": {
+    "timeout_ms": 5000,
+    "max_body_bytes": 1048576
+  },
+  "cases": [
+    {
+      "name": "platform options store category",
+      "method": "GET",
+      "path": "/api/v1/platform/options?option=store%7Ccategory&store_id=1&enterprise_id=ent-a&account_wework_user_id=agent-a"
+    },
+    {
+      "name": "platform community options alias",
+      "method": "GET",
+      "path": "/api/v1/platform/community/options?option=user"
+    },
+    {
+      "name": "platform category price",
+      "method": "GET",
+      "path": "/api/v1/platform/category-price"
+    },
+    {
+      "name": "platform community category price alias",
+      "method": "GET",
+      "path": "/api/v1/platform/community/category-price"
+    },
+    {
+      "name": "platform customer info",
+      "method": "GET",
+      "path": "/api/v1/platform/customer/info?external_userid=wm-1&corp_id=ww-corp&wechat=agent-a"
+    },
+    {
+      "name": "platform stores keyword",
+      "method": "GET",
+      "path": "/api/v1/platform/stores?keyword=%E5%8D%97%E5%B1%B1&customer_id=10"
+    },
+    {
+      "name": "platform store detail",
+      "method": "GET",
+      "path": "/api/v1/platform/stores/1"
+    },
+    {
+      "name": "platform orders list",
+      "method": "GET",
+      "path": "/api/v1/platform/orders?customer_id=10&store_id=1&order_no=O-1&status=1&page=1&limit=20"
+    },
+    {
+      "name": "platform orders check customer",
+      "method": "GET",
+      "path": "/api/v1/platform/orders/check-customer?customer_id=10&kind=1"
+    },
+    {
+      "name": "platform order detail",
+      "method": "GET",
+      "path": "/api/v1/platform/orders/7"
+    },
+    {
+      "name": "platform category prepay",
+      "method": "GET",
+      "path": "/api/v1/platform/category/prepay?category_id=3"
+    },
+    {
+      "name": "platform schedule hours",
+      "method": "GET",
+      "path": "/api/v1/platform/schedule/hours?store_id=1&date=2026-07-01&user_id=7294"
+    },
+    {
+      "name": "platform collections",
+      "method": "GET",
+      "path": "/api/v1/platform/collections?page=1&limit=10"
+    },
+    {
+      "name": "platform user appid",
+      "method": "GET",
+      "path": "/api/v1/platform/user/appid"
+    }
+  ]
+}

@@ -1,0 +1,29 @@
+{
+  "name": "phase9-archive-events-notify",
+  "options": {
+    "timeout_ms": 5000,
+    "max_body_bytes": 1048576
+  },
+  "cases": [
+    {
+      "name": "event notify default scope",
+      "method": "POST",
+      "path": "/api/v1/archive/events/notify",
+      "body": "{\"enterprise_id\":\"default\",\"source\":\"self_decrypt\",\"cursor\":\"42\",\"limit\":200,\"event\":\"message.new\",\"vendor\":\"bridge\",\"payload\":{\"msgid\":\"m-1\"}}"
+    },
+    {
+      "name": "event notify empty body invalid",
+      "method": "POST",
+      "path": "/api/v1/archive/events/notify"
+    },
+    {
+      "name": "event notify raw bridge token",
+      "method": "POST",
+      "path": "/api/v1/archive/events/notify",
+      "headers": {
+        "Authorization": "bridge-token"
+      },
+      "body": "{}"
+    }
+  ]
+}

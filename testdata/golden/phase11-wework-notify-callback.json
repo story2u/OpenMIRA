@@ -1,0 +1,26 @@
+{
+  "name": "phase11-wework-notify-callback",
+  "options": {
+    "timeout_ms": 5000,
+    "max_body_bytes": 1048576
+  },
+  "cases": [
+    {
+      "name": "wework notify callback verify request",
+      "method": "GET",
+      "path": "/api/v1/notify/event/ent-1?msg_signature=sig&timestamp=123&nonce=n&echostr=encrypted"
+    },
+    {
+      "name": "wework notify callback event request",
+      "method": "POST",
+      "path": "/api/v1/notify/event/ent-1?msg_signature=sig&timestamp=123&nonce=n",
+      "body": "<xml><Encrypt>encrypted</Encrypt></xml>"
+    },
+    {
+      "name": "wework notify callback missing signature",
+      "method": "POST",
+      "path": "/api/v1/notify/event/ent-1",
+      "body": "<xml><Encrypt>encrypted</Encrypt></xml>"
+    }
+  ]
+}

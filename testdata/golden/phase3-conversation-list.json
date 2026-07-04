@@ -1,0 +1,22 @@
+{
+  "name": "phase3-conversation-list",
+  "options": {
+    "timeout_ms": 5000,
+    "max_body_bytes": 1048576
+  },
+  "cases": [
+    {
+      "name": "missing bearer token",
+      "method": "GET",
+      "path": "/api/v1/conversations"
+    },
+    {
+      "name": "invalid bearer token",
+      "method": "GET",
+      "path": "/api/v1/conversations?assignee_id=cs-001&account_name=main&q=Alice&unread_only=1&unassigned_only=true",
+      "headers": {
+        "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJ3ZXdvcmstY2xvdWQiLCJzdWIiOiJhZG1pbiIsInJvbGUiOiJhZG1pbiIsImV4cCI6NDEwMjQ0NDgwMCwianRpIjoiand0LWludmFsaWQtZ29sZGVuIn0.invalidsignature"
+      }
+    }
+  ]
+}

@@ -1,0 +1,5244 @@
+{
+  "python_root": "../Python",
+  "routes": [
+    {
+      "method": "GET",
+      "path": "/",
+      "route_path": "/",
+      "router": "router",
+      "router_prefix": "",
+      "source": "routes/health.py",
+      "line": 134
+    },
+    {
+      "method": "POST",
+      "path": "/agents/wework/login/event",
+      "route_path": "/agents/wework/login/event",
+      "router": "router",
+      "router_prefix": "",
+      "request_model": "AgentLoginStatusCallbackRequest",
+      "auth_dependencies": [
+        "optional_agent_auth"
+      ],
+      "source": "routes/actions_login_routes.py",
+      "line": 749
+    },
+    {
+      "method": "GET",
+      "path": "/api/p1/screen/{slot_index}",
+      "route_path": "/screen/{slot_index}",
+      "router": "router",
+      "router_prefix": "/api/p1",
+      "source": "routes/p1_screen.py",
+      "line": 148
+    },
+    {
+      "method": "GET",
+      "path": "/api/p1/screen/{slot_index}/api-url",
+      "route_path": "/screen/{slot_index}/api-url",
+      "router": "router",
+      "router_prefix": "/api/p1",
+      "response_model": "dict",
+      "source": "routes/p1_screen.py",
+      "line": 315
+    },
+    {
+      "method": "GET",
+      "path": "/api/p1/screen/{slot_index}/url",
+      "route_path": "/screen/{slot_index}/url",
+      "router": "router",
+      "router_prefix": "/api/p1",
+      "response_model": "P1ScreenUrl",
+      "source": "routes/p1_screen.py",
+      "line": 271
+    },
+    {
+      "method": "GET",
+      "path": "/api/p1/slots/ports",
+      "route_path": "/slots/ports",
+      "router": "router",
+      "router_prefix": "/api/p1",
+      "response_model": "dict",
+      "source": "routes/p1_screen.py",
+      "line": 347
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/accounts",
+      "route_path": "/accounts",
+      "router": "router",
+      "router_prefix": "/api/v1",
+      "auth_dependencies": [
+        "roles:admin,supervisor,cs"
+      ],
+      "source": "routes/accounts.py",
+      "line": 167
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/accounts",
+      "route_path": "/accounts",
+      "router": "router",
+      "router_prefix": "/api/v1",
+      "request_model": "AccountCreateRequest",
+      "auth_dependencies": [
+        "roles:admin,supervisor"
+      ],
+      "source": "routes/accounts.py",
+      "line": 285
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/accounts/batch",
+      "route_path": "/accounts/batch",
+      "router": "router",
+      "router_prefix": "/api/v1",
+      "auth_dependencies": [
+        "roles:admin,supervisor"
+      ],
+      "source": "routes/accounts.py",
+      "line": 478
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/accounts/{account_id}",
+      "route_path": "/accounts/{account_id}",
+      "router": "router",
+      "router_prefix": "/api/v1",
+      "auth_dependencies": [
+        "roles:admin,supervisor"
+      ],
+      "source": "routes/accounts.py",
+      "line": 318
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/accounts/{account_id}/ai-enabled",
+      "route_path": "/accounts/{account_id}/ai-enabled",
+      "router": "router",
+      "router_prefix": "/api/v1",
+      "request_model": "AccountAiEnabledSwitchRequest",
+      "auth_dependencies": [
+        "roles:admin,supervisor,cs"
+      ],
+      "source": "routes/accounts.py",
+      "line": 379
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/accounts/{account_id}/assign",
+      "route_path": "/accounts/{account_id}/assign",
+      "router": "router",
+      "router_prefix": "/api/v1",
+      "request_model": "AccountAssignRequest",
+      "auth_dependencies": [
+        "roles:admin,supervisor"
+      ],
+      "source": "routes/accounts.py",
+      "line": 337
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/accounts/{account_id}/unassign",
+      "route_path": "/accounts/{account_id}/unassign",
+      "router": "router",
+      "router_prefix": "/api/v1",
+      "auth_dependencies": [
+        "roles:admin,supervisor"
+      ],
+      "source": "routes/accounts.py",
+      "line": 360
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/ai-config",
+      "route_path": "/ai-config",
+      "router": "router",
+      "router_prefix": "/api/v1/admin",
+      "auth_dependencies": [
+        "roles:admin,supervisor"
+      ],
+      "source": "routes/admin_config.py",
+      "line": 2339
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/ai-config",
+      "route_path": "/ai-config",
+      "router": "router",
+      "router_prefix": "/api/v1/admin",
+      "request_model": "AiConfigUpdateRequestV2",
+      "auth_dependencies": [
+        "roles:admin,supervisor"
+      ],
+      "source": "routes/admin_config.py",
+      "line": 2767
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/ai-config/reply-logs",
+      "route_path": "/ai-config/reply-logs",
+      "router": "router",
+      "router_prefix": "/api/v1/admin",
+      "auth_dependencies": [
+        "roles:admin,supervisor"
+      ],
+      "source": "routes/admin_config.py",
+      "line": 2405
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/assignment-config",
+      "route_path": "/admin/assignment-config",
+      "router": "router",
+      "router_prefix": "/api/v1",
+      "auth_dependencies": [
+        "roles:admin,supervisor"
+      ],
+      "source": "routes/assignments.py",
+      "line": 193
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/assignment-config",
+      "route_path": "/admin/assignment-config",
+      "router": "router",
+      "router_prefix": "/api/v1",
+      "request_model": "AssignmentConfigUpdateRequest",
+      "auth_dependencies": [
+        "roles:admin,supervisor"
+      ],
+      "source": "routes/assignments.py",
+      "line": 199
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/audit-logs",
+      "route_path": "/audit-logs",
+      "router": "router",
+      "router_prefix": "/api/v1/admin",
+      "auth_dependencies": [
+        "roles:admin,supervisor"
+      ],
+      "source": "routes/audit_logs.py",
+      "line": 52
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/diagnostic/archive-missing-message-outbox/check",
+      "route_path": "/archive-missing-message-outbox/check",
+      "router": "router",
+      "router_prefix": "/api/v1/admin/diagnostic",
+      "request_model": "ArchiveMissingOutboxCheckRequest",
+      "auth_dependencies": [
+        "roles:admin"
+      ],
+      "source": "routes/diagnostic_archive_outbox.py",
+      "line": 263
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/diagnostic/archive-missing-message-outbox/replay",
+      "route_path": "/archive-missing-message-outbox/replay",
+      "router": "router",
+      "router_prefix": "/api/v1/admin/diagnostic",
+      "request_model": "ArchiveMissingOutboxReplayRequest",
+      "auth_dependencies": [
+        "roles:admin"
+      ],
+      "source": "routes/diagnostic_archive_outbox.py",
+      "line": 208
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/diagnostic/archive-sync-status",
+      "route_path": "/archive-sync-status",
+      "router": "router",
+      "router_prefix": "/api/v1/admin/diagnostic",
+      "auth_dependencies": [
+        "roles:admin"
+      ],
+      "source": "routes/diagnostic.py",
+      "line": 223
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/diagnostic/device-map",
+      "route_path": "/device-map",
+      "router": "router",
+      "router_prefix": "/api/v1/admin/diagnostic",
+      "auth_dependencies": [
+        "roles:admin"
+      ],
+      "source": "routes/diagnostic.py",
+      "line": 59
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/diagnostic/dirty-contacts",
+      "route_path": "/dirty-contacts",
+      "router": "router",
+      "router_prefix": "/api/v1/admin/diagnostic",
+      "auth_dependencies": [
+        "roles:admin"
+      ],
+      "source": "routes/diagnostic.py",
+      "line": 190
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/diagnostic/forked-conversations",
+      "route_path": "/forked-conversations",
+      "router": "router",
+      "router_prefix": "/api/v1/admin/diagnostic",
+      "auth_dependencies": [
+        "roles:admin"
+      ],
+      "source": "routes/diagnostic.py",
+      "line": 135
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/diagnostic/historical-timezone-cutover",
+      "route_path": "/historical-timezone-cutover",
+      "router": "router",
+      "router_prefix": "/api/v1/admin/diagnostic",
+      "request_model": "HistoricalTimezoneCutoverRequest",
+      "auth_dependencies": [
+        "roles:admin"
+      ],
+      "source": "routes/diagnostic.py",
+      "line": 261
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/diagnostic/orphan-conversations",
+      "route_path": "/orphan-conversations",
+      "router": "router",
+      "router_prefix": "/api/v1/admin/diagnostic",
+      "auth_dependencies": [
+        "roles:admin"
+      ],
+      "source": "routes/diagnostic.py",
+      "line": 83
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/enterprises",
+      "route_path": "",
+      "router": "router",
+      "router_prefix": "/api/v1/admin/enterprises",
+      "auth_dependencies": [
+        "roles:admin,supervisor"
+      ],
+      "source": "routes/enterprises.py",
+      "line": 49
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/enterprises",
+      "route_path": "",
+      "router": "router",
+      "router_prefix": "/api/v1/admin/enterprises",
+      "request_model": "EnterpriseUpsertRequest",
+      "auth_dependencies": [
+        "roles:admin,supervisor"
+      ],
+      "source": "routes/enterprises.py",
+      "line": 67
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/admin/enterprises/{enterprise_id}",
+      "route_path": "/{enterprise_id}",
+      "router": "router",
+      "router_prefix": "/api/v1/admin/enterprises",
+      "auth_dependencies": [
+        "roles:admin,supervisor"
+      ],
+      "source": "routes/enterprises.py",
+      "line": 118
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/knowledge/documents",
+      "route_path": "/documents",
+      "router": "admin_router",
+      "router_prefix": "/api/v1/admin/knowledge",
+      "auth_dependencies": [
+        "roles:admin,supervisor"
+      ],
+      "source": "routes/knowledge.py",
+      "line": 18
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/knowledge/documents",
+      "route_path": "/documents",
+      "router": "admin_router",
+      "router_prefix": "/api/v1/admin/knowledge",
+      "auth_dependencies": [
+        "roles:admin,supervisor"
+      ],
+      "source": "routes/knowledge.py",
+      "line": 25
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/admin/knowledge/documents/{doc_id}",
+      "route_path": "/documents/{doc_id}",
+      "router": "admin_router",
+      "router_prefix": "/api/v1/admin/knowledge",
+      "auth_dependencies": [
+        "roles:admin,supervisor"
+      ],
+      "source": "routes/knowledge.py",
+      "line": 54
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/admin/knowledge/documents/{doc_id}",
+      "route_path": "/documents/{doc_id}",
+      "router": "admin_router",
+      "router_prefix": "/api/v1/admin/knowledge",
+      "auth_dependencies": [
+        "roles:admin,supervisor"
+      ],
+      "source": "routes/knowledge.py",
+      "line": 38
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/knowledge/documents/{doc_id}/reindex",
+      "route_path": "/documents/{doc_id}/reindex",
+      "router": "admin_router",
+      "router_prefix": "/api/v1/admin/knowledge",
+      "auth_dependencies": [
+        "roles:admin,supervisor"
+      ],
+      "source": "routes/knowledge.py",
+      "line": 63
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/knowledge/search",
+      "route_path": "/search",
+      "router": "admin_router",
+      "router_prefix": "/api/v1/admin/knowledge",
+      "auth_dependencies": [
+        "roles:admin,supervisor"
+      ],
+      "source": "routes/knowledge.py",
+      "line": 72
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/observability/dashboard",
+      "route_path": "/dashboard",
+      "router": "router",
+      "router_prefix": "/api/v1/admin/observability",
+      "auth_dependencies": [
+        "roles:admin,supervisor"
+      ],
+      "source": "routes/observability.py",
+      "line": 26
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/scripts",
+      "route_path": "/scripts",
+      "router": "router",
+      "router_prefix": "/api/v1/admin",
+      "auth_dependencies": [
+        "roles:admin,supervisor"
+      ],
+      "source": "routes/admin_config.py",
+      "line": 2297
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/scripts",
+      "route_path": "/scripts",
+      "router": "router",
+      "router_prefix": "/api/v1/admin",
+      "request_model": "ReplyScriptUpsertRequest",
+      "auth_dependencies": [
+        "roles:admin,supervisor"
+      ],
+      "source": "routes/admin_config.py",
+      "line": 2302
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/admin/scripts/{script_id}",
+      "route_path": "/scripts/{script_id}",
+      "router": "router",
+      "router_prefix": "/api/v1/admin",
+      "auth_dependencies": [
+        "roles:admin,supervisor"
+      ],
+      "source": "routes/admin_config.py",
+      "line": 2326
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/sensitive-words",
+      "route_path": "/sensitive-words",
+      "router": "router",
+      "router_prefix": "/api/v1/admin",
+      "auth_dependencies": [
+        "roles:admin,supervisor"
+      ],
+      "source": "routes/admin_config.py",
+      "line": 2846
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/sensitive-words",
+      "route_path": "/sensitive-words",
+      "router": "router",
+      "router_prefix": "/api/v1/admin",
+      "request_model": "SensitiveWordUpsertRequest",
+      "auth_dependencies": [
+        "roles:admin,supervisor"
+      ],
+      "source": "routes/admin_config.py",
+      "line": 2851
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/admin/sensitive-words/{word_id}",
+      "route_path": "/sensitive-words/{word_id}",
+      "router": "router",
+      "router_prefix": "/api/v1/admin",
+      "auth_dependencies": [
+        "roles:admin,supervisor"
+      ],
+      "source": "routes/admin_config.py",
+      "line": 2869
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/sop/analytics/facts",
+      "route_path": "/sop/analytics/facts",
+      "router": "router",
+      "router_prefix": "/api/v1/admin",
+      "auth_dependencies": [
+        "roles:admin,supervisor"
+      ],
+      "source": "routes/admin_config.py",
+      "line": 2174
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/sop/analytics/stage-stats",
+      "route_path": "/sop/analytics/stage-stats",
+      "router": "router",
+      "router_prefix": "/api/v1/admin",
+      "auth_dependencies": [
+        "roles:admin,supervisor"
+      ],
+      "source": "routes/admin_config.py",
+      "line": 2154
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/sop/dispatch-tasks",
+      "route_path": "/sop/dispatch-tasks",
+      "router": "router",
+      "router_prefix": "/api/v1/admin",
+      "auth_dependencies": [
+        "roles:admin,supervisor"
+      ],
+      "source": "routes/admin_config.py",
+      "line": 1930
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/sop/dispatch-tasks/resend",
+      "route_path": "/sop/dispatch-tasks/resend",
+      "router": "router",
+      "router_prefix": "/api/v1/admin",
+      "auth_dependencies": [
+        "roles:admin,supervisor"
+      ],
+      "source": "routes/admin_config.py",
+      "line": 2101
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/sop/flows",
+      "route_path": "/sop/flows",
+      "router": "router",
+      "router_prefix": "/api/v1/admin",
+      "auth_dependencies": [
+        "roles:admin,supervisor"
+      ],
+      "source": "routes/admin_config.py",
+      "line": 1751
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/sop/flows",
+      "route_path": "/sop/flows",
+      "router": "router",
+      "router_prefix": "/api/v1/admin",
+      "request_model": "SopFlowConfigUpsertRequest",
+      "auth_dependencies": [
+        "roles:admin,supervisor"
+      ],
+      "source": "routes/admin_config.py",
+      "line": 1757
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/admin/sop/flows/{flow_id}",
+      "route_path": "/sop/flows/{flow_id}",
+      "router": "router",
+      "router_prefix": "/api/v1/admin",
+      "auth_dependencies": [
+        "roles:admin,supervisor"
+      ],
+      "source": "routes/admin_config.py",
+      "line": 1905
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/sop/media/local",
+      "route_path": "/sop/media/local",
+      "router": "router",
+      "router_prefix": "/api/v1/admin",
+      "auth_dependencies": [
+        "roles:admin,supervisor"
+      ],
+      "source": "routes/admin_config.py",
+      "line": 2262
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/sop/media/upload",
+      "route_path": "/sop/media/upload",
+      "router": "router",
+      "router_prefix": "/api/v1/admin",
+      "auth_dependencies": [
+        "roles:admin,supervisor"
+      ],
+      "source": "routes/admin_config.py",
+      "line": 2225
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/sop/platform/test",
+      "route_path": "/sop/platform/test",
+      "router": "router",
+      "router_prefix": "/api/v1/admin",
+      "auth_dependencies": [
+        "roles:admin,supervisor"
+      ],
+      "source": "routes/admin_config.py",
+      "line": 2203
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/sop/policies",
+      "route_path": "/sop/policies",
+      "router": "router",
+      "router_prefix": "/api/v1/admin",
+      "auth_dependencies": [
+        "roles:admin,supervisor"
+      ],
+      "source": "routes/admin_config.py",
+      "line": 1725
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/sop/policies",
+      "route_path": "/sop/policies",
+      "router": "router",
+      "router_prefix": "/api/v1/admin",
+      "request_model": "SopPolicyUpsertRequest",
+      "auth_dependencies": [
+        "roles:admin,supervisor"
+      ],
+      "source": "routes/admin_config.py",
+      "line": 1830
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/admin/sop/policies/{policy_id}",
+      "route_path": "/sop/policies/{policy_id}",
+      "router": "router",
+      "router_prefix": "/api/v1/admin",
+      "auth_dependencies": [
+        "roles:admin,supervisor"
+      ],
+      "source": "routes/admin_config.py",
+      "line": 1887
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/stats/agents",
+      "route_path": "/agents",
+      "router": "router",
+      "router_prefix": "/api/v1/admin/stats",
+      "auth_dependencies": [
+        "roles:admin,supervisor"
+      ],
+      "source": "routes/stats.py",
+      "line": 42
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/stats/ai-replies/breakdown",
+      "route_path": "/ai-replies/breakdown",
+      "router": "router",
+      "router_prefix": "/api/v1/admin/stats",
+      "auth_dependencies": [
+        "roles:admin,supervisor"
+      ],
+      "source": "routes/stats.py",
+      "line": 68
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/stats/ai-replies/overview",
+      "route_path": "/ai-replies/overview",
+      "router": "router",
+      "router_prefix": "/api/v1/admin/stats",
+      "auth_dependencies": [
+        "roles:admin,supervisor"
+      ],
+      "source": "routes/stats.py",
+      "line": 48
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/stats/ai-replies/trend",
+      "route_path": "/ai-replies/trend",
+      "router": "router",
+      "router_prefix": "/api/v1/admin/stats",
+      "auth_dependencies": [
+        "roles:admin,supervisor"
+      ],
+      "source": "routes/stats.py",
+      "line": 58
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/stats/overview",
+      "route_path": "/overview",
+      "router": "router",
+      "router_prefix": "/api/v1/admin/stats",
+      "auth_dependencies": [
+        "roles:admin,supervisor"
+      ],
+      "source": "routes/stats.py",
+      "line": 27
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/stats/trend",
+      "route_path": "/trend",
+      "router": "router",
+      "router_prefix": "/api/v1/admin/stats",
+      "auth_dependencies": [
+        "roles:admin,supervisor"
+      ],
+      "source": "routes/stats.py",
+      "line": 33
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/system-logs",
+      "route_path": "/system-logs",
+      "router": "router",
+      "router_prefix": "/api/v1/admin",
+      "auth_dependencies": [
+        "roles:admin,supervisor"
+      ],
+      "source": "routes/system_logs.py",
+      "line": 93
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/agents/heartbeat",
+      "route_path": "/agents/heartbeat",
+      "router": "router",
+      "router_prefix": "/api/v1",
+      "source": "routes/devices.py",
+      "line": 1561
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/archive/callback/receipts",
+      "route_path": "/callback/receipts",
+      "router": "router",
+      "router_prefix": "/api/v1/archive",
+      "auth_dependencies": [
+        "roles:admin"
+      ],
+      "source": "routes/archive.py",
+      "line": 702
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/archive/callback/{enterprise_id}",
+      "route_path": "/callback/{enterprise_id}",
+      "router": "router",
+      "router_prefix": "/api/v1/archive",
+      "source": "routes/archive.py",
+      "line": 737
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/archive/callback/{enterprise_id}",
+      "route_path": "/callback/{enterprise_id}",
+      "router": "router",
+      "router_prefix": "/api/v1/archive",
+      "source": "routes/archive.py",
+      "line": 810
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/archive/contacts/sync",
+      "route_path": "/contacts/sync",
+      "router": "router",
+      "router_prefix": "/api/v1/archive",
+      "request_model": "ArchiveContactsSyncRequest",
+      "auth_dependencies": [
+        "roles:admin,supervisor"
+      ],
+      "source": "routes/archive.py",
+      "line": 673
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/archive/cursor",
+      "route_path": "/cursor",
+      "router": "router",
+      "router_prefix": "/api/v1/archive",
+      "auth_dependencies": [
+        "roles:admin,supervisor"
+      ],
+      "source": "routes/archive.py",
+      "line": 531
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/archive/events/notify",
+      "route_path": "/events/notify",
+      "router": "router",
+      "router_prefix": "/api/v1/archive",
+      "request_model": "ArchiveEventNotifyRequest",
+      "source": "routes/archive.py",
+      "line": 917
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/archive/integration/test",
+      "route_path": "/integration/test",
+      "router": "router",
+      "router_prefix": "/api/v1/archive",
+      "auth_dependencies": [
+        "roles:admin,supervisor"
+      ],
+      "source": "routes/archive.py",
+      "line": 697
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/archive/media/files/{task_id}",
+      "route_path": "/media/files/{task_id}",
+      "router": "router",
+      "router_prefix": "/api/v1/archive",
+      "source": "routes/archive.py",
+      "line": 1148
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/archive/media/objects/{object_path:path}",
+      "route_path": "/media/objects/{object_path:path}",
+      "router": "router",
+      "router_prefix": "/api/v1/archive",
+      "source": "routes/archive.py",
+      "line": 1153
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/archive/media/sync/run",
+      "route_path": "/media/sync/run",
+      "router": "router",
+      "router_prefix": "/api/v1/archive",
+      "request_model": "ArchiveMediaRunRequest",
+      "source": "routes/archive.py",
+      "line": 981
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/archive/media/tasks",
+      "route_path": "/media/tasks",
+      "router": "router",
+      "router_prefix": "/api/v1/archive",
+      "source": "routes/archive.py",
+      "line": 963
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/archive/media/tasks/{task_id}/prepare",
+      "route_path": "/media/tasks/{task_id}/prepare",
+      "router": "router",
+      "router_prefix": "/api/v1/archive",
+      "auth_dependencies": [
+        "roles:admin,supervisor,cs"
+      ],
+      "source": "routes/archive.py",
+      "line": 1031
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/archive/messages/batch",
+      "route_path": "/messages/batch",
+      "router": "router",
+      "router_prefix": "/api/v1/archive",
+      "request_model": "ArchiveMessagesBatchRequest",
+      "auth_dependencies": [
+        "optional_agent_auth"
+      ],
+      "source": "routes/archive.py",
+      "line": 547
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/archive/official/check",
+      "route_path": "/official/check",
+      "router": "router",
+      "router_prefix": "/api/v1/archive",
+      "auth_dependencies": [
+        "roles:admin,supervisor"
+      ],
+      "source": "routes/archive.py",
+      "line": 691
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/archive/sdk/media/pull",
+      "route_path": "/sdk/media/pull",
+      "router": "router",
+      "router_prefix": "/api/v1/archive",
+      "source": "routes/archive.py",
+      "line": 952
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/archive/sdk/pull",
+      "route_path": "/sdk/pull",
+      "router": "router",
+      "router_prefix": "/api/v1/archive",
+      "source": "routes/archive.py",
+      "line": 941
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/archive/status",
+      "route_path": "/status",
+      "router": "router",
+      "router_prefix": "/api/v1/archive",
+      "auth_dependencies": [
+        "roles:admin,supervisor"
+      ],
+      "source": "routes/archive.py",
+      "line": 491
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/archive/sync/run",
+      "route_path": "/sync/run",
+      "router": "router",
+      "router_prefix": "/api/v1/archive",
+      "request_model": "ArchiveSyncRunRequest",
+      "source": "routes/archive.py",
+      "line": 571
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/archive/voice-transcriptions/retry",
+      "route_path": "/voice-transcriptions/retry",
+      "router": "router",
+      "router_prefix": "/api/v1/archive",
+      "request_model": "ArchiveVoiceTranscriptionRetryRequest",
+      "auth_dependencies": [
+        "roles:admin,supervisor,cs"
+      ],
+      "source": "routes/archive.py",
+      "line": 1059
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/assignments",
+      "route_path": "/assignments",
+      "router": "router",
+      "router_prefix": "/api/v1",
+      "auth_dependencies": [
+        "roles:admin,supervisor,cs"
+      ],
+      "source": "routes/assignments.py",
+      "line": 333
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/assignments/auto-assign",
+      "route_path": "/assignments/auto-assign",
+      "router": "router",
+      "router_prefix": "/api/v1",
+      "request_model": "AutoAssignRequest",
+      "auth_dependencies": [
+        "roles:admin,supervisor"
+      ],
+      "source": "routes/assignments.py",
+      "line": 420
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/assignments/claim",
+      "route_path": "/assignments/claim",
+      "router": "router",
+      "router_prefix": "/api/v1",
+      "request_model": "ConversationClaimRequest",
+      "auth_dependencies": [
+        "roles:admin,supervisor,cs"
+      ],
+      "source": "routes/assignments.py",
+      "line": 227
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/assignments/purge-all",
+      "route_path": "/assignments/purge-all",
+      "router": "router",
+      "router_prefix": "/api/v1",
+      "auth_dependencies": [
+        "roles:admin"
+      ],
+      "source": "routes/assignments.py",
+      "line": 621
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/assignments/release",
+      "route_path": "/assignments/release",
+      "router": "router",
+      "router_prefix": "/api/v1",
+      "request_model": "ConversationReleaseRequest",
+      "auth_dependencies": [
+        "roles:admin,supervisor,cs"
+      ],
+      "source": "routes/assignments.py",
+      "line": 274
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/assignments/workloads",
+      "route_path": "/assignments/workloads",
+      "router": "router",
+      "router_prefix": "/api/v1",
+      "auth_dependencies": [
+        "roles:admin,supervisor,cs"
+      ],
+      "source": "routes/assignments.py",
+      "line": 356
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/assignments/{conversation_id}",
+      "route_path": "/assignments/{conversation_id}",
+      "router": "router",
+      "router_prefix": "/api/v1",
+      "auth_dependencies": [
+        "roles:admin,supervisor,cs"
+      ],
+      "source": "routes/assignments.py",
+      "line": 321
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/client-errors",
+      "route_path": "/client-errors",
+      "router": "client_error_router",
+      "router_prefix": "/api/v1",
+      "request_model": "ClientErrorReportRequest",
+      "source": "routes/audit_logs.py",
+      "line": 76
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/client-logs",
+      "route_path": "/client-logs",
+      "router": "router",
+      "router_prefix": "/api/v1",
+      "source": "routes/client_logs.py",
+      "line": 187
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/contacts/corp-user/{userid}",
+      "route_path": "/corp-user/{userid}",
+      "router": "router",
+      "router_prefix": "/api/v1/contacts",
+      "auth_dependencies": [
+        "roles:admin,supervisor"
+      ],
+      "source": "routes/contact_sync.py",
+      "line": 56
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/contacts/external/{external_userid}",
+      "route_path": "/external/{external_userid}",
+      "router": "router",
+      "router_prefix": "/api/v1/contacts",
+      "auth_dependencies": [
+        "roles:admin,supervisor"
+      ],
+      "source": "routes/contact_sync.py",
+      "line": 45
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/contacts/sync/external-contacts",
+      "route_path": "/sync/external-contacts",
+      "router": "router",
+      "router_prefix": "/api/v1/contacts",
+      "auth_dependencies": [
+        "roles:admin,supervisor"
+      ],
+      "source": "routes/contact_sync.py",
+      "line": 28
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/contacts/sync/full",
+      "route_path": "/sync/full",
+      "router": "router",
+      "router_prefix": "/api/v1/contacts",
+      "auth_dependencies": [
+        "roles:admin,supervisor"
+      ],
+      "source": "routes/contact_sync.py",
+      "line": 23
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/contacts/sync/refresh-stale",
+      "route_path": "/sync/refresh-stale",
+      "router": "router",
+      "router_prefix": "/api/v1/contacts",
+      "auth_dependencies": [
+        "roles:admin,supervisor"
+      ],
+      "source": "routes/contact_sync.py",
+      "line": 37
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/conversations",
+      "route_path": "/conversations",
+      "router": "router",
+      "router_prefix": "/api/v1",
+      "auth_dependencies": [
+        "roles:admin,supervisor,cs"
+      ],
+      "source": "routes/chat.py",
+      "line": 241
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/conversations/account-stats",
+      "route_path": "/conversations/account-stats",
+      "router": "router",
+      "router_prefix": "/api/v1",
+      "auth_dependencies": [
+        "roles:admin,supervisor,cs"
+      ],
+      "source": "routes/chat.py",
+      "line": 524
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/conversations/ai-auto-reply/bulk",
+      "route_path": "/conversations/ai-auto-reply/bulk",
+      "router": "router",
+      "router_prefix": "/api/v1",
+      "request_model": "ConversationAiBulkSwitchRequest",
+      "auth_dependencies": [
+        "get_current_session"
+      ],
+      "source": "routes/chat.py",
+      "line": 678
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/conversations/panel-bootstrap",
+      "route_path": "/conversations/panel-bootstrap",
+      "router": "router",
+      "router_prefix": "/api/v1",
+      "auth_dependencies": [
+        "roles:admin,supervisor,cs"
+      ],
+      "source": "routes/chat.py",
+      "line": 473
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/conversations/panel-snapshot",
+      "route_path": "/conversations/panel-snapshot",
+      "router": "router",
+      "router_prefix": "/api/v1",
+      "auth_dependencies": [
+        "roles:admin,supervisor,cs"
+      ],
+      "source": "routes/chat.py",
+      "line": 420
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/conversations/{conversation_id}/ai-auto-reply",
+      "route_path": "/conversations/{conversation_id}/ai-auto-reply",
+      "router": "router",
+      "router_prefix": "/api/v1",
+      "request_model": "ConversationAiSwitchRequest",
+      "auth_dependencies": [
+        "roles:admin,supervisor,cs"
+      ],
+      "source": "routes/chat.py",
+      "line": 668
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/conversations/{conversation_id}/call",
+      "route_path": "/conversations/{conversation_id}/call",
+      "router": "router",
+      "router_prefix": "/api/v1",
+      "request_model": "ConversationCallRequest",
+      "auth_dependencies": [
+        "roles:admin,supervisor,cs"
+      ],
+      "source": "routes/chat.py",
+      "line": 776
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/conversations/{conversation_id}/call/availability",
+      "route_path": "/conversations/{conversation_id}/call/availability",
+      "router": "router",
+      "router_prefix": "/api/v1",
+      "request_model": "ConversationCallAvailabilityRequest",
+      "auth_dependencies": [
+        "roles:admin,supervisor,cs"
+      ],
+      "source": "routes/chat.py",
+      "line": 742
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/conversations/{conversation_id}/call/hangup",
+      "route_path": "/conversations/{conversation_id}/call/hangup",
+      "router": "router",
+      "router_prefix": "/api/v1",
+      "request_model": "ConversationCallHangupRequest",
+      "auth_dependencies": [
+        "roles:admin,supervisor,cs"
+      ],
+      "source": "routes/chat.py",
+      "line": 793
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/conversations/{conversation_id}/call/reservation/release",
+      "route_path": "/conversations/{conversation_id}/call/reservation/release",
+      "router": "router",
+      "router_prefix": "/api/v1",
+      "request_model": "ConversationCallReservationReleaseRequest",
+      "auth_dependencies": [
+        "roles:admin,supervisor,cs"
+      ],
+      "source": "routes/chat.py",
+      "line": 759
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/conversations/{conversation_id}/contact-profile/refresh",
+      "route_path": "/conversations/{conversation_id}/contact-profile/refresh",
+      "router": "router",
+      "router_prefix": "/api/v1",
+      "auth_dependencies": [
+        "roles:admin,supervisor,cs"
+      ],
+      "source": "routes/chat.py",
+      "line": 596
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/conversations/{conversation_id}/contact-profile/resolve",
+      "route_path": "/conversations/{conversation_id}/contact-profile/resolve",
+      "router": "router",
+      "router_prefix": "/api/v1",
+      "auth_dependencies": [
+        "roles:admin,supervisor,cs"
+      ],
+      "source": "routes/chat.py",
+      "line": 621
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/conversations/{conversation_id}/customer-profile",
+      "route_path": "/conversations/{conversation_id}/customer-profile",
+      "router": "router",
+      "router_prefix": "/api/v1",
+      "request_model": "ConversationCustomerProfileUpdateRequest",
+      "auth_dependencies": [
+        "roles:admin,supervisor,cs"
+      ],
+      "source": "routes/chat.py",
+      "line": 646
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/conversations/{conversation_id}/messages",
+      "route_path": "/conversations/{conversation_id}/messages",
+      "router": "router",
+      "router_prefix": "/api/v1",
+      "auth_dependencies": [
+        "roles:admin,supervisor,cs"
+      ],
+      "source": "routes/chat.py",
+      "line": 549
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/conversations/{conversation_id}/messages/{trace_id}/resend",
+      "route_path": "/conversations/{conversation_id}/messages/{trace_id}/resend",
+      "router": "router",
+      "router_prefix": "/api/v1",
+      "request_model": "ConversationMessageResendRequest",
+      "auth_dependencies": [
+        "roles:admin,supervisor,cs"
+      ],
+      "source": "routes/chat.py",
+      "line": 704
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/conversations/{conversation_id}/messages/{trace_id}/revoke",
+      "route_path": "/conversations/{conversation_id}/messages/{trace_id}/revoke",
+      "router": "router",
+      "router_prefix": "/api/v1",
+      "request_model": "ConversationMessageRevokeRequest",
+      "auth_dependencies": [
+        "roles:admin,supervisor,cs"
+      ],
+      "source": "routes/chat.py",
+      "line": 723
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/conversations/{conversation_id}/read",
+      "route_path": "/conversations/{conversation_id}/read",
+      "router": "router",
+      "router_prefix": "/api/v1",
+      "auth_dependencies": [
+        "roles:admin,supervisor,cs"
+      ],
+      "source": "routes/chat.py",
+      "line": 662
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/conversations/{conversation_id}/reply",
+      "route_path": "/conversations/{conversation_id}/reply",
+      "router": "router",
+      "router_prefix": "/api/v1",
+      "request_model": "ConversationReplyRequest",
+      "auth_dependencies": [
+        "roles:admin,supervisor,cs"
+      ],
+      "source": "routes/chat.py",
+      "line": 687
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/conversations/{conversation_id}/transfer",
+      "route_path": "/conversations/{conversation_id}/transfer",
+      "router": "router",
+      "router_prefix": "/api/v1",
+      "request_model": "ConversationTransferRequest",
+      "auth_dependencies": [
+        "roles:admin,supervisor"
+      ],
+      "source": "routes/chat.py",
+      "line": 810
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/cs-users",
+      "route_path": "/cs-users",
+      "router": "router",
+      "router_prefix": "/api/v1",
+      "auth_dependencies": [
+        "roles:admin"
+      ],
+      "source": "routes/cs_users.py",
+      "line": 51
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/cs-users",
+      "route_path": "/cs-users",
+      "router": "router",
+      "router_prefix": "/api/v1",
+      "request_model": "CsUserUpsertRequest",
+      "auth_dependencies": [
+        "roles:admin"
+      ],
+      "source": "routes/cs_users.py",
+      "line": 106
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/cs-users/status",
+      "route_path": "/cs-users/status",
+      "router": "router",
+      "router_prefix": "/api/v1",
+      "auth_dependencies": [
+        "roles:admin"
+      ],
+      "source": "routes/cs_users.py",
+      "line": 86
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/cs-users/{assignee_id}",
+      "route_path": "/cs-users/{assignee_id}",
+      "router": "router",
+      "router_prefix": "/api/v1",
+      "auth_dependencies": [
+        "roles:admin"
+      ],
+      "source": "routes/cs_users.py",
+      "line": 187
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/cs/workbench/bootstrap",
+      "route_path": "/cs/workbench/bootstrap",
+      "router": "router",
+      "router_prefix": "/api/v1",
+      "auth_dependencies": [
+        "roles:cs",
+        "get_current_session"
+      ],
+      "source": "routes/chat.py",
+      "line": 264
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/cs/workbench/conversations",
+      "route_path": "/cs/workbench/conversations",
+      "router": "router",
+      "router_prefix": "/api/v1",
+      "auth_dependencies": [
+        "roles:cs",
+        "get_current_session"
+      ],
+      "source": "routes/chat.py",
+      "line": 336
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/cs/workbench/search",
+      "route_path": "/cs/workbench/search",
+      "router": "router",
+      "router_prefix": "/api/v1",
+      "auth_dependencies": [
+        "roles:cs",
+        "get_current_session"
+      ],
+      "source": "routes/chat.py",
+      "line": 394
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/cs/workbench/summary",
+      "route_path": "/cs/workbench/summary",
+      "router": "router",
+      "router_prefix": "/api/v1",
+      "auth_dependencies": [
+        "roles:cs",
+        "get_current_session"
+      ],
+      "source": "routes/chat.py",
+      "line": 314
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/devices",
+      "route_path": "/devices",
+      "router": "router",
+      "router_prefix": "/api/v1",
+      "auth_dependencies": [
+        "roles:admin,supervisor,cs"
+      ],
+      "source": "routes/devices.py",
+      "line": 1666
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/devices/call-audio-bridge/targets",
+      "route_path": "/devices/call-audio-bridge/targets",
+      "router": "router",
+      "router_prefix": "/api/v1",
+      "auth_dependencies": [
+        "require_any_auth"
+      ],
+      "source": "routes/devices.py",
+      "line": 2002
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/devices/discovery/probe",
+      "route_path": "/devices/discovery/probe",
+      "router": "router",
+      "router_prefix": "/api/v1",
+      "request_model": "DeviceDiscoveryProbeRequest",
+      "auth_dependencies": [
+        "roles:admin,supervisor"
+      ],
+      "source": "routes/devices.py",
+      "line": 1611
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/devices/discovery/refresh",
+      "route_path": "/devices/discovery/refresh",
+      "router": "router",
+      "router_prefix": "/api/v1",
+      "auth_dependencies": [
+        "roles:admin,supervisor"
+      ],
+      "source": "routes/devices.py",
+      "line": 1570
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/devices/manual",
+      "route_path": "/devices/manual",
+      "router": "router",
+      "router_prefix": "/api/v1",
+      "auth_dependencies": [
+        "roles:admin,supervisor"
+      ],
+      "source": "routes/devices.py",
+      "line": 2274
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/devices/manual",
+      "route_path": "/devices/manual",
+      "router": "router",
+      "router_prefix": "/api/v1",
+      "request_model": "ManualDeviceUpsertRequest",
+      "auth_dependencies": [
+        "roles:admin,supervisor"
+      ],
+      "source": "routes/devices.py",
+      "line": 2248
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/devices/rtc/active",
+      "route_path": "/devices/rtc/active",
+      "router": "router",
+      "router_prefix": "/api/v1",
+      "auth_dependencies": [
+        "require_any_auth"
+      ],
+      "source": "routes/device_rtc.py",
+      "line": 698
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/devices/{device_id}/call-audio-bridge/status",
+      "route_path": "/devices/{device_id}/call-audio-bridge/status",
+      "router": "router",
+      "router_prefix": "/api/v1",
+      "auth_dependencies": [
+        "roles:admin,supervisor,cs"
+      ],
+      "source": "routes/devices.py",
+      "line": 2102
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/devices/{device_id}/call-audio-bridge/status",
+      "route_path": "/devices/{device_id}/call-audio-bridge/status",
+      "router": "router",
+      "router_prefix": "/api/v1",
+      "request_model": "DeviceCallAudioBridgeStatusRequest",
+      "auth_dependencies": [
+        "require_any_auth"
+      ],
+      "source": "routes/devices.py",
+      "line": 2109
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/devices/{device_id}/control/acquire",
+      "route_path": "/devices/{device_id}/control/acquire",
+      "router": "router",
+      "router_prefix": "/api/v1",
+      "request_model": "DeviceControlRequest",
+      "auth_dependencies": [
+        "roles:admin,supervisor,cs"
+      ],
+      "source": "routes/device_rtc.py",
+      "line": 804
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/devices/{device_id}/control/input",
+      "route_path": "/devices/{device_id}/control/input",
+      "router": "router",
+      "router_prefix": "/api/v1",
+      "request_model": "DeviceControlInputRequest",
+      "auth_dependencies": [
+        "require_any_auth"
+      ],
+      "source": "routes/device_rtc.py",
+      "line": 723
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/devices/{device_id}/control/release",
+      "route_path": "/devices/{device_id}/control/release",
+      "router": "router",
+      "router_prefix": "/api/v1",
+      "request_model": "DeviceControlRequest",
+      "auth_dependencies": [
+        "roles:admin,supervisor,cs"
+      ],
+      "source": "routes/device_rtc.py",
+      "line": 870
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/devices/{device_id}/control/state",
+      "route_path": "/devices/{device_id}/control/state",
+      "router": "router",
+      "router_prefix": "/api/v1",
+      "auth_dependencies": [
+        "require_any_auth"
+      ],
+      "source": "routes/device_rtc.py",
+      "line": 708
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/devices/{device_id}/control/steal",
+      "route_path": "/devices/{device_id}/control/steal",
+      "router": "router",
+      "router_prefix": "/api/v1",
+      "request_model": "DeviceControlRequest",
+      "auth_dependencies": [
+        "roles:admin,supervisor"
+      ],
+      "source": "routes/device_rtc.py",
+      "line": 892
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/devices/{device_id}/media/audio",
+      "route_path": "/devices/{device_id}/media/audio",
+      "router": "router",
+      "router_prefix": "/api/v1",
+      "request_model": "DeviceAudioPlaybackRequest",
+      "auth_dependencies": [
+        "roles:admin,supervisor"
+      ],
+      "source": "routes/device_rtc.py",
+      "line": 993
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/devices/{device_id}/media/camera-stream",
+      "route_path": "/devices/{device_id}/media/camera-stream",
+      "router": "router",
+      "router_prefix": "/api/v1",
+      "auth_dependencies": [
+        "roles:admin,supervisor"
+      ],
+      "source": "routes/device_rtc.py",
+      "line": 976
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/devices/{device_id}/media/camera-stream",
+      "route_path": "/devices/{device_id}/media/camera-stream",
+      "router": "router",
+      "router_prefix": "/api/v1",
+      "request_model": "DeviceCameraStreamRequest",
+      "auth_dependencies": [
+        "roles:admin,supervisor"
+      ],
+      "source": "routes/device_rtc.py",
+      "line": 927
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/devices/{device_id}/media/start",
+      "route_path": "/devices/{device_id}/media/start",
+      "router": "router",
+      "router_prefix": "/api/v1",
+      "request_model": "DeviceMediaStartRequest",
+      "auth_dependencies": [
+        "roles:admin,supervisor,cs"
+      ],
+      "source": "routes/device_rtc.py",
+      "line": 1017
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/devices/{device_id}/media/stop",
+      "route_path": "/devices/{device_id}/media/stop",
+      "router": "router",
+      "router_prefix": "/api/v1",
+      "request_model": "DeviceMediaStopRequest",
+      "auth_dependencies": [
+        "roles:admin,supervisor,cs"
+      ],
+      "source": "routes/device_rtc.py",
+      "line": 1249
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/devices/{device_id}/rtc-active",
+      "route_path": "/devices/{device_id}/rtc-active",
+      "router": "router",
+      "router_prefix": "/api/v1",
+      "request_model": "DeviceControlRequest",
+      "auth_dependencies": [
+        "roles:admin,supervisor,cs"
+      ],
+      "source": "routes/device_rtc.py",
+      "line": 666
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/devices/{device_id}/sdk/open-wework",
+      "route_path": "/devices/{device_id}/sdk/open-wework",
+      "router": "router",
+      "router_prefix": "/api/v1",
+      "auth_dependencies": [
+        "roles:admin,supervisor"
+      ],
+      "source": "routes/devices.py",
+      "line": 2145
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/devices/{device_id}/sdk/prepare-call-audio-output",
+      "route_path": "/devices/{device_id}/sdk/prepare-call-audio-output",
+      "router": "router",
+      "router_prefix": "/api/v1",
+      "auth_dependencies": [
+        "roles:admin,supervisor,cs"
+      ],
+      "source": "routes/devices.py",
+      "line": 2169
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/devices/{device_id}/sdk/rtc-session",
+      "route_path": "/devices/{device_id}/sdk/rtc-session",
+      "router": "router",
+      "router_prefix": "/api/v1",
+      "auth_dependencies": [
+        "roles:admin,supervisor,cs"
+      ],
+      "source": "routes/device_rtc.py",
+      "line": 584
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/devices/{device_id}/sdk/status",
+      "route_path": "/devices/{device_id}/sdk/status",
+      "router": "router",
+      "router_prefix": "/api/v1",
+      "auth_dependencies": [
+        "roles:admin,supervisor,cs"
+      ],
+      "source": "routes/devices.py",
+      "line": 2026
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/devices/{device_id}/sdk/stop-wework",
+      "route_path": "/devices/{device_id}/sdk/stop-wework",
+      "router": "router",
+      "router_prefix": "/api/v1",
+      "auth_dependencies": [
+        "roles:admin,supervisor"
+      ],
+      "source": "routes/devices.py",
+      "line": 2157
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/devices/{device_id}/sdk/webrtc",
+      "route_path": "/devices/{device_id}/sdk/webrtc",
+      "router": "router",
+      "router_prefix": "/api/v1",
+      "auth_dependencies": [
+        "roles:admin,supervisor,cs"
+      ],
+      "source": "routes/devices.py",
+      "line": 2185
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/events/friend-added",
+      "route_path": "/events/friend-added",
+      "router": "router",
+      "router_prefix": "/api/v1",
+      "request_model": "FriendAddedEventCreate",
+      "auth_dependencies": [
+        "optional_agent_auth"
+      ],
+      "source": "routes/chat.py",
+      "line": 827
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/knowledge/search",
+      "route_path": "/search",
+      "router": "search_router",
+      "router_prefix": "/api/v1/knowledge",
+      "auth_dependencies": [
+        "roles:admin,supervisor,cs"
+      ],
+      "source": "routes/knowledge.py",
+      "line": 82
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/messages/incoming",
+      "route_path": "/messages/incoming",
+      "router": "router",
+      "router_prefix": "/api/v1",
+      "request_model": "IncomingMessageCreate",
+      "auth_dependencies": [
+        "optional_agent_auth"
+      ],
+      "source": "routes/chat.py",
+      "line": 235
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/notify/event/{enterprise_id}",
+      "route_path": "/{enterprise_id}",
+      "router": "router",
+      "router_prefix": "/api/v1/notify/event",
+      "source": "routes/wework_notify.py",
+      "line": 841
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/notify/event/{enterprise_id}",
+      "route_path": "/{enterprise_id}",
+      "router": "router",
+      "router_prefix": "/api/v1/notify/event",
+      "source": "routes/wework_notify.py",
+      "line": 863
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/platform-agent/ai-outreach/conversation",
+      "route_path": "/conversation",
+      "router": "router",
+      "router_prefix": "/api/v1/platform-agent/ai-outreach",
+      "response_model": "None",
+      "auth_dependencies": [
+        "verify_agent_token"
+      ],
+      "source": "routes/ai_outreach.py",
+      "line": 364
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/platform-agent/ai-outreach/send",
+      "route_path": "/send",
+      "router": "router",
+      "router_prefix": "/api/v1/platform-agent/ai-outreach",
+      "response_model": "None",
+      "request_model": "AiOutreachSendRequest",
+      "auth_dependencies": [
+        "verify_agent_token"
+      ],
+      "source": "routes/ai_outreach.py",
+      "line": 396
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/platform/category-price",
+      "route_path": "/category-price",
+      "router": "router",
+      "router_prefix": "/api/v1/platform",
+      "source": "routes/platform_proxy.py",
+      "line": 694
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/platform/category/prepay",
+      "route_path": "/category/prepay",
+      "router": "router",
+      "router_prefix": "/api/v1/platform",
+      "source": "routes/platform_proxy.py",
+      "line": 922
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/platform/collections",
+      "route_path": "/collections",
+      "router": "router",
+      "router_prefix": "/api/v1/platform",
+      "source": "routes/platform_proxy.py",
+      "line": 999
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/platform/community/category-price",
+      "route_path": "/community/category-price",
+      "router": "router",
+      "router_prefix": "/api/v1/platform",
+      "source": "routes/platform_proxy.py",
+      "line": 695
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/platform/community/options",
+      "route_path": "/community/options",
+      "router": "router",
+      "router_prefix": "/api/v1/platform",
+      "source": "routes/platform_proxy.py",
+      "line": 654
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/platform/customer/add-mobile",
+      "route_path": "/customer/add-mobile",
+      "router": "router",
+      "router_prefix": "/api/v1/platform",
+      "source": "routes/platform_proxy.py",
+      "line": 796
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/platform/customer/info",
+      "route_path": "/customer/info",
+      "router": "router",
+      "router_prefix": "/api/v1/platform",
+      "source": "routes/platform_proxy.py",
+      "line": 704
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/platform/device/{device_id}/sidebar-command",
+      "route_path": "/device/{device_id}/sidebar-command",
+      "router": "router",
+      "router_prefix": "/api/v1/platform",
+      "source": "routes/platform_proxy.py",
+      "line": 1045
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/platform/login",
+      "route_path": "/login",
+      "router": "router",
+      "router_prefix": "/api/v1/platform",
+      "source": "routes/platform_proxy.py",
+      "line": 645
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/platform/options",
+      "route_path": "/options",
+      "router": "router",
+      "router_prefix": "/api/v1/platform",
+      "source": "routes/platform_proxy.py",
+      "line": 653
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/platform/orders",
+      "route_path": "/orders",
+      "router": "router",
+      "router_prefix": "/api/v1/platform",
+      "source": "routes/platform_proxy.py",
+      "line": 805
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/platform/orders/check-customer",
+      "route_path": "/orders/check-customer",
+      "router": "router",
+      "router_prefix": "/api/v1/platform",
+      "source": "routes/platform_proxy.py",
+      "line": 855
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/platform/orders/create",
+      "route_path": "/orders/create",
+      "router": "router",
+      "router_prefix": "/api/v1/platform",
+      "source": "routes/platform_proxy.py",
+      "line": 841
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/platform/orders/modify",
+      "route_path": "/orders/modify",
+      "router": "router",
+      "router_prefix": "/api/v1/platform",
+      "source": "routes/platform_proxy.py",
+      "line": 848
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/platform/orders/plan-modify",
+      "route_path": "/orders/plan-modify",
+      "router": "router",
+      "router_prefix": "/api/v1/platform",
+      "source": "routes/platform_proxy.py",
+      "line": 889
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/platform/orders/storage",
+      "route_path": "/orders/storage",
+      "router": "router",
+      "router_prefix": "/api/v1/platform",
+      "source": "routes/platform_proxy.py",
+      "line": 881
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/platform/orders/{order_id}",
+      "route_path": "/orders/{order_id}",
+      "router": "router",
+      "router_prefix": "/api/v1/platform",
+      "source": "routes/platform_proxy.py",
+      "line": 896
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/platform/pay/prepay",
+      "route_path": "/pay/prepay",
+      "router": "router",
+      "router_prefix": "/api/v1/platform",
+      "source": "routes/platform_proxy.py",
+      "line": 1025
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/platform/schedule/cancel",
+      "route_path": "/schedule/cancel",
+      "router": "router",
+      "router_prefix": "/api/v1/platform",
+      "source": "routes/platform_proxy.py",
+      "line": 983
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/platform/schedule/change",
+      "route_path": "/schedule/change",
+      "router": "router",
+      "router_prefix": "/api/v1/platform",
+      "source": "routes/platform_proxy.py",
+      "line": 990
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/platform/schedule/hours",
+      "route_path": "/schedule/hours",
+      "router": "router",
+      "router_prefix": "/api/v1/platform",
+      "source": "routes/platform_proxy.py",
+      "line": 948
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/platform/schedule/plan",
+      "route_path": "/schedule/plan",
+      "router": "router",
+      "router_prefix": "/api/v1/platform",
+      "source": "routes/platform_proxy.py",
+      "line": 976
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/platform/stores",
+      "route_path": "/stores",
+      "router": "router",
+      "router_prefix": "/api/v1/platform",
+      "source": "routes/platform_proxy.py",
+      "line": 748
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/platform/stores/upload-video",
+      "route_path": "/stores/upload-video",
+      "router": "router",
+      "router_prefix": "/api/v1/platform",
+      "source": "routes/platform_proxy.py",
+      "line": 789
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/platform/stores/{store_id}",
+      "route_path": "/stores/{store_id}",
+      "router": "router",
+      "router_prefix": "/api/v1/platform",
+      "source": "routes/platform_proxy.py",
+      "line": 772
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/platform/user/appid",
+      "route_path": "/user/appid",
+      "router": "router",
+      "router_prefix": "/api/v1/platform",
+      "source": "routes/platform_proxy.py",
+      "line": 1036
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/realtime/events/replay",
+      "route_path": "/events/replay",
+      "router": "router",
+      "router_prefix": "/api/v1/realtime",
+      "auth_dependencies": [
+        "roles:admin,supervisor,cs"
+      ],
+      "source": "routes/realtime_replay.py",
+      "line": 20
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/realtime/snapshot/workbench",
+      "route_path": "/snapshot/workbench",
+      "router": "router",
+      "router_prefix": "/api/v1/realtime",
+      "auth_dependencies": [
+        "roles:cs"
+      ],
+      "source": "routes/realtime_replay.py",
+      "line": 61
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/scripts",
+      "route_path": "/scripts",
+      "router": "router",
+      "router_prefix": "/api/v1",
+      "auth_dependencies": [
+        "roles:admin,supervisor,cs"
+      ],
+      "source": "routes/scripts.py",
+      "line": 10
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/scripts/generate",
+      "route_path": "/scripts/generate",
+      "router": "router",
+      "router_prefix": "/api/v1",
+      "request_model": "ScriptAiGenerateRequest",
+      "auth_dependencies": [
+        "roles:admin,supervisor,cs"
+      ],
+      "source": "routes/scripts.py",
+      "line": 22
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/session/admin-login",
+      "route_path": "/admin-login",
+      "router": "router",
+      "router_prefix": "/api/v1/session",
+      "source": "routes/session.py",
+      "line": 82
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/session/admin/generate-cs-token",
+      "route_path": "/admin/generate-cs-token",
+      "router": "router",
+      "router_prefix": "/api/v1/session",
+      "auth_dependencies": [
+        "roles:admin,supervisor"
+      ],
+      "source": "routes/session.py",
+      "line": 347
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/session/cs-login",
+      "route_path": "/cs-login",
+      "router": "router",
+      "router_prefix": "/api/v1/session",
+      "source": "routes/session.py",
+      "line": 196
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/session/login",
+      "route_path": "/login",
+      "router": "router",
+      "router_prefix": "/api/v1/session",
+      "request_model": "AssigneeLoginRequest",
+      "source": "routes/session.py",
+      "line": 137
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/session/logout",
+      "route_path": "/logout",
+      "router": "router",
+      "router_prefix": "/api/v1/session",
+      "source": "routes/session.py",
+      "line": 326
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/session/me",
+      "route_path": "/me",
+      "router": "router",
+      "router_prefix": "/api/v1/session",
+      "source": "routes/session.py",
+      "line": 261
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/session/refresh",
+      "route_path": "/refresh",
+      "router": "router",
+      "router_prefix": "/api/v1/session",
+      "source": "routes/session.py",
+      "line": 288
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/stream/channels",
+      "route_path": "/stream/channels",
+      "router": "router",
+      "router_prefix": "/api/v1",
+      "auth_dependencies": [
+        "roles:admin,supervisor,cs"
+      ],
+      "source": "routes/stream.py",
+      "line": 9
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/tasks",
+      "route_path": "/tasks",
+      "router": "router",
+      "router_prefix": "/api/v1",
+      "response_model": "list[TaskRecord]",
+      "auth_dependencies": [
+        "roles:admin,supervisor,cs"
+      ],
+      "source": "routes/tasks.py",
+      "line": 41
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/tasks",
+      "route_path": "/tasks",
+      "router": "router",
+      "router_prefix": "/api/v1",
+      "response_model": "TaskRecord",
+      "auth_dependencies": [
+        "optional_agent_auth"
+      ],
+      "source": "routes/tasks.py",
+      "line": 33
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/tasks/{task_id}",
+      "route_path": "/tasks/{task_id}",
+      "router": "router",
+      "router_prefix": "/api/v1",
+      "response_model": "TaskRecord",
+      "auth_dependencies": [
+        "optional_agent_auth"
+      ],
+      "source": "routes/tasks.py",
+      "line": 60
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/tasks/{task_id}/retry",
+      "route_path": "/tasks/{task_id}/retry",
+      "router": "router",
+      "router_prefix": "/api/v1",
+      "response_model": "TaskRecord",
+      "auth_dependencies": [
+        "roles:admin,supervisor"
+      ],
+      "source": "routes/tasks.py",
+      "line": 79
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/tasks/{task_id}/status",
+      "route_path": "/tasks/{task_id}/status",
+      "router": "router",
+      "router_prefix": "/api/v1",
+      "response_model": "TaskRecord",
+      "request_model": "TaskStatusUpdate",
+      "auth_dependencies": [
+        "optional_agent_auth"
+      ],
+      "source": "routes/tasks.py",
+      "line": 69
+    },
+    {
+      "method": "POST",
+      "path": "/group/invite",
+      "route_path": "/group/invite",
+      "router": "router",
+      "router_prefix": "",
+      "request_model": "GroupInviteRequest",
+      "auth_dependencies": [
+        "roles:admin,supervisor,cs"
+      ],
+      "source": "routes/actions_send_routes.py",
+      "line": 756
+    },
+    {
+      "method": "GET",
+      "path": "/healthz",
+      "route_path": "/healthz",
+      "router": "router",
+      "router_prefix": "",
+      "source": "routes/health.py",
+      "line": 139
+    },
+    {
+      "method": "GET",
+      "path": "/healthz/stage6",
+      "route_path": "/healthz/stage6",
+      "router": "router",
+      "router_prefix": "",
+      "auth_dependencies": [
+        "roles:admin,supervisor"
+      ],
+      "source": "routes/health.py",
+      "line": 169
+    },
+    {
+      "method": "GET",
+      "path": "/metrics",
+      "route_path": "/metrics",
+      "router": "router",
+      "router_prefix": "",
+      "source": "routes/health.py",
+      "line": 144
+    },
+    {
+      "method": "GET",
+      "path": "/readyz",
+      "route_path": "/readyz",
+      "router": "router",
+      "router_prefix": "",
+      "source": "routes/health.py",
+      "line": 151
+    },
+    {
+      "method": "POST",
+      "path": "/send/file",
+      "route_path": "/send/file",
+      "router": "router",
+      "router_prefix": "",
+      "auth_dependencies": [
+        "roles:admin,supervisor,cs"
+      ],
+      "source": "routes/actions_send_routes.py",
+      "line": 715
+    },
+    {
+      "method": "POST",
+      "path": "/send/image",
+      "route_path": "/send/image",
+      "router": "router",
+      "router_prefix": "",
+      "auth_dependencies": [
+        "roles:admin,supervisor,cs"
+      ],
+      "source": "routes/actions_send_routes.py",
+      "line": 590
+    },
+    {
+      "method": "POST",
+      "path": "/send/text",
+      "route_path": "/send/text",
+      "router": "router",
+      "router_prefix": "",
+      "request_model": "SendTextRequest",
+      "auth_dependencies": [
+        "roles:admin,supervisor,cs"
+      ],
+      "source": "routes/actions_send_routes.py",
+      "line": 467
+    },
+    {
+      "method": "POST",
+      "path": "/send/video",
+      "route_path": "/send/video",
+      "router": "router",
+      "router_prefix": "",
+      "auth_dependencies": [
+        "roles:admin,supervisor,cs"
+      ],
+      "source": "routes/actions_send_routes.py",
+      "line": 631
+    },
+    {
+      "method": "POST",
+      "path": "/send/voice",
+      "route_path": "/send/voice",
+      "router": "router",
+      "router_prefix": "",
+      "auth_dependencies": [
+        "roles:admin,supervisor,cs"
+      ],
+      "source": "routes/actions_send_routes.py",
+      "line": 672
+    },
+    {
+      "method": "POST",
+      "path": "/wework/login/qrcode",
+      "route_path": "/wework/login/qrcode",
+      "router": "router",
+      "router_prefix": "",
+      "request_model": "LoginQRCodeRequest",
+      "auth_dependencies": [
+        "roles:admin,supervisor"
+      ],
+      "source": "routes/actions_login_routes.py",
+      "line": 346
+    },
+    {
+      "method": "GET",
+      "path": "/wework/login/status",
+      "route_path": "/wework/login/status",
+      "router": "router",
+      "router_prefix": "",
+      "auth_dependencies": [
+        "roles:admin,supervisor,cs"
+      ],
+      "source": "routes/actions_login_routes.py",
+      "line": 421
+    },
+    {
+      "method": "POST",
+      "path": "/wework/login/verify-code",
+      "route_path": "/wework/login/verify-code",
+      "router": "router",
+      "router_prefix": "",
+      "request_model": "LoginVerifyCodeRequest",
+      "auth_dependencies": [
+        "roles:admin,supervisor"
+      ],
+      "source": "routes/actions_login_routes.py",
+      "line": 536
+    },
+    {
+      "method": "POST",
+      "path": "/wework/logout",
+      "route_path": "/wework/logout",
+      "router": "router",
+      "router_prefix": "",
+      "request_model": "WeWorkLogoutRequest",
+      "auth_dependencies": [
+        "roles:admin,supervisor"
+      ],
+      "source": "routes/actions_login_routes.py",
+      "line": 567
+    },
+    {
+      "method": "GET",
+      "path": "/wework/user-info/candidates",
+      "route_path": "/wework/user-info/candidates",
+      "router": "router",
+      "router_prefix": "",
+      "auth_dependencies": [
+        "roles:admin,supervisor"
+      ],
+      "source": "routes/actions_login_routes.py",
+      "line": 701
+    },
+    {
+      "method": "GET",
+      "path": "/wework/user-info/last",
+      "route_path": "/wework/user-info/last",
+      "router": "router",
+      "router_prefix": "",
+      "auth_dependencies": [
+        "roles:admin,supervisor"
+      ],
+      "source": "routes/actions_login_routes.py",
+      "line": 738
+    },
+    {
+      "method": "POST",
+      "path": "/wework/user-info/request",
+      "route_path": "/wework/user-info/request",
+      "router": "router",
+      "router_prefix": "",
+      "request_model": "WeWorkUserInfoRequest",
+      "auth_dependencies": [
+        "roles:admin,supervisor"
+      ],
+      "source": "routes/actions_login_routes.py",
+      "line": 592
+    },
+    {
+      "method": "WEBSOCKET",
+      "path": "/ws/{channel}",
+      "route_path": "/ws/{channel}",
+      "router": "router",
+      "router_prefix": "",
+      "source": "ws.py",
+      "line": 75
+    }
+  ],
+  "contracts": [
+    {
+      "name": "agent-heartbeat.schema.json",
+      "path": "../Python/contracts/v1/agent-heartbeat.schema.json"
+    },
+    {
+      "name": "task-create.schema.json",
+      "path": "../Python/contracts/v1/task-create.schema.json"
+    },
+    {
+      "name": "task-status.schema.json",
+      "path": "../Python/contracts/v1/task-status.schema.json"
+    }
+  ],
+  "feature_docs": [
+    "account-device-management.md",
+    "admin-console.md",
+    "ai-auto-reply.md",
+    "ai-outreach.md",
+    "ai-quality-daily-evaluation.md",
+    "ai-reply-attempt-metrics-design.md",
+    "archive-voice-transcription-coze-plan.md",
+    "archive.md",
+    "auth-rbac.md",
+    "chat-workbench-elasticsearch-search-plan.md",
+    "chat-workbench-send-status.md",
+    "chat-workbench.md",
+    "contact-sync-identity.md",
+    "conversation-assignment.md",
+    "device-gateway.md",
+    "message-dispatch.md",
+    "realtime-broadcast-observability.md",
+    "realtime-broadcast.md",
+    "sop-knowledge.md",
+    "stats-audit.md"
+  ],
+  "compose_services": [
+    "archive-media-worker",
+    "archive-worker",
+    "automation-worker",
+    "backend",
+    "backend-data",
+    "cache-redis",
+    "incoming-worker",
+    "livekit-server",
+    "maintenance-worker",
+    "object-storage",
+    "p1-livekit-bridge",
+    "redis",
+    "rtc-media-relay",
+    "rtc-srs-whep-bridge",
+    "send-dispatcher",
+    "web",
+    "wework-net",
+    "worker",
+    "ws-gateway"
+  ],
+  "ws_events": [
+    {
+      "name": "account.assigned",
+      "kind": "event",
+      "source": "backend/app/api/routes/accounts.py",
+      "line": 348
+    },
+    {
+      "name": "account.batch_imported",
+      "kind": "event",
+      "source": "backend/app/api/routes/accounts.py",
+      "line": 524
+    },
+    {
+      "name": "account.changed",
+      "kind": "event",
+      "source": "backend/app/api/routes/actions_login_routes.py",
+      "line": 245
+    },
+    {
+      "name": "account.changed",
+      "kind": "event",
+      "source": "backend/app/api/routes/device_ws_account_sync.py",
+      "line": 1198
+    },
+    {
+      "name": "account.changed",
+      "kind": "event",
+      "source": "backend/app/api/routes/device_ws_account_sync.py",
+      "line": 1377
+    },
+    {
+      "name": "account.changed",
+      "kind": "topic",
+      "source": "backend/app/api/routes/accounts.py",
+      "line": 307
+    },
+    {
+      "name": "account.changed",
+      "kind": "topic",
+      "source": "backend/app/api/routes/accounts.py",
+      "line": 325
+    },
+    {
+      "name": "account.changed",
+      "kind": "topic",
+      "source": "backend/app/api/routes/accounts.py",
+      "line": 349
+    },
+    {
+      "name": "account.changed",
+      "kind": "topic",
+      "source": "backend/app/api/routes/accounts.py",
+      "line": 368
+    },
+    {
+      "name": "account.changed",
+      "kind": "topic",
+      "source": "backend/app/api/routes/accounts.py",
+      "line": 453
+    },
+    {
+      "name": "account.changed",
+      "kind": "topic",
+      "source": "backend/app/api/routes/accounts.py",
+      "line": 525
+    },
+    {
+      "name": "account.changed",
+      "kind": "topic",
+      "source": "backend/app/api/routes/actions_login_routes.py",
+      "line": 246
+    },
+    {
+      "name": "account.changed",
+      "kind": "topic",
+      "source": "backend/app/api/routes/admin_config.py",
+      "line": 2746
+    },
+    {
+      "name": "account.changed",
+      "kind": "topic",
+      "source": "backend/app/api/routes/device_ws_account_sync.py",
+      "line": 1199
+    },
+    {
+      "name": "account.changed",
+      "kind": "topic",
+      "source": "backend/app/api/routes/device_ws_account_sync.py",
+      "line": 1378
+    },
+    {
+      "name": "account.deleted",
+      "kind": "event",
+      "source": "backend/app/api/routes/accounts.py",
+      "line": 324
+    },
+    {
+      "name": "account.unassigned",
+      "kind": "event",
+      "source": "backend/app/api/routes/accounts.py",
+      "line": 367
+    },
+    {
+      "name": "account.updated",
+      "kind": "event",
+      "source": "backend/app/api/routes/accounts.py",
+      "line": 306
+    },
+    {
+      "name": "account.updated",
+      "kind": "event",
+      "source": "backend/app/api/routes/accounts.py",
+      "line": 452
+    },
+    {
+      "name": "account.updated",
+      "kind": "event",
+      "source": "backend/app/api/routes/admin_config.py",
+      "line": 2745
+    },
+    {
+      "name": "ai.config",
+      "kind": "topic",
+      "source": "backend/app/api/routes/admin_config.py",
+      "line": 2842
+    },
+    {
+      "name": "ai.config.updated",
+      "kind": "event",
+      "source": "backend/app/api/routes/admin_config.py",
+      "line": 2841
+    },
+    {
+      "name": "ai_outreach_send_enqueued",
+      "kind": "event",
+      "source": "backend/app/api/routes/ai_outreach.py",
+      "line": 480
+    },
+    {
+      "name": "archive.callback.received",
+      "kind": "event",
+      "source": "backend/app/services/archive_callback_consumer.py",
+      "line": 203
+    },
+    {
+      "name": "archive.callback.received",
+      "kind": "topic",
+      "source": "backend/app/services/archive_callback_consumer.py",
+      "line": 204
+    },
+    {
+      "name": "assignment.config",
+      "kind": "topic",
+      "source": "backend/app/api/routes/assignments.py",
+      "line": 218
+    },
+    {
+      "name": "assignment.config.updated",
+      "kind": "event",
+      "source": "backend/app/api/routes/assignments.py",
+      "line": 217
+    },
+    {
+      "name": "contact.profile_updated",
+      "kind": "topic",
+      "source": "backend/app/api/routes/chat_contact_profile_refresh.py",
+      "line": 877
+    },
+    {
+      "name": "contact.profile_updated",
+      "kind": "topic",
+      "source": "backend/app/api/routes/wework_notify.py",
+      "line": 812
+    },
+    {
+      "name": "contact_profile_updated",
+      "kind": "event",
+      "source": "backend/app/api/routes/chat_contact_profile_refresh.py",
+      "line": 876
+    },
+    {
+      "name": "contact_profile_updated",
+      "kind": "event",
+      "source": "backend/app/api/routes/wework_notify.py",
+      "line": 811
+    },
+    {
+      "name": "conversation.ai_auto_reply",
+      "kind": "event",
+      "source": "backend/app/api/routes/accounts.py",
+      "line": 432
+    },
+    {
+      "name": "conversation.ai_auto_reply",
+      "kind": "event",
+      "source": "backend/app/api/routes/admin_config.py",
+      "line": 2716
+    },
+    {
+      "name": "conversation.ai_auto_reply",
+      "kind": "event",
+      "source": "backend/app/api/routes/admin_config.py",
+      "line": 2731
+    },
+    {
+      "name": "conversation.ai_auto_reply",
+      "kind": "event",
+      "source": "backend/app/api/routes/chat_mutations.py",
+      "line": 1120
+    },
+    {
+      "name": "conversation.ai_auto_reply",
+      "kind": "event",
+      "source": "backend/app/core/context.py",
+      "line": 2708
+    },
+    {
+      "name": "conversation.ai_auto_reply",
+      "kind": "event",
+      "source": "backend/app/core/context.py",
+      "line": 2994
+    },
+    {
+      "name": "conversation.ai_auto_reply",
+      "kind": "event",
+      "source": "backend/app/core/context.py",
+      "line": 3258
+    },
+    {
+      "name": "conversation.ai_auto_reply",
+      "kind": "topic",
+      "source": "backend/app/api/routes/accounts.py",
+      "line": 433
+    },
+    {
+      "name": "conversation.ai_auto_reply",
+      "kind": "topic",
+      "source": "backend/app/api/routes/admin_config.py",
+      "line": 2717
+    },
+    {
+      "name": "conversation.ai_auto_reply",
+      "kind": "topic",
+      "source": "backend/app/api/routes/admin_config.py",
+      "line": 2732
+    },
+    {
+      "name": "conversation.ai_auto_reply",
+      "kind": "topic",
+      "source": "backend/app/core/context.py",
+      "line": 2709
+    },
+    {
+      "name": "conversation.ai_auto_reply",
+      "kind": "topic",
+      "source": "backend/app/core/context.py",
+      "line": 2995
+    },
+    {
+      "name": "conversation.ai_auto_reply",
+      "kind": "topic",
+      "source": "backend/app/core/context.py",
+      "line": 3259
+    },
+    {
+      "name": "conversation.ai_auto_reply.bulk",
+      "kind": "event",
+      "source": "backend/app/api/routes/chat_mutations.py",
+      "line": 715
+    },
+    {
+      "name": "conversation.ai_auto_reply.bulk",
+      "kind": "event",
+      "source": "backend/app/api/routes/chat_mutations.py",
+      "line": 1193
+    },
+    {
+      "name": "conversation.ai_reply_status",
+      "kind": "event",
+      "source": "backend/app/core/context.py",
+      "line": 2722
+    },
+    {
+      "name": "conversation.ai_reply_status",
+      "kind": "event",
+      "source": "backend/app/core/context.py",
+      "line": 2827
+    },
+    {
+      "name": "conversation.ai_reply_status",
+      "kind": "event",
+      "source": "backend/app/core/context.py",
+      "line": 3009
+    },
+    {
+      "name": "conversation.ai_reply_status",
+      "kind": "event",
+      "source": "backend/app/core/context.py",
+      "line": 3273
+    },
+    {
+      "name": "conversation.ai_reply_status",
+      "kind": "event",
+      "source": "backend/app/core/context.py",
+      "line": 3360
+    },
+    {
+      "name": "conversation.ai_reply_status",
+      "kind": "event",
+      "source": "backend/app/core/context.py",
+      "line": 3467
+    },
+    {
+      "name": "conversation.ai_reply_status",
+      "kind": "event",
+      "source": "backend/app/core/context.py",
+      "line": 3614
+    },
+    {
+      "name": "conversation.ai_reply_status",
+      "kind": "event",
+      "source": "backend/app/core/context.py",
+      "line": 3696
+    },
+    {
+      "name": "conversation.ai_reply_status",
+      "kind": "event",
+      "source": "backend/app/core/context.py",
+      "line": 3805
+    },
+    {
+      "name": "conversation.ai_reply_status",
+      "kind": "event",
+      "source": "backend/app/core/context_runtime.py",
+      "line": 1206
+    },
+    {
+      "name": "conversation.ai_reply_status",
+      "kind": "event",
+      "source": "backend/app/core/context_tasks.py",
+      "line": 569
+    },
+    {
+      "name": "conversation.ai_reply_status",
+      "kind": "event",
+      "source": "backend/app/core/outbox_background_tasks.py",
+      "line": 128
+    },
+    {
+      "name": "conversation.ai_reply_status",
+      "kind": "topic",
+      "source": "backend/app/core/context.py",
+      "line": 2723
+    },
+    {
+      "name": "conversation.ai_reply_status",
+      "kind": "topic",
+      "source": "backend/app/core/context.py",
+      "line": 2828
+    },
+    {
+      "name": "conversation.ai_reply_status",
+      "kind": "topic",
+      "source": "backend/app/core/context.py",
+      "line": 3010
+    },
+    {
+      "name": "conversation.ai_reply_status",
+      "kind": "topic",
+      "source": "backend/app/core/context.py",
+      "line": 3274
+    },
+    {
+      "name": "conversation.ai_reply_status",
+      "kind": "topic",
+      "source": "backend/app/core/context.py",
+      "line": 3361
+    },
+    {
+      "name": "conversation.ai_reply_status",
+      "kind": "topic",
+      "source": "backend/app/core/context.py",
+      "line": 3468
+    },
+    {
+      "name": "conversation.ai_reply_status",
+      "kind": "topic",
+      "source": "backend/app/core/context.py",
+      "line": 3615
+    },
+    {
+      "name": "conversation.ai_reply_status",
+      "kind": "topic",
+      "source": "backend/app/core/context.py",
+      "line": 3697
+    },
+    {
+      "name": "conversation.ai_reply_status",
+      "kind": "topic",
+      "source": "backend/app/core/context.py",
+      "line": 3806
+    },
+    {
+      "name": "conversation.ai_reply_status",
+      "kind": "topic",
+      "source": "backend/app/core/context_runtime.py",
+      "line": 1207
+    },
+    {
+      "name": "conversation.ai_reply_status",
+      "kind": "topic",
+      "source": "backend/app/core/context_tasks.py",
+      "line": 570
+    },
+    {
+      "name": "conversation.ai_reply_status",
+      "kind": "topic",
+      "source": "backend/app/core/outbox_background_tasks.py",
+      "line": 129
+    },
+    {
+      "name": "conversation.archive_ingested",
+      "kind": "event",
+      "source": "backend/app/core/context_runtime.py",
+      "line": 5402
+    },
+    {
+      "name": "conversation.assigned",
+      "kind": "event",
+      "source": "backend/app/api/routes/assignments.py",
+      "line": 251
+    },
+    {
+      "name": "conversation.assigned",
+      "kind": "event",
+      "source": "backend/app/api/routes/assignments.py",
+      "line": 587
+    },
+    {
+      "name": "conversation.assigned",
+      "kind": "event",
+      "source": "backend/app/core/context_runtime.py",
+      "line": 981
+    },
+    {
+      "name": "conversation.assignment",
+      "kind": "topic",
+      "source": "backend/app/api/routes/assignments.py",
+      "line": 252
+    },
+    {
+      "name": "conversation.assignment",
+      "kind": "topic",
+      "source": "backend/app/api/routes/assignments.py",
+      "line": 299
+    },
+    {
+      "name": "conversation.assignment",
+      "kind": "topic",
+      "source": "backend/app/api/routes/assignments.py",
+      "line": 588
+    },
+    {
+      "name": "conversation.assignment",
+      "kind": "topic",
+      "source": "backend/app/api/routes/assignments.py",
+      "line": 648
+    },
+    {
+      "name": "conversation.assignment",
+      "kind": "topic",
+      "source": "backend/app/core/context_runtime.py",
+      "line": 982
+    },
+    {
+      "name": "conversation.assignment",
+      "kind": "topic",
+      "source": "backend/app/core/context_runtime.py",
+      "line": 4383
+    },
+    {
+      "name": "conversation.assignments_purged",
+      "kind": "event",
+      "source": "backend/app/api/routes/assignments.py",
+      "line": 647
+    },
+    {
+      "name": "conversation.media_ready",
+      "kind": "event",
+      "source": "backend/app/services/archive_media_service.py",
+      "line": 1711
+    },
+    {
+      "name": "conversation.media_ready",
+      "kind": "topic",
+      "source": "backend/app/services/archive_media_service.py",
+      "line": 1712
+    },
+    {
+      "name": "conversation.message",
+      "kind": "topic",
+      "source": "backend/app/api/routes/chat_mutations.py",
+      "line": 152
+    },
+    {
+      "name": "conversation.message",
+      "kind": "topic",
+      "source": "backend/app/api/routes/chat_mutations.py",
+      "line": 413
+    },
+    {
+      "name": "conversation.message",
+      "kind": "topic",
+      "source": "backend/app/api/routes/chat_mutations.py",
+      "line": 716
+    },
+    {
+      "name": "conversation.message",
+      "kind": "topic",
+      "source": "backend/app/api/routes/chat_mutations.py",
+      "line": 808
+    },
+    {
+      "name": "conversation.message",
+      "kind": "topic",
+      "source": "backend/app/api/routes/chat_mutations.py",
+      "line": 1068
+    },
+    {
+      "name": "conversation.message",
+      "kind": "topic",
+      "source": "backend/app/api/routes/chat_mutations.py",
+      "line": 1121
+    },
+    {
+      "name": "conversation.message",
+      "kind": "topic",
+      "source": "backend/app/api/routes/chat_mutations.py",
+      "line": 1194
+    },
+    {
+      "name": "conversation.message",
+      "kind": "topic",
+      "source": "backend/app/api/routes/chat_mutations.py",
+      "line": 1657
+    },
+    {
+      "name": "conversation.message",
+      "kind": "topic",
+      "source": "backend/app/api/routes/chat_mutations.py",
+      "line": 1747
+    },
+    {
+      "name": "conversation.message",
+      "kind": "topic",
+      "source": "backend/app/api/routes/chat_mutations.py",
+      "line": 1886
+    },
+    {
+      "name": "conversation.message",
+      "kind": "topic",
+      "source": "backend/app/api/routes/chat_mutations.py",
+      "line": 1904
+    },
+    {
+      "name": "conversation.message",
+      "kind": "topic",
+      "source": "backend/app/core/context.py",
+      "line": 1445
+    },
+    {
+      "name": "conversation.message",
+      "kind": "topic",
+      "source": "backend/app/core/context.py",
+      "line": 2316
+    },
+    {
+      "name": "conversation.message",
+      "kind": "topic",
+      "source": "backend/app/core/context.py",
+      "line": 2382
+    },
+    {
+      "name": "conversation.message",
+      "kind": "topic",
+      "source": "backend/app/core/context.py",
+      "line": 2694
+    },
+    {
+      "name": "conversation.message",
+      "kind": "topic",
+      "source": "backend/app/core/context.py",
+      "line": 3244
+    },
+    {
+      "name": "conversation.message",
+      "kind": "topic",
+      "source": "backend/app/core/context_runtime.py",
+      "line": 1414
+    },
+    {
+      "name": "conversation.message",
+      "kind": "topic",
+      "source": "backend/app/core/context_runtime.py",
+      "line": 1424
+    },
+    {
+      "name": "conversation.message",
+      "kind": "topic",
+      "source": "backend/app/core/context_runtime.py",
+      "line": 4333
+    },
+    {
+      "name": "conversation.message",
+      "kind": "topic",
+      "source": "backend/app/core/context_runtime.py",
+      "line": 5403
+    },
+    {
+      "name": "conversation.message",
+      "kind": "topic",
+      "source": "backend/app/core/context_tasks.py",
+      "line": 464
+    },
+    {
+      "name": "conversation.message",
+      "kind": "topic",
+      "source": "backend/app/core/context_tasks.py",
+      "line": 470
+    },
+    {
+      "name": "conversation.message.revoke",
+      "kind": "event",
+      "source": "backend/app/api/routes/chat_mutations.py",
+      "line": 1885
+    },
+    {
+      "name": "conversation.message.revoke",
+      "kind": "event",
+      "source": "backend/app/api/routes/chat_mutations.py",
+      "line": 1903
+    },
+    {
+      "name": "conversation.message.revoke",
+      "kind": "event",
+      "source": "backend/app/core/context_tasks.py",
+      "line": 463
+    },
+    {
+      "name": "conversation.replied",
+      "kind": "event",
+      "source": "backend/app/api/routes/chat_mutations.py",
+      "line": 412
+    },
+    {
+      "name": "conversation.replied",
+      "kind": "event",
+      "source": "backend/app/api/routes/chat_mutations.py",
+      "line": 1656
+    },
+    {
+      "name": "conversation.replied",
+      "kind": "event",
+      "source": "backend/app/api/routes/chat_mutations.py",
+      "line": 1746
+    },
+    {
+      "name": "conversation.replied",
+      "kind": "event",
+      "source": "backend/app/core/context.py",
+      "line": 1444
+    },
+    {
+      "name": "conversation.replied",
+      "kind": "event",
+      "source": "backend/app/core/context.py",
+      "line": 2315
+    },
+    {
+      "name": "conversation.replied",
+      "kind": "event",
+      "source": "backend/app/core/context.py",
+      "line": 2381
+    },
+    {
+      "name": "conversation.unassigned",
+      "kind": "event",
+      "source": "backend/app/api/routes/assignments.py",
+      "line": 298
+    },
+    {
+      "name": "conversation.voice_transcription_ready",
+      "kind": "event",
+      "source": "backend/app/services/coze_voice_transcription_service.py",
+      "line": 535
+    },
+    {
+      "name": "conversation.voice_transcription_ready",
+      "kind": "topic",
+      "source": "backend/app/services/coze_voice_transcription_service.py",
+      "line": 536
+    },
+    {
+      "name": "cs.user",
+      "kind": "topic",
+      "source": "backend/app/api/routes/cs_users.py",
+      "line": 145
+    },
+    {
+      "name": "cs.user",
+      "kind": "topic",
+      "source": "backend/app/api/routes/cs_users.py",
+      "line": 197
+    },
+    {
+      "name": "cs.user.deleted",
+      "kind": "event",
+      "source": "backend/app/api/routes/cs_users.py",
+      "line": 196
+    },
+    {
+      "name": "cs.user.updated",
+      "kind": "event",
+      "source": "backend/app/api/routes/cs_users.py",
+      "line": 144
+    },
+    {
+      "name": "customer.relation",
+      "kind": "topic",
+      "source": "backend/app/api/routes/wework_notify.py",
+      "line": 919
+    },
+    {
+      "name": "device.heartbeat",
+      "kind": "topic",
+      "source": "backend/app/api/routes/devices.py",
+      "line": 2268
+    },
+    {
+      "name": "device.heartbeat",
+      "kind": "topic",
+      "source": "backend/app/api/routes/devices.py",
+      "line": 2288
+    },
+    {
+      "name": "device.manual.deleted",
+      "kind": "event",
+      "source": "backend/app/api/routes/devices.py",
+      "line": 2287
+    },
+    {
+      "name": "device.manual.upserted",
+      "kind": "event",
+      "source": "backend/app/api/routes/devices.py",
+      "line": 2267
+    },
+    {
+      "name": "device.status",
+      "kind": "event",
+      "source": "backend/app/api/routes/actions_login_sdk.py",
+      "line": 205
+    },
+    {
+      "name": "device.status",
+      "kind": "event",
+      "source": "backend/app/api/routes/device_ws_account_sync.py",
+      "line": 1205
+    },
+    {
+      "name": "device.status",
+      "kind": "topic",
+      "source": "backend/app/api/routes/actions_login_sdk.py",
+      "line": 206
+    },
+    {
+      "name": "device.status",
+      "kind": "topic",
+      "source": "backend/app/api/routes/device_ws_account_sync.py",
+      "line": 1206
+    },
+    {
+      "name": "friend.added",
+      "kind": "event",
+      "source": "backend/app/api/routes/chat_mutations.py",
+      "line": 2049
+    },
+    {
+      "name": "friend.added",
+      "kind": "event",
+      "source": "backend/app/api/routes/wework_notify.py",
+      "line": 208
+    },
+    {
+      "name": "friend.added",
+      "kind": "topic",
+      "source": "backend/app/api/routes/chat_mutations.py",
+      "line": 2049
+    },
+    {
+      "name": "friend.added",
+      "kind": "topic",
+      "source": "backend/app/api/routes/wework_notify.py",
+      "line": 209
+    },
+    {
+      "name": "identity.updated",
+      "kind": "topic",
+      "source": "backend/app/core/outbox_background_tasks.py",
+      "line": 376
+    },
+    {
+      "name": "identity.updated",
+      "kind": "topic",
+      "source": "backend/app/services/archive_callback_consumer.py",
+      "line": 106
+    },
+    {
+      "name": "identity.updated",
+      "kind": "topic",
+      "source": "backend/app/services/realtime_contact_identity_service.py",
+      "line": 416
+    },
+    {
+      "name": "identity_updated",
+      "kind": "event",
+      "source": "backend/app/core/outbox_background_tasks.py",
+      "line": 375
+    },
+    {
+      "name": "identity_updated",
+      "kind": "event",
+      "source": "backend/app/services/archive_callback_consumer.py",
+      "line": 105
+    },
+    {
+      "name": "identity_updated",
+      "kind": "event",
+      "source": "backend/app/services/realtime_contact_identity_service.py",
+      "line": 415
+    },
+    {
+      "name": "managed_ai_profile_not_configured",
+      "kind": "event",
+      "source": "backend/app/core/context.py",
+      "line": 2844
+    },
+    {
+      "name": "script.deleted",
+      "kind": "event",
+      "source": "backend/app/api/routes/admin_config.py",
+      "line": 2332
+    },
+    {
+      "name": "script.updated",
+      "kind": "event",
+      "source": "backend/app/api/routes/admin_config.py",
+      "line": 2319
+    },
+    {
+      "name": "sop.changed",
+      "kind": "topic",
+      "source": "backend/app/api/routes/admin_config.py",
+      "line": 1819
+    },
+    {
+      "name": "sop.changed",
+      "kind": "topic",
+      "source": "backend/app/api/routes/admin_config.py",
+      "line": 1876
+    },
+    {
+      "name": "sop.changed",
+      "kind": "topic",
+      "source": "backend/app/api/routes/admin_config.py",
+      "line": 1899
+    },
+    {
+      "name": "sop.changed",
+      "kind": "topic",
+      "source": "backend/app/api/routes/admin_config.py",
+      "line": 1922
+    },
+    {
+      "name": "sop.changed",
+      "kind": "topic",
+      "source": "backend/app/api/routes/admin_config.py",
+      "line": 2320
+    },
+    {
+      "name": "sop.changed",
+      "kind": "topic",
+      "source": "backend/app/api/routes/admin_config.py",
+      "line": 2333
+    },
+    {
+      "name": "sop.flow.deleted",
+      "kind": "event",
+      "source": "backend/app/api/routes/admin_config.py",
+      "line": 1921
+    },
+    {
+      "name": "sop.flow.updated",
+      "kind": "event",
+      "source": "backend/app/api/routes/admin_config.py",
+      "line": 1818
+    },
+    {
+      "name": "sop.policy.deleted",
+      "kind": "event",
+      "source": "backend/app/api/routes/admin_config.py",
+      "line": 1898
+    },
+    {
+      "name": "sop.policy.updated",
+      "kind": "event",
+      "source": "backend/app/api/routes/admin_config.py",
+      "line": 1875
+    },
+    {
+      "name": "sop_ai_empty_reply",
+      "kind": "event",
+      "source": "backend/app/core/context.py",
+      "line": 3649
+    },
+    {
+      "name": "sop_coze_backend_send",
+      "kind": "event",
+      "source": "backend/app/core/context.py",
+      "line": 3829
+    },
+    {
+      "name": "sop_coze_superseded",
+      "kind": "event",
+      "source": "backend/app/core/context.py",
+      "line": 3495
+    },
+    {
+      "name": "sop_delivery_fact",
+      "kind": "event",
+      "source": "backend/app/api/routes/admin_config.py",
+      "line": 199
+    },
+    {
+      "name": "sop_delivery_fact_batch",
+      "kind": "event",
+      "source": "backend/app/api/routes/admin_config.py",
+      "line": 740
+    },
+    {
+      "name": "sop_fallback_legacy",
+      "kind": "event",
+      "source": "backend/app/core/context.py",
+      "line": 4300
+    },
+    {
+      "name": "sop_platform_pull_busy",
+      "kind": "event",
+      "source": "backend/app/core/context.py",
+      "line": 4211
+    },
+    {
+      "name": "sop_platform_pull_deferred_device_backpressure",
+      "kind": "event",
+      "source": "backend/app/core/context_runtime.py",
+      "line": 4704
+    },
+    {
+      "name": "sop_platform_pull_dispatch_device_switched",
+      "kind": "event",
+      "source": "backend/app/core/context.py",
+      "line": 2034
+    },
+    {
+      "name": "sop_platform_pull_dispatch_failed",
+      "kind": "event",
+      "source": "backend/app/core/context.py",
+      "line": 1704
+    },
+    {
+      "name": "sop_platform_pull_dispatch_failed",
+      "kind": "event",
+      "source": "backend/app/core/context.py",
+      "line": 1790
+    },
+    {
+      "name": "sop_platform_pull_dispatch_failed",
+      "kind": "event",
+      "source": "backend/app/core/context.py",
+      "line": 1845
+    },
+    {
+      "name": "sop_platform_pull_empty",
+      "kind": "event",
+      "source": "backend/app/core/context.py",
+      "line": 1640
+    },
+    {
+      "name": "sop_platform_pull_failed",
+      "kind": "event",
+      "source": "backend/app/core/context.py",
+      "line": 1057
+    },
+    {
+      "name": "sop_platform_pull_failed",
+      "kind": "event",
+      "source": "backend/app/core/context.py",
+      "line": 1073
+    },
+    {
+      "name": "sop_platform_pull_failed",
+      "kind": "event",
+      "source": "backend/app/core/context.py",
+      "line": 1618
+    },
+    {
+      "name": "sop_platform_pull_fetch_success",
+      "kind": "event",
+      "source": "backend/app/core/context.py",
+      "line": 1155
+    },
+    {
+      "name": "sop_platform_pull_missing_entity",
+      "kind": "event",
+      "source": "backend/app/core/context.py",
+      "line": 1735
+    },
+    {
+      "name": "sop_platform_pull_skip_invalid_conversation",
+      "kind": "event",
+      "source": "backend/app/core/context_runtime.py",
+      "line": 5029
+    },
+    {
+      "name": "sop_platform_pull_skip_missing_flow",
+      "kind": "event",
+      "source": "backend/app/core/context.py",
+      "line": 4188
+    },
+    {
+      "name": "sop_platform_task_driver_missing_conversation",
+      "kind": "event",
+      "source": "backend/app/core/context_runtime.py",
+      "line": 4850
+    },
+    {
+      "name": "sop_platform_task_driver_skip_account_mismatch",
+      "kind": "event",
+      "source": "backend/app/core/context_runtime.py",
+      "line": 4814
+    },
+    {
+      "name": "sop_platform_task_driver_skip_missing_customer_id",
+      "kind": "event",
+      "source": "backend/app/core/context_runtime.py",
+      "line": 4830
+    },
+    {
+      "name": "sop_route",
+      "kind": "event",
+      "source": "backend/app/core/context.py",
+      "line": 3952
+    },
+    {
+      "name": "sop_runtime",
+      "kind": "event",
+      "source": "backend/app/api/routes/admin_config.py",
+      "line": 632
+    },
+    {
+      "name": "sop_runtime",
+      "kind": "event",
+      "source": "backend/app/core/context.py",
+      "line": 4548
+    },
+    {
+      "name": "sop_sensitive_handoff",
+      "kind": "event",
+      "source": "backend/app/core/context.py",
+      "line": 3025
+    },
+    {
+      "name": "sop_skip_disabled_flow",
+      "kind": "event",
+      "source": "backend/app/core/context.py",
+      "line": 4136
+    },
+    {
+      "name": "sop_skip_missing_account_fact",
+      "kind": "event",
+      "source": "backend/app/core/context.py",
+      "line": 4076
+    },
+    {
+      "name": "sop_skip_outside_flow_window",
+      "kind": "event",
+      "source": "backend/app/core/context.py",
+      "line": 4159
+    },
+    {
+      "name": "task.status",
+      "kind": "event",
+      "source": "backend/app/core/context_tasks.py",
+      "line": 652
+    },
+    {
+      "name": "task.status",
+      "kind": "topic",
+      "source": "backend/app/api/routes/tasks.py",
+      "line": 19
+    },
+    {
+      "name": "task.status",
+      "kind": "topic",
+      "source": "backend/app/core/context_tasks.py",
+      "line": 653
+    },
+    {
+      "name": "wework.login",
+      "kind": "topic",
+      "source": "backend/app/api/routes/actions_login_routes.py",
+      "line": 221
+    },
+    {
+      "name": "wework.login",
+      "kind": "topic",
+      "source": "backend/app/api/routes/actions_login_routes.py",
+      "line": 372
+    },
+    {
+      "name": "wework.login",
+      "kind": "topic",
+      "source": "backend/app/api/routes/actions_login_routes.py",
+      "line": 392
+    },
+    {
+      "name": "wework.login",
+      "kind": "topic",
+      "source": "backend/app/api/routes/actions_login_routes.py",
+      "line": 558
+    },
+    {
+      "name": "wework.login",
+      "kind": "topic",
+      "source": "backend/app/api/routes/actions_login_routes.py",
+      "line": 580
+    },
+    {
+      "name": "wework.login",
+      "kind": "topic",
+      "source": "backend/app/api/routes/actions_login_sdk.py",
+      "line": 143
+    },
+    {
+      "name": "wework.login",
+      "kind": "topic",
+      "source": "backend/app/api/routes/device_ws_account_sync.py",
+      "line": 1192
+    },
+    {
+      "name": "wework.login",
+      "kind": "topic",
+      "source": "backend/app/api/routes/device_ws_account_sync.py",
+      "line": 1358
+    },
+    {
+      "name": "wework.login.status",
+      "kind": "event",
+      "source": "backend/app/api/routes/actions_login_routes.py",
+      "line": 220
+    },
+    {
+      "name": "wework.login.status",
+      "kind": "event",
+      "source": "backend/app/api/routes/actions_login_routes.py",
+      "line": 372
+    },
+    {
+      "name": "wework.login.status",
+      "kind": "event",
+      "source": "backend/app/api/routes/actions_login_routes.py",
+      "line": 392
+    },
+    {
+      "name": "wework.login.status",
+      "kind": "event",
+      "source": "backend/app/api/routes/actions_login_routes.py",
+      "line": 558
+    },
+    {
+      "name": "wework.login.status",
+      "kind": "event",
+      "source": "backend/app/api/routes/actions_login_routes.py",
+      "line": 580
+    },
+    {
+      "name": "wework.login.status",
+      "kind": "event",
+      "source": "backend/app/api/routes/actions_login_sdk.py",
+      "line": 142
+    },
+    {
+      "name": "wework.login.status",
+      "kind": "event",
+      "source": "backend/app/api/routes/device_ws_account_sync.py",
+      "line": 1191
+    },
+    {
+      "name": "wework.login.status",
+      "kind": "event",
+      "source": "backend/app/api/routes/device_ws_account_sync.py",
+      "line": 1357
+    }
+  ],
+  "redis_keys": [
+    {
+      "name": "archive:",
+      "kind": "key",
+      "source": "backend/app/api/routes/chat_cache_helpers.py",
+      "line": 116
+    },
+    {
+      "name": "archive:",
+      "kind": "key",
+      "source": "backend/app/api/routes/chat_message_service.py",
+      "line": 74
+    },
+    {
+      "name": "archive:",
+      "kind": "key",
+      "source": "backend/app/core/context.py",
+      "line": 4727
+    },
+    {
+      "name": "archive:",
+      "kind": "key",
+      "source": "backend/app/core/context_runtime.py",
+      "line": 1667
+    },
+    {
+      "name": "archive:{item.archive_msgid}",
+      "kind": "key",
+      "source": "backend/app/core/context_runtime.py",
+      "line": 5423
+    },
+    {
+      "name": "archive:{tenant_id}:{archive_msgid}",
+      "kind": "key",
+      "source": "backend/app/core/context_runtime.py",
+      "line": 1467
+    },
+    {
+      "name": "cloud_ws_events",
+      "kind": "topic",
+      "source": "backend/app/core/context_bootstrap_realtime.py",
+      "line": 40
+    },
+    {
+      "name": "cloud_ws_events",
+      "kind": "topic",
+      "source": "backend/app/realtime/broker.py",
+      "line": 561
+    },
+    {
+      "name": "lock:sdk-device:{canonical_id}",
+      "kind": "exists",
+      "source": "backend/app/core/wework_status_probe.py",
+      "line": 184
+    },
+    {
+      "name": "lock:sdk-device:{lock_device_id}",
+      "kind": "key",
+      "source": "backend/app/core/context_tasks.py",
+      "line": 2361
+    },
+    {
+      "name": "sdk:",
+      "kind": "key",
+      "source": "backend/app/core/context_tasks.py",
+      "line": 727
+    },
+    {
+      "name": "sdk:",
+      "kind": "key",
+      "source": "backend/app/core/context_tasks.py",
+      "line": 729
+    },
+    {
+      "name": "sdk:",
+      "kind": "key",
+      "source": "backend/app/core/context_tasks.py",
+      "line": 744
+    },
+    {
+      "name": "sdk:device_transport:",
+      "kind": "key",
+      "source": "backend/app/core/sdk_device_health.py",
+      "line": 21
+    },
+    {
+      "name": "sdk:device_ui_unstable:",
+      "kind": "key",
+      "source": "backend/app/core/sdk_device_health.py",
+      "line": 22
+    },
+    {
+      "name": "sdk:{device_id}",
+      "kind": "key",
+      "source": "backend/app/api/routes/device_ws_account_sync.py",
+      "line": 687
+    },
+    {
+      "name": "sdk:{device_id}",
+      "kind": "key",
+      "source": "backend/app/api/routes/device_ws_account_sync.py",
+      "line": 1075
+    },
+    {
+      "name": "sdk:{device_id}",
+      "kind": "key",
+      "source": "backend/app/api/routes/devices.py",
+      "line": 1892
+    },
+    {
+      "name": "sdk:{device_id}",
+      "kind": "key",
+      "source": "backend/app/api/routes/devices.py",
+      "line": 1941
+    },
+    {
+      "name": "sdk:{normalized_device_id}",
+      "kind": "key",
+      "source": "backend/app/api/routes/actions_login_sdk.py",
+      "line": 173
+    },
+    {
+      "name": "sdk:{resolved_device_id}",
+      "kind": "key",
+      "source": "backend/app/core/context_tasks.py",
+      "line": 725
+    },
+    {
+      "name": "wework:",
+      "kind": "key",
+      "source": "backend/app/api/routes/chat_identity_selection.py",
+      "line": 25
+    },
+    {
+      "name": "wework:",
+      "kind": "key",
+      "source": "backend/app/api/routes/chat_message_payloads.py",
+      "line": 32
+    },
+    {
+      "name": "wework:",
+      "kind": "key",
+      "source": "backend/app/api/routes/chat_message_payloads.py",
+      "line": 52
+    },
+    {
+      "name": "wework:",
+      "kind": "key",
+      "source": "backend/app/api/routes/chat_presentation.py",
+      "line": 62
+    },
+    {
+      "name": "wework:",
+      "kind": "key",
+      "source": "backend/app/api/routes/chat_query_service.py",
+      "line": 180
+    },
+    {
+      "name": "wework:",
+      "kind": "key",
+      "source": "backend/app/api/routes/chat_query_service.py",
+      "line": 728
+    },
+    {
+      "name": "wework:",
+      "kind": "key",
+      "source": "backend/app/core/context_bootstrap.py",
+      "line": 168
+    },
+    {
+      "name": "wework:",
+      "kind": "key",
+      "source": "backend/app/core/context_tasks.py",
+      "line": 703
+    },
+    {
+      "name": "wework:ingest:incoming",
+      "kind": "stream",
+      "source": "backend/app/services/incoming_event_queue_service.py",
+      "line": 102
+    },
+    {
+      "name": "wework:{bound_account.wework_user_id}",
+      "kind": "key",
+      "source": "backend/app/api/routes/chat_identity_snapshot.py",
+      "line": 247
+    },
+    {
+      "name": "wework:{conversation_wework_user_id}",
+      "kind": "key",
+      "source": "backend/app/api/routes/chat_identity_snapshot.py",
+      "line": 283
+    },
+    {
+      "name": "wework:{enterprise_id}:{wework_user_id}",
+      "kind": "key",
+      "source": "backend/app/api/routes/chat_mutations.py",
+      "line": 1223
+    },
+    {
+      "name": "wework:{resolved_wework_user_id}",
+      "kind": "key",
+      "source": "backend/app/api/routes/chat_message_payloads.py",
+      "line": 515
+    },
+    {
+      "name": "wework:{row_wework_user_id}",
+      "kind": "key",
+      "source": "backend/app/api/routes/chat_query_helpers.py",
+      "line": 1877
+    },
+    {
+      "name": "wework:{row_wework_user_id}",
+      "kind": "key",
+      "source": "backend/app/api/routes/chat_query_helpers.py",
+      "line": 2085
+    },
+    {
+      "name": "wework:{user_id}",
+      "kind": "key",
+      "source": "backend/app/api/routes/chat_query_helpers.py",
+      "line": 507
+    },
+    {
+      "name": "wework:{wework_user_id}",
+      "kind": "key",
+      "source": "backend/app/api/routes/admin_config.py",
+      "line": 1562
+    }
+  ],
+  "db_tables": [
+    {
+      "name": "__db_probe",
+      "kind": "create_table",
+      "source": "backend/app/infra/db.py",
+      "line": 227
+    },
+    {
+      "name": "account_conversation_stats_projection",
+      "kind": "create_table",
+      "source": "backend/app/infra/postgres_bootstrap.py",
+      "line": 279
+    },
+    {
+      "name": "account_inbox_projection",
+      "kind": "create_table",
+      "source": "backend/app/infra/inbox_projection_repository.py",
+      "line": 234
+    },
+    {
+      "name": "account_inbox_projection",
+      "kind": "create_table",
+      "source": "backend/app/infra/inbox_projection_repository_mysql.py",
+      "line": 236
+    },
+    {
+      "name": "account_inbox_projection",
+      "kind": "create_table",
+      "source": "backend/app/infra/inbox_projection_repository_postgres.py",
+      "line": 184
+    },
+    {
+      "name": "ai_conversation_quality_results",
+      "kind": "create_table",
+      "source": "backend/app/infra/ai_quality_schema.py",
+      "line": 24
+    },
+    {
+      "name": "ai_conversation_quality_results",
+      "kind": "create_table",
+      "source": "backend/app/infra/ai_quality_schema.py",
+      "line": 124
+    },
+    {
+      "name": "ai_conversation_quality_results",
+      "kind": "create_table",
+      "source": "backend/migrations/versions/20260505_0012_add_ai_quality_tables.py",
+      "line": 35
+    },
+    {
+      "name": "ai_conversation_quality_results",
+      "kind": "create_table",
+      "source": "backend/migrations/versions/20260505_0012_add_ai_quality_tables.py",
+      "line": 134
+    },
+    {
+      "name": "ai_quality_daily_stats",
+      "kind": "create_table",
+      "source": "backend/app/infra/ai_quality_schema.py",
+      "line": 78
+    },
+    {
+      "name": "ai_quality_daily_stats",
+      "kind": "create_table",
+      "source": "backend/app/infra/ai_quality_schema.py",
+      "line": 192
+    },
+    {
+      "name": "ai_quality_daily_stats",
+      "kind": "create_table",
+      "source": "backend/migrations/versions/20260505_0012_add_ai_quality_tables.py",
+      "line": 90
+    },
+    {
+      "name": "ai_quality_daily_stats",
+      "kind": "create_table",
+      "source": "backend/migrations/versions/20260505_0012_add_ai_quality_tables.py",
+      "line": 214
+    },
+    {
+      "name": "ai_reply_attempts",
+      "kind": "create_table",
+      "source": "backend/app/infra/ai_reply_attempt_repository.py",
+      "line": 279
+    },
+    {
+      "name": "ai_reply_attempts",
+      "kind": "create_table",
+      "source": "backend/app/infra/ai_reply_attempt_repository.py",
+      "line": 285
+    },
+    {
+      "name": "ai_reply_attempts",
+      "kind": "create_table",
+      "source": "backend/app/infra/ai_reply_attempt_repository.py",
+      "line": 319
+    },
+    {
+      "name": "archive_callback_receipts",
+      "kind": "create_table",
+      "source": "backend/app/infra/archive_callback_receipt_repository.py",
+      "line": 44
+    },
+    {
+      "name": "archive_callback_receipts",
+      "kind": "create_table",
+      "source": "backend/app/infra/archive_callback_receipt_repository.py",
+      "line": 543
+    },
+    {
+      "name": "archive_callback_receipts",
+      "kind": "create_table",
+      "source": "backend/app/infra/archive_callback_receipt_repository.py",
+      "line": 567
+    },
+    {
+      "name": "archive_compensation_tasks",
+      "kind": "create_table",
+      "source": "backend/app/infra/archive_compensation_task_repository.py",
+      "line": 62
+    },
+    {
+      "name": "archive_compensation_tasks",
+      "kind": "create_table",
+      "source": "backend/app/infra/archive_compensation_task_repository.py",
+      "line": 85
+    },
+    {
+      "name": "archive_compensation_tasks",
+      "kind": "create_table",
+      "source": "backend/app/infra/archive_compensation_task_repository.py",
+      "line": 393
+    },
+    {
+      "name": "archive_compensation_tasks",
+      "kind": "create_table",
+      "source": "backend/app/infra/archive_compensation_task_repository.py",
+      "line": 416
+    },
+    {
+      "name": "archive_ingest_tasks",
+      "kind": "create_table",
+      "source": "backend/app/infra/archive_ingest_task_repository.py",
+      "line": 168
+    },
+    {
+      "name": "archive_ingest_tasks",
+      "kind": "create_table",
+      "source": "backend/app/infra/archive_ingest_task_repository.py",
+      "line": 627
+    },
+    {
+      "name": "archive_ingest_tasks",
+      "kind": "create_table",
+      "source": "backend/migrations/versions/20260426_0010_add_archive_ingest_tasks.py",
+      "line": 39
+    },
+    {
+      "name": "archive_ingest_tasks",
+      "kind": "create_table",
+      "source": "backend/migrations/versions/20260426_0010_add_archive_ingest_tasks.py",
+      "line": 78
+    },
+    {
+      "name": "archive_media_tasks",
+      "kind": "create_table",
+      "source": "backend/app/infra/archive_media_task_repository.py",
+      "line": 57
+    },
+    {
+      "name": "archive_media_tasks",
+      "kind": "create_table",
+      "source": "backend/app/infra/archive_media_task_repository.py",
+      "line": 823
+    },
+    {
+      "name": "archive_media_tasks",
+      "kind": "create_table",
+      "source": "backend/app/infra/postgres_bootstrap.py",
+      "line": 132
+    },
+    {
+      "name": "archive_metadata",
+      "kind": "create_table",
+      "source": "backend/app/infra/postgres_bootstrap.py",
+      "line": 206
+    },
+    {
+      "name": "archive_metadata",
+      "kind": "create_table",
+      "source": "backend/app/infra/tenant_governance_repository.py",
+      "line": 91
+    },
+    {
+      "name": "archive_metadata",
+      "kind": "create_table",
+      "source": "backend/app/infra/tenant_governance_repository.py",
+      "line": 467
+    },
+    {
+      "name": "archive_raw_messages",
+      "kind": "create_table",
+      "source": "backend/app/infra/archive_raw_repository.py",
+      "line": 67
+    },
+    {
+      "name": "archive_raw_messages",
+      "kind": "create_table",
+      "source": "backend/app/infra/archive_raw_repository.py",
+      "line": 757
+    },
+    {
+      "name": "archive_raw_messages",
+      "kind": "create_table",
+      "source": "backend/app/infra/postgres_bootstrap.py",
+      "line": 113
+    },
+    {
+      "name": "archive_sync_cursors",
+      "kind": "create_table",
+      "source": "backend/app/infra/archive_sync_repository.py",
+      "line": 109
+    },
+    {
+      "name": "archive_sync_cursors",
+      "kind": "create_table",
+      "source": "backend/app/infra/archive_sync_repository.py",
+      "line": 296
+    },
+    {
+      "name": "assignee_conversation_projection",
+      "kind": "create_table",
+      "source": "backend/app/infra/inbox_projection_repository_mysql.py",
+      "line": 84
+    },
+    {
+      "name": "assignee_conversation_projection",
+      "kind": "create_table",
+      "source": "backend/app/infra/postgres_bootstrap.py",
+      "line": 262
+    },
+    {
+      "name": "assignee_inbox_conversation_projection",
+      "kind": "create_table",
+      "source": "backend/app/infra/inbox_projection_repository.py",
+      "line": 74
+    },
+    {
+      "name": "assignee_inbox_conversation_projection",
+      "kind": "create_table",
+      "source": "backend/app/infra/inbox_projection_repository_postgres.py",
+      "line": 61
+    },
+    {
+      "name": "assignee_inbox_projection",
+      "kind": "create_table",
+      "source": "backend/app/infra/inbox_projection_repository.py",
+      "line": 60
+    },
+    {
+      "name": "assignee_inbox_projection",
+      "kind": "create_table",
+      "source": "backend/app/infra/inbox_projection_repository_mysql.py",
+      "line": 70
+    },
+    {
+      "name": "assignee_inbox_projection",
+      "kind": "create_table",
+      "source": "backend/app/infra/inbox_projection_repository_postgres.py",
+      "line": 47
+    },
+    {
+      "name": "audit_logs",
+      "kind": "create_table",
+      "source": "backend/app/infra/audit_log_repository.py",
+      "line": 74
+    },
+    {
+      "name": "audit_logs",
+      "kind": "create_table",
+      "source": "backend/app/infra/audit_log_repository.py",
+      "line": 87
+    },
+    {
+      "name": "contact_identity_master",
+      "kind": "create_table",
+      "source": "backend/app/infra/contact_identity_master_repository.py",
+      "line": 43
+    },
+    {
+      "name": "contact_identity_master",
+      "kind": "create_table",
+      "source": "backend/app/infra/contact_identity_master_repository.py",
+      "line": 467
+    },
+    {
+      "name": "contact_identity_master",
+      "kind": "create_table",
+      "source": "backend/app/infra/contact_identity_master_repository.py",
+      "line": 490
+    },
+    {
+      "name": "contact_identity_master",
+      "kind": "create_table",
+      "source": "backend/app/infra/postgres_bootstrap.py",
+      "line": 218
+    },
+    {
+      "name": "contact_identity_scoped_display_index",
+      "kind": "create_table",
+      "source": "backend/app/infra/contact_identity_master_repository.py",
+      "line": 128
+    },
+    {
+      "name": "contact_identity_scoped_display_index",
+      "kind": "create_table",
+      "source": "backend/app/infra/contact_identity_master_repository.py",
+      "line": 145
+    },
+    {
+      "name": "contact_identity_scoped_display_index",
+      "kind": "create_table",
+      "source": "backend/app/infra/postgres_bootstrap.py",
+      "line": 239
+    },
+    {
+      "name": "contact_profiles",
+      "kind": "create_table",
+      "source": "backend/app/infra/message_repository/mysql_repo.py",
+      "line": 318
+    },
+    {
+      "name": "contact_profiles",
+      "kind": "create_table",
+      "source": "backend/app/infra/message_repository/runtime_schema.py",
+      "line": 254
+    },
+    {
+      "name": "contact_profiles",
+      "kind": "create_table",
+      "source": "backend/app/infra/postgres_bootstrap.py",
+      "line": 101
+    },
+    {
+      "name": "conversation_assignments",
+      "kind": "create_table",
+      "source": "backend/app/infra/assignment_repository_mysql.py",
+      "line": 40
+    },
+    {
+      "name": "conversation_assignments",
+      "kind": "create_table",
+      "source": "backend/app/infra/assignment_repository_postgres.py",
+      "line": 54
+    },
+    {
+      "name": "conversation_assignments",
+      "kind": "create_table",
+      "source": "backend/app/infra/postgres_bootstrap.py",
+      "line": 153
+    },
+    {
+      "name": "conversation_counter_projection",
+      "kind": "create_table",
+      "source": "backend/app/infra/inbox_projection_repository.py",
+      "line": 347
+    },
+    {
+      "name": "conversation_counter_projection",
+      "kind": "create_table",
+      "source": "backend/app/infra/inbox_projection_repository_mysql.py",
+      "line": 313
+    },
+    {
+      "name": "conversation_counter_projection",
+      "kind": "create_table",
+      "source": "backend/app/infra/inbox_projection_repository_postgres.py",
+      "line": 246
+    },
+    {
+      "name": "conversation_overview_projection",
+      "kind": "create_table",
+      "source": "backend/app/infra/conversation_projection_repository_cloud.py",
+      "line": 392
+    },
+    {
+      "name": "conversation_overview_projection",
+      "kind": "create_table",
+      "source": "backend/app/infra/conversation_projection_repository_cloud.py",
+      "line": 429
+    },
+    {
+      "name": "conversation_search_projection",
+      "kind": "create_table",
+      "source": "backend/app/infra/pg_fts_search_adapter.py",
+      "line": 101
+    },
+    {
+      "name": "conversation_unread_projection",
+      "kind": "create_table",
+      "source": "backend/app/infra/postgres_bootstrap.py",
+      "line": 251
+    },
+    {
+      "name": "conversations",
+      "kind": "create_table",
+      "source": "backend/app/infra/message_repository/mysql_repo.py",
+      "line": 191
+    },
+    {
+      "name": "conversations",
+      "kind": "create_table",
+      "source": "backend/app/infra/message_repository/runtime_schema.py",
+      "line": 44
+    },
+    {
+      "name": "conversations",
+      "kind": "create_table",
+      "source": "backend/app/infra/postgres_bootstrap.py",
+      "line": 18
+    },
+    {
+      "name": "cs_users",
+      "kind": "create_table",
+      "source": "backend/app/infra/cs_user_repository.py",
+      "line": 60
+    },
+    {
+      "name": "cs_users",
+      "kind": "create_table",
+      "source": "backend/app/infra/cs_user_repository.py",
+      "line": 409
+    },
+    {
+      "name": "customer_member_relations",
+      "kind": "create_table",
+      "source": "backend/app/infra/customer_member_relation_repository.py",
+      "line": 83
+    },
+    {
+      "name": "customer_member_relations",
+      "kind": "create_table",
+      "source": "backend/migrations/versions/20260507_0013_add_customer_member_relations.py",
+      "line": 35
+    },
+    {
+      "name": "customer_member_relations",
+      "kind": "create_table",
+      "source": "backend/migrations/versions/20260507_0013_add_customer_member_relations.py",
+      "line": 61
+    },
+    {
+      "name": "devices",
+      "kind": "create_table",
+      "source": "backend/app/infra/device_repository.py",
+      "line": 36
+    },
+    {
+      "name": "devices",
+      "kind": "create_table",
+      "source": "backend/app/infra/device_repository.py",
+      "line": 332
+    },
+    {
+      "name": "encrypted_messages",
+      "kind": "create_table",
+      "source": "backend/app/infra/encrypted_message_repository.py",
+      "line": 68
+    },
+    {
+      "name": "encrypted_messages",
+      "kind": "create_table",
+      "source": "backend/app/infra/encrypted_message_repository.py",
+      "line": 407
+    },
+    {
+      "name": "encrypted_messages",
+      "kind": "create_table",
+      "source": "backend/app/infra/encrypted_message_repository.py",
+      "line": 436
+    },
+    {
+      "name": "encrypted_messages",
+      "kind": "create_table",
+      "source": "backend/app/infra/postgres_bootstrap.py",
+      "line": 163
+    },
+    {
+      "name": "enterprises",
+      "kind": "create_table",
+      "source": "backend/app/infra/enterprise_repository.py",
+      "line": 35
+    },
+    {
+      "name": "enterprises",
+      "kind": "create_table",
+      "source": "backend/app/infra/enterprise_repository.py",
+      "line": 357
+    },
+    {
+      "name": "error_events",
+      "kind": "create_table",
+      "source": "backend/app/infra/error_event_repository.py",
+      "line": 84
+    },
+    {
+      "name": "error_events",
+      "kind": "create_table",
+      "source": "backend/app/infra/error_event_repository.py",
+      "line": 239
+    },
+    {
+      "name": "error_events",
+      "kind": "create_table",
+      "source": "backend/app/infra/error_event_repository.py",
+      "line": 274
+    },
+    {
+      "name": "error_events",
+      "kind": "create_table",
+      "source": "backend/migrations/versions/20260408_0002_add_pipeline_spans_and_error_events.py",
+      "line": 64
+    },
+    {
+      "name": "error_events",
+      "kind": "create_table",
+      "source": "backend/migrations/versions/20260408_0002_add_pipeline_spans_and_error_events.py",
+      "line": 172
+    },
+    {
+      "name": "event_consume_receipts",
+      "kind": "create_table",
+      "source": "backend/app/infra/event_consume_receipt_repository.py",
+      "line": 46
+    },
+    {
+      "name": "event_consume_receipts",
+      "kind": "create_table",
+      "source": "backend/app/infra/event_consume_receipt_repository.py",
+      "line": 294
+    },
+    {
+      "name": "friend_added_events",
+      "kind": "create_table",
+      "source": "backend/app/infra/message_repository/mysql_repo.py",
+      "line": 305
+    },
+    {
+      "name": "friend_added_events",
+      "kind": "create_table",
+      "source": "backend/app/infra/message_repository/runtime_schema.py",
+      "line": 241
+    },
+    {
+      "name": "friend_added_events",
+      "kind": "create_table",
+      "source": "backend/app/infra/postgres_bootstrap.py",
+      "line": 90
+    },
+    {
+      "name": "knowledge_docs",
+      "kind": "create_table",
+      "source": "backend/app/infra/knowledge_repository_mysql.py",
+      "line": 37
+    },
+    {
+      "name": "knowledge_docs",
+      "kind": "create_table",
+      "source": "backend/app/infra/knowledge_repository_postgres.py",
+      "line": 31
+    },
+    {
+      "name": "knowledge_docs",
+      "kind": "create_table",
+      "source": "backend/app/infra/knowledge_repository_sqlite.py",
+      "line": 30
+    },
+    {
+      "name": "message_revoke_states",
+      "kind": "create_table",
+      "source": "backend/app/infra/message_repository/mysql_repo.py",
+      "line": 292
+    },
+    {
+      "name": "message_revoke_states",
+      "kind": "create_table",
+      "source": "backend/app/infra/message_repository/runtime_schema.py",
+      "line": 179
+    },
+    {
+      "name": "message_revoke_states",
+      "kind": "create_table",
+      "source": "backend/app/infra/postgres_bootstrap.py",
+      "line": 79
+    },
+    {
+      "name": "message_revoke_states",
+      "kind": "create_table",
+      "source": "backend/migrations/versions/20260610_0027_add_message_revoke_states.py",
+      "line": 63
+    },
+    {
+      "name": "message_revoke_states",
+      "kind": "create_table",
+      "source": "backend/migrations/versions/20260610_0027_add_message_revoke_states.py",
+      "line": 80
+    },
+    {
+      "name": "messages",
+      "kind": "create_table",
+      "source": "backend/app/infra/message_repository/mysql_repo.py",
+      "line": 239
+    },
+    {
+      "name": "messages",
+      "kind": "create_table",
+      "source": "backend/app/infra/message_repository/runtime_schema.py",
+      "line": 111
+    },
+    {
+      "name": "messages",
+      "kind": "create_table",
+      "source": "backend/app/infra/postgres_bootstrap.py",
+      "line": 48
+    },
+    {
+      "name": "outbox_events",
+      "kind": "create_table",
+      "source": "backend/app/infra/outbox_repository.py",
+      "line": 74
+    },
+    {
+      "name": "outbox_events",
+      "kind": "create_table",
+      "source": "backend/app/infra/outbox_repository.py",
+      "line": 529
+    },
+    {
+      "name": "outbox_events",
+      "kind": "create_table",
+      "source": "backend/app/infra/outbox_repository.py",
+      "line": 550
+    },
+    {
+      "name": "pipeline_spans",
+      "kind": "create_table",
+      "source": "backend/app/infra/span_repository.py",
+      "line": 81
+    },
+    {
+      "name": "pipeline_spans",
+      "kind": "create_table",
+      "source": "backend/app/infra/span_repository.py",
+      "line": 242
+    },
+    {
+      "name": "pipeline_spans",
+      "kind": "create_table",
+      "source": "backend/app/infra/span_repository.py",
+      "line": 275
+    },
+    {
+      "name": "pipeline_spans",
+      "kind": "create_table",
+      "source": "backend/migrations/versions/20260408_0002_add_pipeline_spans_and_error_events.py",
+      "line": 34
+    },
+    {
+      "name": "pipeline_spans",
+      "kind": "create_table",
+      "source": "backend/migrations/versions/20260408_0002_add_pipeline_spans_and_error_events.py",
+      "line": 141
+    },
+    {
+      "name": "realtime_event_log",
+      "kind": "create_table",
+      "source": "backend/app/infra/postgres_bootstrap.py",
+      "line": 291
+    },
+    {
+      "name": "realtime_event_log",
+      "kind": "create_table",
+      "source": "backend/app/infra/realtime_event_log_repository.py",
+      "line": 42
+    },
+    {
+      "name": "realtime_event_log",
+      "kind": "create_table",
+      "source": "backend/app/infra/realtime_event_log_repository.py",
+      "line": 226
+    },
+    {
+      "name": "realtime_event_log",
+      "kind": "create_table",
+      "source": "backend/app/infra/realtime_event_log_repository.py",
+      "line": 242
+    },
+    {
+      "name": "reply_scripts",
+      "kind": "create_table",
+      "source": "backend/app/infra/sop_repository.py",
+      "line": 174
+    },
+    {
+      "name": "reply_scripts",
+      "kind": "create_table",
+      "source": "backend/app/infra/sop_repository.py",
+      "line": 960
+    },
+    {
+      "name": "runtime_metric_snapshots",
+      "kind": "create_table",
+      "source": "backend/app/infra/runtime_metric_snapshot_repository.py",
+      "line": 88
+    },
+    {
+      "name": "runtime_metric_snapshots",
+      "kind": "create_table",
+      "source": "backend/app/infra/runtime_metric_snapshot_repository.py",
+      "line": 220
+    },
+    {
+      "name": "runtime_metric_snapshots",
+      "kind": "create_table",
+      "source": "backend/app/infra/runtime_metric_snapshot_repository.py",
+      "line": 250
+    },
+    {
+      "name": "runtime_metric_snapshots",
+      "kind": "create_table",
+      "source": "backend/migrations/versions/20260408_0002_add_pipeline_spans_and_error_events.py",
+      "line": 98
+    },
+    {
+      "name": "runtime_metric_snapshots",
+      "kind": "create_table",
+      "source": "backend/migrations/versions/20260408_0002_add_pipeline_spans_and_error_events.py",
+      "line": 206
+    },
+    {
+      "name": "send_worker_devices",
+      "kind": "create_table",
+      "source": "backend/app/infra/send_worker_repository.py",
+      "line": 123
+    },
+    {
+      "name": "send_worker_devices",
+      "kind": "create_table",
+      "source": "backend/app/infra/send_worker_repository.py",
+      "line": 394
+    },
+    {
+      "name": "send_worker_devices",
+      "kind": "create_table",
+      "source": "backend/migrations/versions/20260622_0028_add_send_worker_lease_tables.py",
+      "line": 79
+    },
+    {
+      "name": "send_worker_devices",
+      "kind": "create_table",
+      "source": "backend/migrations/versions/20260622_0028_add_send_worker_lease_tables.py",
+      "line": 113
+    },
+    {
+      "name": "send_workers",
+      "kind": "create_table",
+      "source": "backend/app/infra/send_worker_repository.py",
+      "line": 108
+    },
+    {
+      "name": "send_workers",
+      "kind": "create_table",
+      "source": "backend/app/infra/send_worker_repository.py",
+      "line": 378
+    },
+    {
+      "name": "send_workers",
+      "kind": "create_table",
+      "source": "backend/migrations/versions/20260622_0028_add_send_worker_lease_tables.py",
+      "line": 63
+    },
+    {
+      "name": "send_workers",
+      "kind": "create_table",
+      "source": "backend/migrations/versions/20260622_0028_add_send_worker_lease_tables.py",
+      "line": 98
+    },
+    {
+      "name": "sensitive_words",
+      "kind": "create_table",
+      "source": "backend/app/infra/sensitive_word_repository.py",
+      "line": 40
+    },
+    {
+      "name": "sensitive_words",
+      "kind": "create_table",
+      "source": "backend/app/infra/sensitive_word_repository.py",
+      "line": 178
+    },
+    {
+      "name": "sensitive_words",
+      "kind": "create_table",
+      "source": "backend/app/infra/sensitive_word_repository.py",
+      "line": 188
+    },
+    {
+      "name": "session_blacklist",
+      "kind": "create_table",
+      "source": "backend/app/infra/session_blacklist_repository.py",
+      "line": 53
+    },
+    {
+      "name": "session_blacklist",
+      "kind": "create_table",
+      "source": "backend/app/infra/session_blacklist_repository.py",
+      "line": 225
+    },
+    {
+      "name": "sop_delivery_facts",
+      "kind": "create_table",
+      "source": "backend/app/infra/sop_delivery_fact_schema.py",
+      "line": 126
+    },
+    {
+      "name": "sop_delivery_facts",
+      "kind": "create_table",
+      "source": "backend/migrations/versions/20260518_0021_add_sop_delivery_facts.py",
+      "line": 96
+    },
+    {
+      "name": "sop_flow_configs",
+      "kind": "create_table",
+      "source": "backend/app/infra/sop_repository.py",
+      "line": 153
+    },
+    {
+      "name": "sop_flow_configs",
+      "kind": "create_table",
+      "source": "backend/app/infra/sop_repository.py",
+      "line": 939
+    },
+    {
+      "name": "sop_policies",
+      "kind": "create_table",
+      "source": "backend/app/infra/sop_repository.py",
+      "line": 124
+    },
+    {
+      "name": "sop_policies",
+      "kind": "create_table",
+      "source": "backend/app/infra/sop_repository.py",
+      "line": 910
+    },
+    {
+      "name": "system_settings",
+      "kind": "create_table",
+      "source": "backend/app/infra/system_settings_repository.py",
+      "line": 43
+    },
+    {
+      "name": "system_settings",
+      "kind": "create_table",
+      "source": "backend/app/infra/system_settings_repository.py",
+      "line": 110
+    },
+    {
+      "name": "system_settings",
+      "kind": "create_table",
+      "source": "backend/app/infra/system_settings_repository.py",
+      "line": 117
+    },
+    {
+      "name": "tasks",
+      "kind": "create_table",
+      "source": "backend/app/infra/task_repository.py",
+      "line": 55
+    },
+    {
+      "name": "tasks",
+      "kind": "create_table",
+      "source": "backend/app/infra/task_repository.py",
+      "line": 779
+    },
+    {
+      "name": "tenant_quotas",
+      "kind": "create_table",
+      "source": "backend/app/infra/postgres_bootstrap.py",
+      "line": 183
+    },
+    {
+      "name": "tenant_quotas",
+      "kind": "create_table",
+      "source": "backend/app/infra/tenant_governance_repository.py",
+      "line": 64
+    },
+    {
+      "name": "tenant_quotas",
+      "kind": "create_table",
+      "source": "backend/app/infra/tenant_governance_repository.py",
+      "line": 419
+    },
+    {
+      "name": "tenant_usage_daily",
+      "kind": "create_table",
+      "source": "backend/app/infra/postgres_bootstrap.py",
+      "line": 194
+    },
+    {
+      "name": "tenant_usage_daily",
+      "kind": "create_table",
+      "source": "backend/app/infra/tenant_governance_repository.py",
+      "line": 77
+    },
+    {
+      "name": "tenant_usage_daily",
+      "kind": "create_table",
+      "source": "backend/app/infra/tenant_governance_repository.py",
+      "line": 446
+    },
+    {
+      "name": "voice_transcription_tasks",
+      "kind": "create_table",
+      "source": "backend/app/infra/voice_transcription_task_repository.py",
+      "line": 57
+    },
+    {
+      "name": "voice_transcription_tasks",
+      "kind": "create_table",
+      "source": "backend/app/infra/voice_transcription_task_repository.py",
+      "line": 564
+    },
+    {
+      "name": "wework_accounts",
+      "kind": "create_table",
+      "source": "backend/app/infra/account_repository.py",
+      "line": 51
+    },
+    {
+      "name": "wework_accounts",
+      "kind": "create_table",
+      "source": "backend/app/infra/account_repository.py",
+      "line": 632
+    },
+    {
+      "name": "wework_corp_users",
+      "kind": "create_table",
+      "source": "backend/app/infra/wework_corp_user_repository.py",
+      "line": 123
+    },
+    {
+      "name": "wework_external_contacts",
+      "kind": "create_table",
+      "source": "backend/app/infra/wework_external_contact_repository.py",
+      "line": 130
+    },
+    {
+      "name": "wework_login_sessions",
+      "kind": "create_table",
+      "source": "backend/app/infra/login_session_repository_mysql.py",
+      "line": 23
+    },
+    {
+      "name": "wework_login_sessions",
+      "kind": "create_table",
+      "source": "backend/app/infra/login_session_repository_postgres.py",
+      "line": 22
+    }
+  ],
+  "task_types": [
+    {
+      "name": "appointment_billing",
+      "kind": "contract",
+      "source": "contracts/v1/task-create.schema.json",
+      "line": 41
+    },
+    {
+      "name": "appointment_billing",
+      "kind": "durable_sdk",
+      "source": "backend/app/send_runtime/task_types.py",
+      "line": 12
+    },
+    {
+      "name": "cancel_message",
+      "kind": "contract",
+      "source": "contracts/v1/task-create.schema.json",
+      "line": 52
+    },
+    {
+      "name": "cancel_message",
+      "kind": "durable_sdk",
+      "source": "backend/app/send_runtime/task_types.py",
+      "line": 16
+    },
+    {
+      "name": "device_open_app",
+      "kind": "contract",
+      "source": "contracts/v1/task-create.schema.json",
+      "line": 59
+    },
+    {
+      "name": "device_screenshot",
+      "kind": "contract",
+      "source": "contracts/v1/task-create.schema.json",
+      "line": 61
+    },
+    {
+      "name": "device_stop_app",
+      "kind": "contract",
+      "source": "contracts/v1/task-create.schema.json",
+      "line": 60
+    },
+    {
+      "name": "group_invite",
+      "kind": "contract",
+      "source": "contracts/v1/task-create.schema.json",
+      "line": 40
+    },
+    {
+      "name": "group_invite",
+      "kind": "durable_sdk",
+      "source": "backend/app/send_runtime/task_types.py",
+      "line": 17
+    },
+    {
+      "name": "logout",
+      "kind": "contract",
+      "source": "contracts/v1/task-create.schema.json",
+      "line": 58
+    },
+    {
+      "name": "request_money",
+      "kind": "contract",
+      "source": "contracts/v1/task-create.schema.json",
+      "line": 43
+    },
+    {
+      "name": "request_money",
+      "kind": "durable_sdk",
+      "source": "backend/app/send_runtime/task_types.py",
+      "line": 14
+    },
+    {
+      "name": "revoke_text_message",
+      "kind": "contract",
+      "source": "contracts/v1/task-create.schema.json",
+      "line": 51
+    },
+    {
+      "name": "revoke_text_message",
+      "kind": "durable_sdk",
+      "source": "backend/app/send_runtime/task_types.py",
+      "line": 11
+    },
+    {
+      "name": "send_address",
+      "kind": "contract",
+      "source": "contracts/v1/task-create.schema.json",
+      "line": 42
+    },
+    {
+      "name": "send_address",
+      "kind": "durable_sdk",
+      "source": "backend/app/send_runtime/task_types.py",
+      "line": 13
+    },
+    {
+      "name": "send_file",
+      "kind": "contract",
+      "source": "contracts/v1/task-create.schema.json",
+      "line": 39
+    },
+    {
+      "name": "send_file",
+      "kind": "durable_sdk",
+      "source": "backend/app/send_runtime/task_types.py",
+      "line": 7
+    },
+    {
+      "name": "send_image",
+      "kind": "contract",
+      "source": "contracts/v1/task-create.schema.json",
+      "line": 36
+    },
+    {
+      "name": "send_image",
+      "kind": "durable_sdk",
+      "source": "backend/app/send_runtime/task_types.py",
+      "line": 5
+    },
+    {
+      "name": "send_mixed_messages",
+      "kind": "contract",
+      "source": "contracts/v1/task-create.schema.json",
+      "line": 49
+    },
+    {
+      "name": "send_mixed_messages",
+      "kind": "durable_sdk",
+      "source": "backend/app/send_runtime/task_types.py",
+      "line": 9
+    },
+    {
+      "name": "send_text",
+      "kind": "contract",
+      "source": "contracts/v1/task-create.schema.json",
+      "line": 35
+    },
+    {
+      "name": "send_text",
+      "kind": "durable_sdk",
+      "source": "backend/app/send_runtime/task_types.py",
+      "line": 4
+    },
+    {
+      "name": "send_video",
+      "kind": "contract",
+      "source": "contracts/v1/task-create.schema.json",
+      "line": 37
+    },
+    {
+      "name": "send_video",
+      "kind": "durable_sdk",
+      "source": "backend/app/send_runtime/task_types.py",
+      "line": 6
+    },
+    {
+      "name": "send_voice",
+      "kind": "contract",
+      "source": "contracts/v1/task-create.schema.json",
+      "line": 38
+    },
+    {
+      "name": "send_voice",
+      "kind": "durable_sdk",
+      "source": "backend/app/send_runtime/task_types.py",
+      "line": 8
+    },
+    {
+      "name": "share_bundle_send",
+      "kind": "contract",
+      "source": "contracts/v1/task-create.schema.json",
+      "line": 50
+    },
+    {
+      "name": "share_bundle_send",
+      "kind": "durable_sdk",
+      "source": "backend/app/send_runtime/task_types.py",
+      "line": 10
+    },
+    {
+      "name": "transfer_money",
+      "kind": "contract",
+      "source": "contracts/v1/task-create.schema.json",
+      "line": 44
+    },
+    {
+      "name": "transfer_money",
+      "kind": "durable_sdk",
+      "source": "backend/app/send_runtime/task_types.py",
+      "line": 15
+    },
+    {
+      "name": "wework_hangup_call",
+      "kind": "contract",
+      "source": "contracts/v1/task-create.schema.json",
+      "line": 47
+    },
+    {
+      "name": "wework_login_qrcode",
+      "kind": "contract",
+      "source": "contracts/v1/task-create.schema.json",
+      "line": 53
+    },
+    {
+      "name": "wework_login_status",
+      "kind": "contract",
+      "source": "contracts/v1/task-create.schema.json",
+      "line": 54
+    },
+    {
+      "name": "wework_login_verify",
+      "kind": "contract",
+      "source": "contracts/v1/task-create.schema.json",
+      "line": 55
+    },
+    {
+      "name": "wework_logout",
+      "kind": "contract",
+      "source": "contracts/v1/task-create.schema.json",
+      "line": 57
+    },
+    {
+      "name": "wework_prepare_call_audio_output",
+      "kind": "contract",
+      "source": "contracts/v1/task-create.schema.json",
+      "line": 48
+    },
+    {
+      "name": "wework_user_info",
+      "kind": "contract",
+      "source": "contracts/v1/task-create.schema.json",
+      "line": 56
+    },
+    {
+      "name": "wework_video_call",
+      "kind": "contract",
+      "source": "contracts/v1/task-create.schema.json",
+      "line": 46
+    },
+    {
+      "name": "wework_voice_call",
+      "kind": "contract",
+      "source": "contracts/v1/task-create.schema.json",
+      "line": 45
+    }
+  ]
+}

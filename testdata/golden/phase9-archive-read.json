@@ -1,0 +1,45 @@
+{
+  "name": "phase9-archive-read",
+  "options": {
+    "timeout_ms": 5000,
+    "max_body_bytes": 1048576
+  },
+  "cases": [
+    {
+      "name": "status missing bearer token",
+      "method": "GET",
+      "path": "/api/v1/archive/status"
+    },
+    {
+      "name": "status invalid bearer token",
+      "method": "GET",
+      "path": "/api/v1/archive/status",
+      "headers": {
+        "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJ3ZXdvcmstY2xvdWQiLCJzdWIiOiJhZG1pbi0wMDEiLCJuYW1lIjoi566h55CG5ZGYIiwicm9sZSI6ImFkbWluIiwiZXhwIjo0MTAyNDQ0ODAwLCJqdGkiOiJqd3QtaW52YWxpZC1nb2xkZW4ifQ.invalidsignature"
+      }
+    },
+    {
+      "name": "cursor missing bearer token",
+      "method": "GET",
+      "path": "/api/v1/archive/cursor"
+    },
+    {
+      "name": "cursor invalid bearer token",
+      "method": "GET",
+      "path": "/api/v1/archive/cursor",
+      "headers": {
+        "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJ3ZXdvcmstY2xvdWQiLCJzdWIiOiJhZG1pbi0wMDEiLCJuYW1lIjoi566h55CG5ZGYIiwicm9sZSI6ImFkbWluIiwiZXhwIjo0MTAyNDQ0ODAwLCJqdGkiOiJqd3QtaW52YWxpZC1nb2xkZW4ifQ.invalidsignature"
+      }
+    },
+    {
+      "name": "media tasks list query",
+      "method": "GET",
+      "path": "/api/v1/archive/media/tasks?enterprise_id=ent-1&source=self_decrypt&status=success&limit=100"
+    },
+    {
+      "name": "media tasks invalid limit",
+      "method": "GET",
+      "path": "/api/v1/archive/media/tasks?limit=abc"
+    }
+  ]
+}

@@ -1,0 +1,39 @@
+{
+  "name": "phase4-assignment-write",
+  "options": {
+    "timeout_ms": 5000,
+    "max_body_bytes": 1048576
+  },
+  "cases": [
+    {
+      "name": "missing bearer token on assignment claim",
+      "method": "POST",
+      "path": "/api/v1/assignments/claim",
+      "body": "{\"conversation_id\":\"conv-001\",\"assignee_id\":\"cs-001\"}"
+    },
+    {
+      "name": "invalid bearer token on assignment claim",
+      "method": "POST",
+      "path": "/api/v1/assignments/claim",
+      "headers": {
+        "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJ3ZXdvcmstY2xvdWQiLCJzdWIiOiJhZG1pbi0wMDEiLCJuYW1lIjoi566h55CG5ZGYIiwicm9sZSI6ImFkbWluIiwiZXhwIjo0MTAyNDQ0ODAwLCJqdGkiOiJqd3QtaW52YWxpZC1nb2xkZW4ifQ.invalidsignature"
+      },
+      "body": "{\"conversation_id\":\"conv-001\",\"assignee_id\":\"cs-001\",\"force\":true}"
+    },
+    {
+      "name": "missing bearer token on assignment release",
+      "method": "POST",
+      "path": "/api/v1/assignments/release",
+      "body": "{\"conversation_id\":\"conv-001\",\"assignee_id\":\"cs-001\"}"
+    },
+    {
+      "name": "invalid bearer token on assignment release",
+      "method": "POST",
+      "path": "/api/v1/assignments/release",
+      "headers": {
+        "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJ3ZXdvcmstY2xvdWQiLCJzdWIiOiJhZG1pbi0wMDEiLCJuYW1lIjoi566h55CG5ZGYIiwicm9sZSI6ImFkbWluIiwiZXhwIjo0MTAyNDQ0ODAwLCJqdGkiOiJqd3QtaW52YWxpZC1nb2xkZW4ifQ.invalidsignature"
+      },
+      "body": "{\"conversation_id\":\"conv-001\",\"assignee_id\":\"cs-001\",\"force\":true}"
+    }
+  ]
+}

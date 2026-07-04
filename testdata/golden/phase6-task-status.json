@@ -1,0 +1,35 @@
+{
+  "name": "phase6-task-status",
+  "options": {
+    "timeout_ms": 5000,
+    "max_body_bytes": 1048576,
+    "ignore_json_fields": ["created_at", "updated_at", "trace_id"]
+  },
+  "cases": [
+    {
+      "name": "missing bearer on task list",
+      "method": "GET",
+      "path": "/api/v1/tasks?status=accepted&agent_id=sdk%3Azimo&device_id=zimo&task_type=send_text&limit=10"
+    },
+    {
+      "name": "missing auth on task detail",
+      "method": "GET",
+      "path": "/api/v1/tasks/task-golden-0001"
+    },
+    {
+      "name": "missing auth on task status update",
+      "method": "POST",
+      "path": "/api/v1/tasks/task-golden-0001/status",
+      "body": "{\"status\":\"success\",\"error\":null}"
+    },
+    {
+      "name": "invalid bearer on task status update",
+      "method": "POST",
+      "path": "/api/v1/tasks/task-golden-0001/status",
+      "headers": {
+        "Authorization": "Bearer invalid.task.status"
+      },
+      "body": "{\"status\":\"failed\",\"error\":\"phone offline\"}"
+    }
+  ]
+}

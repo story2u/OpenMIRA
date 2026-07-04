@@ -1,0 +1,24 @@
+{
+  "name": "phase11-conversation-revoke",
+  "options": {
+    "timeout_ms": 5000,
+    "max_body_bytes": 1048576
+  },
+  "cases": [
+    {
+      "name": "missing bearer token on conversation message revoke",
+      "method": "POST",
+      "path": "/api/v1/conversations/conv-golden-0001/messages/trace-golden-0001/revoke",
+      "body": "{\"device_id\":\"zimo\",\"source\":\"cloud-web\",\"target_content\":\"hello\",\"target_msg_type\":\"text\",\"occurrence_from_bottom\":1}"
+    },
+    {
+      "name": "invalid bearer token on conversation message revoke",
+      "method": "POST",
+      "path": "/api/v1/conversations/conv-golden-0001/messages/trace-golden-0001/revoke",
+      "headers": {
+        "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJ3ZXdvcmstY2xvdWQiLCJzdWIiOiJjcy0wMDEiLCJuYW1lIjoi5a6i5pyN5LiAIiwicm9sZSI6ImNzIiwiZXhwIjo0MTAyNDQ0ODAwLCJqdGkiOiJqd3QtaW52YWxpZC1nb2xkZW4ifQ.invalidsignature"
+      },
+      "body": "{\"device_id\":\"zimo\",\"source\":\"cloud-web\",\"target_content\":\"hello\",\"target_msg_type\":\"text\",\"occurrence_from_bottom\":1}"
+    }
+  ]
+}

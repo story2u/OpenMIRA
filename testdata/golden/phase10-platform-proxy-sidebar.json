@@ -1,0 +1,24 @@
+{
+  "name": "phase10-platform-proxy-sidebar",
+  "options": {
+    "timeout_ms": 5000,
+    "max_body_bytes": 1048576
+  },
+  "cases": [
+    {
+      "name": "platform sidebar request money",
+      "method": "POST",
+      "path": "/api/v1/platform/device/device-1/sidebar-command",
+      "headers": {
+        "X-Trace-Id": "trace-sidebar-1"
+      },
+      "body": "{\"type\":\"request_money\",\"receiver\":\"客户A\",\"organization_name\":\"子墨\",\"money\":\"88.5\",\"msg_id\":\"msg-sidebar-0001\"}"
+    },
+    {
+      "name": "platform sidebar mixed messages",
+      "method": "POST",
+      "path": "/api/v1/platform/device/device-1/sidebar-command",
+      "body": "{\"type\":\"send_mixed_messages\",\"receiver\":\"客户B\",\"organization_name\":\"子墨\",\"messages\":[{\"type\":\"text\",\"content\":\"你好\"}],\"msg_id\":\"msg-sidebar-0002\"}"
+    }
+  ]
+}

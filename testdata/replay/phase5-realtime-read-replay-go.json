@@ -1,0 +1,31 @@
+[
+  {
+    "channel": "conversations",
+    "type": "conversation.message",
+    "cursor": "12",
+    "trace_id": "go-trace-AAAA",
+    "payload": {
+      "event_id": "evt-1001",
+      "conversation_id": "conv-9001",
+      "message_id": "msg-1"
+    }
+  },
+  {
+    "channel": "tasks",
+    "event_type": "task.status",
+    "after_cursor": "13",
+    "trace_id": "go-trace-BBBB",
+    "payload": {
+      "task_id": "task-100",
+      "status": "done"
+    }
+  },
+  {
+    "channel": "conversations",
+    "type": "conversation.media_ready",
+    "time": "2026-07-01T00:00:00Z",
+    "cursor": "14",
+    "trace_id": "go-trace-CCCC",
+    "media_id": "media-100"
+  }
+]

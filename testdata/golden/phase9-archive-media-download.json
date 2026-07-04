@@ -1,0 +1,19 @@
+{
+  "name": "phase9-archive-media-download",
+  "options": {
+    "timeout_ms": 5000,
+    "max_body_bytes": 1048576
+  },
+  "cases": [
+    {
+      "name": "media file requires signed token",
+      "method": "GET",
+      "path": "/api/v1/archive/media/files/task-1"
+    },
+    {
+      "name": "media object requires signed token",
+      "method": "GET",
+      "path": "/api/v1/archive/media/objects/ent-1/file.png"
+    }
+  ]
+}

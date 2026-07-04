@@ -1,0 +1,81 @@
+{
+  "name": "phase2-session-auth-readonly",
+  "options": {
+    "timeout_ms": 5000,
+    "max_body_bytes": 1048576
+  },
+  "cases": [
+    {
+      "name": "session me missing bearer token",
+      "method": "GET",
+      "path": "/api/v1/session/me"
+    },
+    {
+      "name": "session me invalid bearer token",
+      "method": "GET",
+      "path": "/api/v1/session/me",
+      "headers": {
+        "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJ3ZXdvcmstY2xvdWQiLCJzdWIiOiJjcy0wMDEiLCJuYW1lIjoi5a6i5pyN5LiAIiwicm9sZSI6ImNzIiwiZXhwIjo0MTAyNDQ0ODAwLCJqdGkiOiJqd3QtaW52YWxpZC1nb2xkZW4ifQ.invalidsignature"
+      }
+    },
+    {
+      "name": "session refresh missing bearer token",
+      "method": "POST",
+      "path": "/api/v1/session/refresh"
+    },
+    {
+      "name": "session refresh invalid bearer token",
+      "method": "POST",
+      "path": "/api/v1/session/refresh",
+      "headers": {
+        "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJ3ZXdvcmstY2xvdWQiLCJzdWIiOiJjcy0wMDEiLCJuYW1lIjoi5a6i5pyN5LiAIiwicm9sZSI6ImNzIiwiZXhwIjo0MTAyNDQ0ODAwLCJqdGkiOiJqd3QtaW52YWxpZC1nb2xkZW4ifQ.invalidsignature"
+      }
+    },
+    {
+      "name": "session logout missing bearer token",
+      "method": "POST",
+      "path": "/api/v1/session/logout"
+    },
+    {
+      "name": "session logout invalid bearer token",
+      "method": "POST",
+      "path": "/api/v1/session/logout",
+      "headers": {
+        "Authorization": "Bearer invalid"
+      }
+    },
+    {
+      "name": "session admin login missing credentials",
+      "method": "POST",
+      "path": "/api/v1/session/admin-login",
+      "body": "{}"
+    },
+    {
+      "name": "session cs login missing credentials",
+      "method": "POST",
+      "path": "/api/v1/session/cs-login",
+      "body": "{}"
+    },
+    {
+      "name": "session admin generate cs token missing bearer token",
+      "method": "POST",
+      "path": "/api/v1/session/admin/generate-cs-token",
+      "body": "{\"assignee_id\":\"cs-001\"}"
+    },
+    {
+      "name": "session admin generate cs token invalid bearer",
+      "method": "POST",
+      "path": "/api/v1/session/admin/generate-cs-token",
+      "headers": {
+        "Authorization": "Bearer invalid"
+      },
+      "body": "{\"assignee_id\":\"cs-001\"}"
+    },
+    {
+      "name": "passwordless login disabled",
+      "method": "POST",
+      "path": "/api/v1/session/login",
+      "body": "{\"assignee_id\":\"cs-001\"}"
+    }
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "name": "phase4-wework-login-qrcode",
+  "options": {
+    "timeout_ms": 5000,
+    "max_body_bytes": 1048576
+  },
+  "cases": [
+    {
+      "name": "missing bearer on wework login qrcode",
+      "method": "POST",
+      "path": "/wework/login/qrcode",
+      "body": "{\"device_id\":\"device-1\"}"
+    },
+    {
+      "name": "invalid bearer on wework login qrcode",
+      "method": "POST",
+      "path": "/wework/login/qrcode",
+      "headers": {
+        "Authorization": "Bearer invalid.wework.login.qrcode"
+      },
+      "body": "{\"device_id\":\"device-1\"}"
+    }
+  ]
+}

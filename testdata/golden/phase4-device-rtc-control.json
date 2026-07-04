@@ -1,0 +1,38 @@
+{
+  "name": "phase4-device-rtc-control",
+  "options": {
+    "timeout_ms": 5000,
+    "max_body_bytes": 1048576
+  },
+  "cases": [
+    {
+      "name": "missing auth on control state",
+      "method": "GET",
+      "path": "/api/v1/devices/device-1/control/state"
+    },
+    {
+      "name": "missing bearer token on control acquire",
+      "method": "POST",
+      "path": "/api/v1/devices/device-1/control/acquire",
+      "body": "{\"participant_identity\":\"user-device-1\"}"
+    },
+    {
+      "name": "missing auth on control input",
+      "method": "POST",
+      "path": "/api/v1/devices/device-1/control/input",
+      "body": "{\"participant_identity\":\"user-device-1\",\"kind\":\"pointer\",\"action\":\"down\"}"
+    },
+    {
+      "name": "missing bearer token on control release",
+      "method": "POST",
+      "path": "/api/v1/devices/device-1/control/release",
+      "body": "{\"participant_identity\":\"user-device-1\"}"
+    },
+    {
+      "name": "missing bearer token on control steal",
+      "method": "POST",
+      "path": "/api/v1/devices/device-1/control/steal",
+      "body": "{\"participant_identity\":\"user-device-1\"}"
+    }
+  ]
+}

@@ -1,0 +1,35 @@
+{
+  "name": "phase4-p1-screen",
+  "options": {
+    "timeout_ms": 5000,
+    "max_body_bytes": 1048576
+  },
+  "cases": [
+    {
+      "name": "screen html",
+      "method": "GET",
+      "path": "/api/p1/screen/3?quality=1",
+      "skip_body_compare": true
+    },
+    {
+      "name": "screen url",
+      "method": "GET",
+      "path": "/api/p1/screen/3/url?quality=1"
+    },
+    {
+      "name": "screen api url",
+      "method": "GET",
+      "path": "/api/p1/screen/3/api-url?quality=1"
+    },
+    {
+      "name": "slots ports",
+      "method": "GET",
+      "path": "/api/p1/slots/ports"
+    },
+    {
+      "name": "invalid slot",
+      "method": "GET",
+      "path": "/api/p1/screen/25/url?quality=1"
+    }
+  ]
+}

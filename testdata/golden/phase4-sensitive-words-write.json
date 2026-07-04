@@ -1,0 +1,23 @@
+{
+  "name": "phase4-sensitive-words-write",
+  "options": {
+    "timeout_ms": 5000,
+    "max_body_bytes": 1048576
+  },
+  "cases": [
+    {
+      "name": "missing bearer token on upsert",
+      "method": "POST",
+      "path": "/api/v1/admin/sensitive-words",
+      "body": "{\"word\":\"风险词\",\"enabled\":true}"
+    },
+    {
+      "name": "invalid bearer token on delete",
+      "method": "DELETE",
+      "path": "/api/v1/admin/sensitive-words/sw-invalid",
+      "headers": {
+        "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJ3ZXdvcmstY2xvdWQiLCJzdWIiOiJhZG1pbi0wMDEiLCJuYW1lIjoi566h55CG5ZGYIiwicm9sZSI6ImFkbWluIiwiZXhwIjo0MTAyNDQ0ODAwLCJqdGkiOiJqd3QtaW52YWxpZC1nb2xkZW4ifQ.invalidsignature"
+      }
+    }
+  ]
+}

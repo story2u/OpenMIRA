@@ -1,0 +1,22 @@
+{
+  "name": "phase11-contact-profile-refresh",
+  "options": {
+    "timeout_ms": 5000,
+    "max_body_bytes": 1048576
+  },
+  "cases": [
+    {
+      "name": "missing bearer token",
+      "method": "POST",
+      "path": "/api/v1/conversations/conv-1/contact-profile/refresh"
+    },
+    {
+      "name": "invalid bearer token",
+      "method": "POST",
+      "path": "/api/v1/conversations/conv-1/contact-profile/refresh",
+      "headers": {
+        "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJ3ZXdvcmstY2xvdWQiLCJzdWIiOiJhZG1pbiIsInJvbGUiOiJhZG1pbiIsImV4cCI6NDEwMjQ0NDgwMCwianRpIjoianVzdC1pbnZhbGlkIn0.invalidsignature"
+      }
+    }
+  ]
+}

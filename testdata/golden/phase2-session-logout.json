@@ -1,0 +1,22 @@
+{
+  "name": "phase2-session-logout",
+  "options": {
+    "timeout_ms": 5000,
+    "max_body_bytes": 1048576
+  },
+  "cases": [
+    {
+      "name": "missing bearer token",
+      "method": "POST",
+      "path": "/api/v1/session/logout"
+    },
+    {
+      "name": "invalid bearer token",
+      "method": "POST",
+      "path": "/api/v1/session/logout",
+      "headers": {
+        "Authorization": "Bearer invalid"
+      }
+    }
+  ]
+}

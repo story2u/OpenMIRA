@@ -1,0 +1,22 @@
+{
+  "name": "phase3-cs-workbench-summary",
+  "options": {
+    "timeout_ms": 5000,
+    "max_body_bytes": 1048576
+  },
+  "cases": [
+    {
+      "name": "missing bearer token",
+      "method": "GET",
+      "path": "/api/v1/cs/workbench/summary"
+    },
+    {
+      "name": "invalid bearer token",
+      "method": "GET",
+      "path": "/api/v1/cs/workbench/summary?selected_account_id=all&mode_filter=manual",
+      "headers": {
+        "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJ3ZXdvcmstY2xvdWQiLCJzdWIiOiJjcy0wMDEiLCJuYW1lIjoi5a6i5pyN5LiAIiwicm9sZSI6ImNzIiwiZXhwIjo0MTAyNDQ0ODAwLCJqdGkiOiJqd3QtaW52YWxpZC1nb2xkZW4ifQ.invalidsignature"
+      }
+    }
+  ]
+}

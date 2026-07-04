@@ -1,0 +1,25 @@
+{
+  "name": "phase2-session-generate-cs-token",
+  "options": {
+    "timeout_ms": 5000,
+    "max_body_bytes": 1048576,
+    "ignore_json_fields": ["token", "expires_at"]
+  },
+  "cases": [
+    {
+      "name": "missing bearer token",
+      "method": "POST",
+      "path": "/api/v1/session/admin/generate-cs-token",
+      "body": "{\"assignee_id\":\"cs-001\"}"
+    },
+    {
+      "name": "invalid bearer token",
+      "method": "POST",
+      "path": "/api/v1/session/admin/generate-cs-token",
+      "headers": {
+        "Authorization": "Bearer invalid"
+      },
+      "body": "{\"assignee_id\":\"cs-001\"}"
+    }
+  ]
+}

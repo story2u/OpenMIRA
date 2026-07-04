@@ -1,0 +1,31 @@
+[
+  {
+    "channel": "conversations",
+    "event": "conversation.message",
+    "cursor": "12",
+    "trace_id": "py-trace-0001",
+    "payload": {
+      "event_id": "evt-1001",
+      "conversation_id": "conv-9001",
+      "message_id": "msg-1"
+    }
+  },
+  {
+    "channel": "tasks",
+    "event_type": "task.status",
+    "seq": "13",
+    "trace_id": "py-trace-0002",
+    "payload": {
+      "task_id": "task-100",
+      "status": "done"
+    }
+  },
+  {
+    "channel": "conversations",
+    "name": "conversation.media_ready",
+    "cursor": "14",
+    "created_at": "2026-07-01T00:00:00Z",
+    "trace_id": "py-trace-0003",
+    "media_id": "media-100"
+  }
+]

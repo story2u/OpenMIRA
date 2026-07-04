@@ -1,0 +1,41 @@
+{
+  "name": "phase4-device-call-audio-bridge",
+  "options": {
+    "timeout_ms": 5000,
+    "max_body_bytes": 1048576
+  },
+  "cases": [
+    {
+      "name": "missing bearer token on status",
+      "method": "GET",
+      "path": "/api/v1/devices/device-1/call-audio-bridge/status"
+    },
+    {
+      "name": "missing any auth on report",
+      "method": "POST",
+      "path": "/api/v1/devices/device-1/call-audio-bridge/status",
+      "body": "{\"running\":true}"
+    },
+    {
+      "name": "invalid bearer token on status",
+      "method": "GET",
+      "path": "/api/v1/devices/device-1/call-audio-bridge/status",
+      "headers": {
+        "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJ3ZXdvcmstY2xvdWQiLCJzdWIiOiJjcy0wMDEiLCJuYW1lIjoi5a6i5pyN5LiAIiwicm9sZSI6ImNzIiwiZXhwIjo0MTAyNDQ0ODAwLCJqdGkiOiJqd3QtaW52YWxpZC1nb2xkZW4ifQ.invalidsignature"
+      }
+    },
+    {
+      "name": "missing any auth on targets",
+      "method": "GET",
+      "path": "/api/v1/devices/call-audio-bridge/targets"
+    },
+    {
+      "name": "invalid bearer token on targets",
+      "method": "GET",
+      "path": "/api/v1/devices/call-audio-bridge/targets",
+      "headers": {
+        "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJ3ZXdvcmstY2xvdWQiLCJzdWIiOiJjcy0wMDEiLCJuYW1lIjoi5a6i5pyN5LiAIiwicm9sZSI6ImNzIiwiZXhwIjo0MTAyNDQ0ODAwLCJqdGkiOiJqd3QtaW52YWxpZC1nb2xkZW4ifQ.invalidsignature"
+      }
+    }
+  ]
+}

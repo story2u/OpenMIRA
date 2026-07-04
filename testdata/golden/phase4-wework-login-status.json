@@ -1,0 +1,22 @@
+{
+  "name": "phase4-wework-login-status",
+  "options": {
+    "timeout_ms": 5000,
+    "max_body_bytes": 1048576
+  },
+  "cases": [
+    {
+      "name": "missing bearer on wework login status",
+      "method": "GET",
+      "path": "/wework/login/status?device_id=device-1"
+    },
+    {
+      "name": "invalid bearer on wework login status",
+      "method": "GET",
+      "path": "/wework/login/status?device_id=device-1",
+      "headers": {
+        "Authorization": "Bearer invalid.wework.login.status"
+      }
+    }
+  ]
+}

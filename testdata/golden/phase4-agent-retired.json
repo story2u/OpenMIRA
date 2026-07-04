@@ -1,0 +1,29 @@
+{
+  "name": "phase4-agent-retired",
+  "options": {
+    "timeout_ms": 5000,
+    "max_body_bytes": 1048576
+  },
+  "cases": [
+    {
+      "name": "retired app agent heartbeat",
+      "method": "POST",
+      "path": "/api/v1/agents/heartbeat"
+    },
+    {
+      "name": "missing auth on retired login event",
+      "method": "POST",
+      "path": "/agents/wework/login/event",
+      "body": "{\"device_id\":\"device-1\",\"status\":\"normal\"}"
+    },
+    {
+      "name": "invalid bearer on retired login event",
+      "method": "POST",
+      "path": "/agents/wework/login/event",
+      "headers": {
+        "Authorization": "Bearer invalid.agent.retired"
+      },
+      "body": "{\"device_id\":\"device-1\",\"status\":\"normal\"}"
+    }
+  ]
+}

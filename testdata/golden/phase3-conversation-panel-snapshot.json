@@ -1,0 +1,22 @@
+{
+  "name": "phase3-conversation-panel-snapshot",
+  "options": {
+    "timeout_ms": 5000,
+    "max_body_bytes": 1048576
+  },
+  "cases": [
+    {
+      "name": "missing bearer token",
+      "method": "GET",
+      "path": "/api/v1/conversations/panel-snapshot?panel=session&conversation_limit=20"
+    },
+    {
+      "name": "invalid bearer token",
+      "method": "GET",
+      "path": "/api/v1/conversations/panel-snapshot?panel=session&account_key=account:acc-001&conversation_cursor=2026-06-29T10:00:00%7Cconv-001&conversation_limit=20",
+      "headers": {
+        "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJ3ZXdvcmstY2xvdWQiLCJzdWIiOiJjcy0wMDEiLCJuYW1lIjoi5a6i5pyN5LiAIiwicm9sZSI6ImNzIiwiZXhwIjo0MTAyNDQ0ODAwLCJqdGkiOiJqd3QtaW52YWxpZC1nb2xkZW4ifQ.invalidsignature"
+      }
+    }
+  ]
+}

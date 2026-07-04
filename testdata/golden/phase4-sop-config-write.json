@@ -1,0 +1,37 @@
+{
+  "name": "phase4-sop-config-write",
+  "options": {
+    "timeout_ms": 5000,
+    "max_body_bytes": 1048576
+  },
+  "cases": [
+    {
+      "name": "missing bearer token on flow upsert",
+      "method": "POST",
+      "path": "/api/v1/admin/sop/flows",
+      "body": "{\"flow_id\":\"flow-b\",\"flow_name\":\"流程B\",\"target_audience\":\"cs-001\",\"execution_mode\":\"local_days\",\"enabled\":true}"
+    },
+    {
+      "name": "invalid bearer token on flow delete",
+      "method": "DELETE",
+      "path": "/api/v1/admin/sop/flows/flow-b",
+      "headers": {
+        "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJ3ZXdvcmstY2xvdWQiLCJzdWIiOiJhZG1pbi0wMDEiLCJuYW1lIjoi566h55CG5ZGYIiwicm9sZSI6ImFkbWluIiwiZXhwIjo0MTAyNDQ0ODAwLCJqdGkiOiJqd3QtaW52YWxpZC1nb2xkZW4ifQ.invalidsignature"
+      }
+    },
+    {
+      "name": "missing bearer token on policy upsert",
+      "method": "POST",
+      "path": "/api/v1/admin/sop/policies",
+      "body": "{\"flow_id\":\"flow-b\",\"name\":\"DAY1\",\"day_stage\":\"1\",\"trigger_event\":\"incoming_message\",\"reply_text\":\"您好\"}"
+    },
+    {
+      "name": "invalid bearer token on policy delete",
+      "method": "DELETE",
+      "path": "/api/v1/admin/sop/policies/policy-1",
+      "headers": {
+        "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJ3ZXdvcmstY2xvdWQiLCJzdWIiOiJhZG1pbi0wMDEiLCJuYW1lIjoi566h55CG5ZGYIiwicm9sZSI6ImFkbWluIiwiZXhwIjo0MTAyNDQ0ODAwLCJqdGkiOiJqd3QtaW52YWxpZC1nb2xkZW4ifQ.invalidsignature"
+      }
+    }
+  ]
+}

@@ -1,0 +1,39 @@
+{
+  "name": "phase4-conversation-ai-write",
+  "options": {
+    "timeout_ms": 5000,
+    "max_body_bytes": 1048576
+  },
+  "cases": [
+    {
+      "name": "missing bearer token on conversation ai enable",
+      "method": "POST",
+      "path": "/api/v1/conversations/conv-001/ai-auto-reply",
+      "body": "{\"enabled\":true}"
+    },
+    {
+      "name": "invalid bearer token on conversation ai disable",
+      "method": "POST",
+      "path": "/api/v1/conversations/conv-001/ai-auto-reply",
+      "headers": {
+        "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJ3ZXdvcmstY2xvdWQiLCJzdWIiOiJhZG1pbi0wMDEiLCJuYW1lIjoi566h55CG5ZGYIiwicm9sZSI6ImFkbWluIiwiZXhwIjo0MTAyNDQ0ODAwLCJqdGkiOiJqd3QtaW52YWxpZC1nb2xkZW4ifQ.invalidsignature"
+      },
+      "body": "{\"enabled\":false}"
+    },
+    {
+      "name": "missing bearer token on conversation ai bulk",
+      "method": "POST",
+      "path": "/api/v1/conversations/ai-auto-reply/bulk",
+      "body": "{\"enabled\":true,\"assignee_id\":\"cs-001\"}"
+    },
+    {
+      "name": "invalid bearer token on conversation ai bulk",
+      "method": "POST",
+      "path": "/api/v1/conversations/ai-auto-reply/bulk",
+      "headers": {
+        "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJ3ZXdvcmstY2xvdWQiLCJzdWIiOiJhZG1pbi0wMDEiLCJuYW1lIjoi566h55CG5ZGYIiwicm9sZSI6ImFkbWluIiwiZXhwIjo0MTAyNDQ0ODAwLCJqdGkiOiJqd3QtaW52YWxpZC1nb2xkZW4ifQ.invalidsignature"
+      },
+      "body": "{\"enabled\":false,\"assignee_id\":\"cs-001\"}"
+    }
+  ]
+}

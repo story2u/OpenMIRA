@@ -1,0 +1,32 @@
+{
+  "name": "phase4-device-sdk-control",
+  "options": {
+    "timeout_ms": 5000,
+    "max_body_bytes": 1048576
+  },
+  "cases": [
+    {
+      "name": "missing bearer token on sdk open wework",
+      "method": "POST",
+      "path": "/api/v1/devices/device-1/sdk/open-wework"
+    },
+    {
+      "name": "missing bearer token on sdk stop wework",
+      "method": "POST",
+      "path": "/api/v1/devices/device-1/sdk/stop-wework"
+    },
+    {
+      "name": "missing bearer token on prepare call audio output",
+      "method": "POST",
+      "path": "/api/v1/devices/device-1/sdk/prepare-call-audio-output"
+    },
+    {
+      "name": "invalid bearer token on prepare call audio output",
+      "method": "POST",
+      "path": "/api/v1/devices/device-1/sdk/prepare-call-audio-output?call_type=voice",
+      "headers": {
+        "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJ3ZXdvcmstY2xvdWQiLCJzdWIiOiJjcy0wMDEiLCJuYW1lIjoi5a6i5pyN5LiAIiwicm9sZSI6ImNzIiwiZXhwIjo0MTAyNDQ0ODAwLCJqdGkiOiJqd3QtaW52YWxpZC1nb2xkZW4ifQ.invalidsignature"
+      }
+    }
+  ]
+}

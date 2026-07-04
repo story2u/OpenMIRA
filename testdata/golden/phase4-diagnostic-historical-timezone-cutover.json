@@ -1,0 +1,38 @@
+{
+  "name": "phase4-diagnostic-historical-timezone-cutover",
+  "options": {
+    "timeout_ms": 5000,
+    "max_body_bytes": 1048576
+  },
+  "cases": [
+    {
+      "name": "missing bearer token",
+      "method": "POST",
+      "path": "/api/v1/admin/diagnostic/historical-timezone-cutover",
+      "headers": {
+        "Content-Type": "application/json"
+      },
+      "body": "{\"targeted_only\":true,\"cutoff\":\"2026-04-19 00:00:00\"}"
+    },
+    {
+      "name": "invalid bearer token",
+      "method": "POST",
+      "path": "/api/v1/admin/diagnostic/historical-timezone-cutover",
+      "headers": {
+        "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJ3ZXdvcmstY2xvdWQiLCJzdWIiOiJhZG1pbi0wMDEiLCJuYW1lIjoi566h55CG5ZGYIiwicm9sZSI6ImFkbWluIiwiZXhwIjo0MTAyNDQ0ODAwLCJqdGkiOiJqd3QtaW52YWxpZC1nb2xkZW4ifQ.invalidsignature",
+        "Content-Type": "application/json"
+      },
+      "body": "{\"targeted_only\":true,\"cutoff\":\"2026-04-19 00:00:00\"}"
+    },
+    {
+      "name": "invalid json payload",
+      "method": "POST",
+      "path": "/api/v1/admin/diagnostic/historical-timezone-cutover",
+      "headers": {
+        "Authorization": "Bearer test-token",
+        "Content-Type": "application/json"
+      },
+      "body": "{\"cutoff\":"
+    }
+  ]
+}

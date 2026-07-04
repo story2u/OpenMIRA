@@ -1,0 +1,89 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Run tests
+        run: go test -v -race ./...
+
+      - name: Run vet
+        run: go vet ./...
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Build API
+        run: CGO_ENABLED=0 go build -o bin/api ./cmd/api
+
+      - name: Build archive-ingest-worker
+        run: CGO_ENABLED=0 go build -o bin/archive-ingest-worker ./cmd/archive-ingest-worker
+
+      - name: Build archive-media-worker
+        run: CGO_ENABLED=0 go build -o bin/archive-media-worker ./cmd/archive-media-worker
+
+      - name: Build archive-sync-worker
+        run: CGO_ENABLED=0 go build -o bin/archive-sync-worker ./cmd/archive-sync-worker
+
+      - name: Build contact-sync-worker
+        run: CGO_ENABLED=0 go build -o bin/contact-sync-worker ./cmd/contact-sync-worker
+
+      - name: Build incoming-worker
+        run: CGO_ENABLED=0 go build -o bin/incoming-worker ./cmd/incoming-worker
+
+      - name: Build outbox-worker
+        run: CGO_ENABLED=0 go build -o bin/outbox-worker ./cmd/outbox-worker
+
+      - name: Build send-dispatcher
+        run: CGO_ENABLED=0 go build -o bin/send-dispatcher ./cmd/send-dispatcher
+
+      - name: Build voice-transcription-worker
+        run: CGO_ENABLED=0 go build -o bin/voice-transcription-worker ./cmd/voice-transcription-worker
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v7
+        with:
+          version: latest

@@ -1,0 +1,42 @@
+{
+  "name": "phase9-archive-contacts-sync",
+  "options": {
+    "timeout_ms": 5000,
+    "max_body_bytes": 1048576
+  },
+  "cases": [
+    {
+      "name": "archive contacts sync missing bearer token",
+      "method": "POST",
+      "path": "/api/v1/archive/contacts/sync",
+      "body": "{\"enterprise_id\":\"ent-1\",\"sender_ids\":[\"wm-golden-0001\"],\"force_refresh\":true,\"limit\":20}"
+    },
+    {
+      "name": "archive contacts sync invalid bearer token",
+      "method": "POST",
+      "path": "/api/v1/archive/contacts/sync",
+      "headers": {
+        "Authorization": "Bearer invalid-token"
+      },
+      "body": "{\"enterprise_id\":\"ent-1\",\"sender_ids\":[\"wm-golden-0001\"],\"limit\":20}"
+    },
+    {
+      "name": "archive contacts sync default body",
+      "method": "POST",
+      "path": "/api/v1/archive/contacts/sync",
+      "headers": {
+        "Authorization": "Bearer test-token"
+      },
+      "body": "{}"
+    },
+    {
+      "name": "archive contacts sync invalid json",
+      "method": "POST",
+      "path": "/api/v1/archive/contacts/sync",
+      "headers": {
+        "Authorization": "Bearer test-token"
+      },
+      "body": "{"
+    }
+  ]
+}

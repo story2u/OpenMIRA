@@ -1,0 +1,24 @@
+{
+  "name": "phase11-conversation-transfer",
+  "options": {
+    "timeout_ms": 5000,
+    "max_body_bytes": 1048576
+  },
+  "cases": [
+    {
+      "name": "missing bearer token on conversation transfer",
+      "method": "POST",
+      "path": "/api/v1/conversations/conv-golden-0001/transfer",
+      "body": "{\"target_assignee_id\":\"cs-golden-0002\",\"target_assignee_name\":\"客服二\",\"from_assignee_id\":\"cs-golden-0001\",\"force\":true}"
+    },
+    {
+      "name": "invalid bearer token on conversation transfer",
+      "method": "POST",
+      "path": "/api/v1/conversations/conv-golden-0001/transfer",
+      "headers": {
+        "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJ3ZXdvcmstY2xvdWQiLCJzdWIiOiJhZG1pbi0wMDEiLCJuYW1lIjoi566h55CG5ZGYIiwicm9sZSI6ImFkbWluIiwiZXhwIjo0MTAyNDQ0ODAwLCJqdGkiOiJqd3QtaW52YWxpZC10cmFuc2Zlci1nb2xkZW4ifQ.invalidsignature"
+      },
+      "body": "{\"target_assignee_id\":\"cs-golden-0002\",\"target_assignee_name\":\"客服二\",\"force\":true}"
+    }
+  ]
+}

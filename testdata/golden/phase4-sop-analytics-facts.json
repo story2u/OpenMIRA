@@ -1,0 +1,22 @@
+{
+  "name": "phase4-sop-analytics-facts",
+  "options": {
+    "timeout_ms": 5000,
+    "max_body_bytes": 1048576
+  },
+  "cases": [
+    {
+      "name": "missing bearer token",
+      "method": "GET",
+      "path": "/api/v1/admin/sop/analytics/facts"
+    },
+    {
+      "name": "invalid bearer token",
+      "method": "GET",
+      "path": "/api/v1/admin/sop/analytics/facts?flow_id=formal&stage_unique_id=stage-1&status=opened&page=1&page_size=50",
+      "headers": {
+        "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJ3ZXdvcmstY2xvdWQiLCJzdWIiOiJhZG1pbi0wMDEiLCJuYW1lIjoi566h55CG5ZGYIiwicm9sZSI6ImFkbWluIiwiZXhwIjo0MTAyNDQ0ODAwLCJqdGkiOiJqd3QtaW52YWxpZC1nb2xkZW4ifQ.invalidsignature"
+      }
+    }
+  ]
+}

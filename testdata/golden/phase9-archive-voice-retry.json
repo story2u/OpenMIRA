@@ -1,0 +1,33 @@
+{
+  "name": "phase9-archive-voice-retry",
+  "options": {
+    "timeout_ms": 5000,
+    "max_body_bytes": 1048576
+  },
+  "cases": [
+    {
+      "name": "voice retry missing bearer token",
+      "method": "POST",
+      "path": "/api/v1/archive/voice-transcriptions/retry",
+      "body": "{\"enterprise_id\":\"ent-1\",\"archive_msgid\":\"am-1\"}"
+    },
+    {
+      "name": "voice retry invalid bearer token",
+      "method": "POST",
+      "path": "/api/v1/archive/voice-transcriptions/retry",
+      "headers": {
+        "Authorization": "Bearer invalid-token"
+      },
+      "body": "{\"enterprise_id\":\"ent-1\",\"archive_msgid\":\"am-1\"}"
+    },
+    {
+      "name": "voice retry missing archive msgid",
+      "method": "POST",
+      "path": "/api/v1/archive/voice-transcriptions/retry",
+      "headers": {
+        "Authorization": "Bearer test-token"
+      },
+      "body": "{\"enterprise_id\":\"ent-1\"}"
+    }
+  ]
+}

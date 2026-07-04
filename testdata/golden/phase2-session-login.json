@@ -1,0 +1,15 @@
+{
+  "name": "phase2-session-login",
+  "options": {
+    "timeout_ms": 5000,
+    "max_body_bytes": 1048576
+  },
+  "cases": [
+    {
+      "name": "passwordless login disabled",
+      "method": "POST",
+      "path": "/api/v1/session/login",
+      "body": "{\"assignee_id\":\"cs-001\"}"
+    }
+  ]
+}
