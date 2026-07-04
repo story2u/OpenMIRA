@@ -46,7 +46,7 @@ SKIP_NPM_CI=1 bash scripts/phase1_gate.sh
 - `web-routes.json` / `web-routes.md`：Next.js 路由清单与入口检查。
 - `web-unit-test.out` / `web-unit-test.json` / `web-unit-test.md`：前端单元测试摘要。
 - `web-build.out` / `web-build.json` / `web-build.md`：前端构建摘要。
-- `cutover-*.json` / `cutover-*.md`：现有 readiness profile 的机器产物。命名会在后续里程碑中调整为 release readiness。
+- `release-readiness-*.json` / `release-readiness-*.md`：发布就绪 profile 的机器产物。
 
 如需临时对照外部 reference，可显式启用：
 
@@ -88,7 +88,7 @@ docker build -t im-next-web .
 
 ## 需要逐步清理的过渡资产
 
-- 仍以 `phase1`、`candidate`、`cutover` 命名的脚本、artifact 和开关。
+- 仍以 `phase1`、`candidate` 命名的脚本、artifact 和开关。
 - 与单一供应商绑定的路由、env、compose 服务和 worker 装配。
 - 以通道专名或 RPA 供应商专名定义核心领域模型的代码。
 - 无法在本仓库独立验证的外部桥接路径。

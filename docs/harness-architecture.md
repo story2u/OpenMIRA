@@ -205,7 +205,7 @@ Go 约束：
 - `release-readiness-*.md`
 - 发布建议、阻塞项和回滚检查点。
 
-现有脚本暂时仍会生成 `cutover-*.json` / `cutover-*.md`，后续里程碑会统一重命名。
+现有脚本生成 `release-readiness-*.json` / `release-readiness-*.md`；旧 `cutover-*` artifact 只作为历史 fallback 被 summary 脚本识别。
 
 ## 5. 推荐命令
 
@@ -217,7 +217,7 @@ Go 约束：
 | Frontend build | `cd web && npm run build` |
 | Phase gate | `SKIP_NPM_CI=1 bash scripts/phase1_gate.sh` |
 | API local run | `go run ./cmd/api` |
-| Readiness profile | `go run ./cmd/cutover-readiness -all -format markdown` |
+| Readiness profile | `go run ./cmd/release-readiness -all -format markdown` |
 
 ## 6. 反模式
 

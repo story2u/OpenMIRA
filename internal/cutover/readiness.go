@@ -1,5 +1,4 @@
-// Package cutover defines machine-checkable readiness profiles for the final
-// Python-to-Go traffic cutover stage.
+// Package cutover defines machine-checkable release readiness profiles.
 package cutover
 
 import (
@@ -21,14 +20,13 @@ const (
 	StatusFail = "fail"
 )
 
-// RouteRequirement is the stable route identity required by a cutover profile.
+// RouteRequirement is the stable route identity required by a readiness profile.
 type RouteRequirement struct {
 	Method string `json:"method"`
 	Path   string `json:"path"`
 }
 
-// Profile captures the minimum evidence needed before a traffic slice can move
-// from Python to Go.
+// Profile captures the minimum evidence needed before a product surface can be released.
 type Profile struct {
 	Name           string                 `json:"name"`
 	Description    string                 `json:"description"`
@@ -75,13 +73,13 @@ type Report struct {
 	Checks      []Check `json:"checks"`
 }
 
-// DefaultProfiles returns the first cutover slices that have meaningful local
+// DefaultProfiles returns the release slices that have meaningful local
 // route, env, compose, and golden-suite evidence.
 func DefaultProfiles() []Profile {
 	return []Profile{
 		{
 			Name:        "session-access",
-			Description: "Session login, impersonation, refresh, logout, and current-user access for Next.js cutover.",
+			Description: "Session login, impersonation, refresh, logout, and current-user access for Next.js release.",
 			Routes: []RouteRequirement{
 				{Method: "POST", Path: "/api/v1/session/admin-login"},
 				{Method: "POST", Path: "/api/v1/session/login"},
@@ -479,7 +477,7 @@ func DefaultProfiles() []Profile {
 		},
 		{
 			Name:        "send-dispatch",
-			Description: "Manual send, media send, group invite, and conversation reply paths with the temporary Python SDK executor sidecar.",
+			Description: "Manual send, media send, group invite, and conversation reply paths with the temporary SDK executor bridge.",
 			Routes: []RouteRequirement{
 				{Method: "POST", Path: "/api/v1/conversations/{conversation_id}/reply"},
 				{Method: "POST", Path: "/send/text"},
@@ -972,7 +970,7 @@ func Evaluate(profile Profile, input Inputs) Report {
 		value, ok := env[flag]
 		switch {
 		case !ok:
-			report.add(StatusFail, "flag", fmt.Sprintf("%s is missing from the cutover env", flag))
+			report.add(StatusFail, "flag", fmt.Sprintf("%s is missing from the release env", flag))
 		case !truthy(value):
 			report.add(StatusFail, "flag", fmt.Sprintf("%s is disabled (%q)", flag, value))
 		default:
@@ -1031,7 +1029,7 @@ func LoadDotEnv(path string) (map[string]string, error) {
 	return env, nil
 }
 
-// ParseDotEnv parses deterministic .env files used by the local cutover gate.
+// ParseDotEnv parses deterministic .env files used by the local release readiness gate.
 func ParseDotEnv(data []byte) (map[string]string, error) {
 	env := map[string]string{}
 	scanner := bufio.NewScanner(bytes.NewReader(data))
@@ -1101,7 +1099,7 @@ func ListGoldenSuites(root string) ([]string, error) {
 // MarkdownReport renders the same readiness facts for CI artifacts.
 func MarkdownReport(report Report) string {
 	var builder strings.Builder
-	builder.WriteString("# Cutover Readiness Report\n\n")
+	builder.WriteString("# Release Readiness Report\n\n")
 	builder.WriteString("| Field | Value |\n")
 	builder.WriteString("| --- | --- |\n")
 	builder.WriteString(fmt.Sprintf("| Profile | `%s` |\n", escape(report.Profile)))

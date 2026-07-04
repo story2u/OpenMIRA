@@ -32,13 +32,13 @@ docker compose --env-file .env up -d --build \
 Generate a readiness report from the Go project root and keep the artifact with the deployment change:
 
 ```bash
-go run ./cmd/cutover-readiness -all -format markdown
-go run ./cmd/cutover-readiness -profile session-access -format markdown
-go run ./cmd/cutover-readiness -profile incoming-ingest -format markdown
-go run ./cmd/cutover-readiness -profile send-dispatch -format markdown
+go run ./cmd/release-readiness -all -format markdown
+go run ./cmd/release-readiness -profile session-access -format markdown
+go run ./cmd/release-readiness -profile incoming-ingest -format markdown
+go run ./cmd/release-readiness -profile send-dispatch -format markdown
 ```
 
-The command checks route metadata, runtime flags, required settings, compose services, and fixture coverage. The command name is transitional; the target model is release readiness, documented in `docs/release-readiness.md`.
+The command checks route metadata, runtime flags, required settings, compose services, and fixture coverage. The release readiness model is documented in `docs/release-readiness.md`.
 
 Use `-strict` in a release gate so disabled flags or missing settings fail before traffic reaches a product surface.
 

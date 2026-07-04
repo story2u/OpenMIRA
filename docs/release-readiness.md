@@ -6,15 +6,8 @@
 
 ```bash
 cd go
-go run ./cmd/cutover-readiness -all -format markdown
-go run ./cmd/cutover-readiness -profile <profile> -format markdown
-go run ./cmd/cutover-readiness -profile <profile> -strict
-```
-
-后续目标命令：
-
-```bash
 go run ./cmd/release-readiness -all -format markdown
+go run ./cmd/release-readiness -profile <profile> -format markdown
 go run ./cmd/release-readiness -profile <profile> -strict
 ```
 

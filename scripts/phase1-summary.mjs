@@ -41,7 +41,7 @@ const openAPICandidate = readJSON("route-openapi-drift-candidate.json");
 const inventoryDiff = readJSON("inventory-diff.json");
 const webUnit = readJSON("web-unit-test.json");
 const webBuild = readJSON("web-build.json");
-const cutover = readCutoverSummary();
+const readiness = readReadinessSummary();
 const runbookBaseURL = resolveRunbookBaseURL();
 
 const lines = [];
@@ -98,20 +98,20 @@ lines.push("");
 
 lines.push("## Release Readiness");
 lines.push("");
-if (cutover?.profiles?.length > 0) {
-  lines.push(`Ready profiles: ${display(cutover.ready_count)}/${display(cutover.total_count)}`);
+if (readiness?.profiles?.length > 0) {
+  lines.push(`Ready profiles: ${display(readiness.ready_count)}/${display(readiness.total_count)}`);
   lines.push("");
   lines.push("| Surface | Failing checks | Affected profiles | Suggested action |");
   lines.push("| --- | ---: | ---: | --- |");
-  for (const row of cutoverBlockerRows(cutover.profiles)) {
+  for (const row of readinessBlockerRows(readiness.profiles)) {
     lines.push(`| ${display(row.surface)} | ${row.failures} | ${row.profiles} | ${display(actionForSurface(row.surface))} |`);
   }
   lines.push("");
   lines.push("| Profile | Ready | Pass | Fail | Route fail | Flag fail | Env fail | Service fail | Golden fail | Guide | Suggested action | First failures |");
   lines.push("| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- | --- |");
-  for (const profile of cutover.profiles) {
+  for (const profile of readiness.profiles) {
     lines.push(
-      `| ${display(profile.profile)} | ${profile.ready ? "yes" : "no"} | ${checkCount(profile, "pass")} | ${checkCount(profile, "fail")} | ${checkCount(profile, "fail", "route")} | ${checkCount(profile, "fail", "flag")} | ${checkCount(profile, "fail", "env")} | ${checkCount(profile, "fail", "service")} | ${checkCount(profile, "fail", "golden")} | ${runbookLink(profile.profile)} | ${display(suggestedCutoverAction(profile))} | ${display(firstFailures(profile))} |`
+      `| ${display(profile.profile)} | ${profile.ready ? "yes" : "no"} | ${checkCount(profile, "pass")} | ${checkCount(profile, "fail")} | ${checkCount(profile, "fail", "route")} | ${checkCount(profile, "fail", "flag")} | ${checkCount(profile, "fail", "env")} | ${checkCount(profile, "fail", "service")} | ${checkCount(profile, "fail", "golden")} | ${runbookLink(profile.profile)} | ${display(suggestedReadinessAction(profile))} | ${display(firstFailures(profile))} |`
     );
   }
 } else {
@@ -166,10 +166,10 @@ function formatReasons(reasons) {
     .join(", ");
 }
 
-function readCutoverSummary() {
-  const aggregate = readJSON("cutover-all.json");
+function readReadinessSummary() {
+  const aggregate = readJSON("release-readiness-all.json") ?? readJSON("cutover-all.json");
   if (Array.isArray(aggregate?.profiles)) {
-    return normalizeCutoverSummary(aggregate);
+    return normalizeReadinessSummary(aggregate);
   }
 
   let names = [];
@@ -182,7 +182,11 @@ function readCutoverSummary() {
   const profiles = [];
   const seen = new Set();
   for (const name of names.sort()) {
-    if (!name.startsWith("cutover-") || !name.endsWith(".json") || name === "cutover-all.json") {
+    const isReleaseArtifact =
+      name.startsWith("release-readiness-") && name.endsWith(".json") && name !== "release-readiness-all.json";
+    const isLegacyArtifact =
+      name.startsWith("cutover-") && name.endsWith(".json") && name !== "cutover-all.json";
+    if (!isReleaseArtifact && !isLegacyArtifact) {
       continue;
     }
     const report = readJSON(name);
@@ -197,10 +201,10 @@ function readCutoverSummary() {
   if (profiles.length === 0) {
     return null;
   }
-  return normalizeCutoverSummary({ profiles });
+  return normalizeReadinessSummary({ profiles });
 }
 
-function normalizeCutoverSummary(summary) {
+function normalizeReadinessSummary(summary) {
   const profiles = [...(summary.profiles ?? [])].sort((left, right) =>
     String(left.profile ?? "").localeCompare(String(right.profile ?? ""))
   );
@@ -236,7 +240,7 @@ function firstFailures(profile) {
     .join("; ");
 }
 
-function cutoverBlockerRows(profiles) {
+function readinessBlockerRows(profiles) {
   const rows = [];
   for (const surface of ["route", "golden", "service", "env", "flag"]) {
     const affectedProfiles = new Set();
@@ -259,7 +263,7 @@ function cutoverBlockerRows(profiles) {
   return rows;
 }
 
-function suggestedCutoverAction(profile) {
+function suggestedReadinessAction(profile) {
   if (checkCount(profile, "fail") === 0) {
     return "进入 strict readiness gate 或 shadow/canary 验证";
   }

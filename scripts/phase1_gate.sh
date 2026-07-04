@@ -233,13 +233,13 @@ if [[ -s "$ARTIFACT_DIR/candidate-flags-missing-compose.txt" ]]; then
   cat "$ARTIFACT_DIR/candidate-flags-missing-compose.txt" >&2
   exit 1
 fi
-run_cutover_profile() {
+run_release_profile() {
   local profile="$1"
   local artifact="$2"
-  echo "==> cutover readiness ${artifact} JSON"
-  (cd "$GO_ROOT" && go run ./cmd/cutover-readiness -profile "$profile" -pretty > "$ARTIFACT_DIR/cutover-${artifact}.json")
-  echo "==> cutover readiness ${artifact} Markdown"
-  (cd "$GO_ROOT" && go run ./cmd/cutover-readiness -profile "$profile" -format markdown > "$ARTIFACT_DIR/cutover-${artifact}.md")
+  echo "==> release readiness ${artifact} JSON"
+  (cd "$GO_ROOT" && go run ./cmd/release-readiness -profile "$profile" -pretty > "$ARTIFACT_DIR/release-readiness-${artifact}.json")
+  echo "==> release readiness ${artifact} Markdown"
+  (cd "$GO_ROOT" && go run ./cmd/release-readiness -profile "$profile" -format markdown > "$ARTIFACT_DIR/release-readiness-${artifact}.md")
 }
 
 run_live_golden_suite() {
@@ -287,10 +287,13 @@ run_replay_suite() {
     -format markdown > "$ARTIFACT_DIR/${artifact}.md")
 }
 
-if [[ -n "${CUTOVER_PROFILE_LIST:-}" ]]; then
-  IFS=',' read -r -a selected_cutover_profiles <<< "$CUTOVER_PROFILE_LIST"
+RELEASE_PROFILE_LIST="${RELEASE_PROFILE_LIST:-${CUTOVER_PROFILE_LIST:-}}"
+SKIP_RELEASE_AGGREGATE="${SKIP_RELEASE_AGGREGATE:-${SKIP_CUTOVER_AGGREGATE:-0}}"
+
+if [[ -n "$RELEASE_PROFILE_LIST" ]]; then
+  IFS=',' read -r -a selected_release_profiles <<< "$RELEASE_PROFILE_LIST"
 else
-  selected_cutover_profiles=(
+  selected_release_profiles=(
     session-access
     admin-observability
     incoming-ingest
@@ -315,7 +318,7 @@ else
   )
 fi
 
-sanitize_cutover_profiles() {
+sanitize_release_profiles() {
   local raw
   local trimmed
   local seen_profiles="|"
@@ -334,16 +337,16 @@ sanitize_cutover_profiles() {
   done
 }
 
-sanitized_cutover_profiles=()
+sanitized_release_profiles=()
 while IFS= read -r profile; do
-  sanitized_cutover_profiles+=("$profile")
-done < <(sanitize_cutover_profiles "${selected_cutover_profiles[@]}")
-selected_cutover_profiles=("${sanitized_cutover_profiles[@]}")
+  sanitized_release_profiles+=("$profile")
+done < <(sanitize_release_profiles "${selected_release_profiles[@]}")
+selected_release_profiles=("${sanitized_release_profiles[@]}")
 
 manifest_profiles() {
   local first=true
   local p
-  for p in "${selected_cutover_profiles[@]}"; do
+  for p in "${selected_release_profiles[@]}"; do
     if [[ "$first" == "true" ]]; then
       first=false
       printf '    "%s"' "$p"
@@ -426,25 +429,25 @@ cat <<EOF > "$ARTIFACT_DIR/phase1_gate_manifest.json"
   ],
   "run_replay_gating": "${RUN_REPLAY_GATING:-0}",
   "run_replay_compare": "${RUN_REPLAY_COMPARE:-0}",
-  "skip_cutover_aggregate": "${SKIP_CUTOVER_AGGREGATE:-0}",
-  "cutover_profile_count": ${#selected_cutover_profiles[@]},
-  "cutover_profiles": [
+  "skip_release_aggregate": "${SKIP_RELEASE_AGGREGATE}",
+  "release_profile_count": ${#selected_release_profiles[@]},
+  "release_profiles": [
 $(manifest_profiles)
   ]
 }
 EOF
 
-for profile in "${selected_cutover_profiles[@]}"; do
+for profile in "${selected_release_profiles[@]}"; do
   profile="${profile// /}"
   [[ -z "$profile" ]] && continue
-  run_cutover_profile "$profile" "$profile"
+  run_release_profile "$profile" "$profile"
 done
 
-if [[ "${SKIP_CUTOVER_AGGREGATE:-0}" != "1" ]]; then
-  echo "==> cutover readiness all profiles JSON"
-  (cd "$GO_ROOT" && go run ./cmd/cutover-readiness -all -pretty > "$ARTIFACT_DIR/cutover-all.json")
-  echo "==> cutover readiness all profiles Markdown"
-  (cd "$GO_ROOT" && go run ./cmd/cutover-readiness -all -format markdown > "$ARTIFACT_DIR/cutover-all.md")
+if [[ "$SKIP_RELEASE_AGGREGATE" != "1" ]]; then
+  echo "==> release readiness all profiles JSON"
+  (cd "$GO_ROOT" && go run ./cmd/release-readiness -all -pretty > "$ARTIFACT_DIR/release-readiness-all.json")
+  echo "==> release readiness all profiles Markdown"
+  (cd "$GO_ROOT" && go run ./cmd/release-readiness -all -format markdown > "$ARTIFACT_DIR/release-readiness-all.md")
 fi
 
 echo "==> golden suite validation JSON"
