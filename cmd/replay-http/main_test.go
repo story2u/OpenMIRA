@@ -44,6 +44,31 @@ func TestValidationReportLoadErrors(t *testing.T) {
 	}
 }
 
+func TestLoadSuiteKeepsLegacyReferenceFixtureAlias(t *testing.T) {
+	dir := t.TempDir()
+	referencePath := filepath.Join(dir, "reference.json")
+	goPath := filepath.Join(dir, "go.json")
+	if err := os.WriteFile(referencePath, []byte(`[{"event":"conversation.message","cursor":"1"}]`), 0o600); err != nil {
+		t.Fatalf("write reference fixture: %v", err)
+	}
+	if err := os.WriteFile(goPath, []byte(`[{"event":"conversation.message","cursor":"1"}]`), 0o600); err != nil {
+		t.Fatalf("write go fixture: %v", err)
+	}
+	suitePath := filepath.Join(dir, "suite.json")
+	suiteJSON := `{"name":"legacy-suite","cases":[{"name":"legacy alias","python":"reference.json","go":"go.json"}]}`
+	if err := os.WriteFile(suitePath, []byte(suiteJSON), 0o600); err != nil {
+		t.Fatalf("write suite: %v", err)
+	}
+
+	suite, err := loadSuite(suitePath)
+	if err != nil {
+		t.Fatalf("loadSuite() = %v", err)
+	}
+	if got := suite.Cases[0].referenceEventsPath(); got != "reference.json" {
+		t.Fatalf("referenceEventsPath() = %q, want reference.json", got)
+	}
+}
+
 func TestCompareReportSummarizesMismatch(t *testing.T) {
 	dir := t.TempDir()
 	mustWrite := func(name, content string) string {
@@ -53,16 +78,16 @@ func TestCompareReportSummarizesMismatch(t *testing.T) {
 		}
 		return path
 	}
-	pythonPath := mustWrite("python.json", `[{"event":"conversation.message","cursor":"1","channel":"conversations","payload":{"id":"x"}}]`)
+	referencePath := mustWrite("reference.json", `[{"event":"conversation.message","cursor":"1","channel":"conversations","payload":{"id":"x"}}]`)
 	goPath := mustWrite("go.json", `[{"event":"conversation.message","cursor":"2","channel":"conversations","payload":{"id":"x"}}]`)
 
 	suite := replaySuite{
 		Name: "mismatch-check",
 		Cases: []suiteCase{
 			{
-				Name:             "cursor mismatch",
-				PythonEventsPath: pythonPath,
-				GoEventsPath:     goPath,
+				Name:                "cursor mismatch",
+				ReferenceEventsPath: referencePath,
+				GoEventsPath:        goPath,
 			},
 		},
 	}

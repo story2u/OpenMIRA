@@ -1,4 +1,4 @@
-// Command replay-http validates or compares Go/legacy replay event stream fixtures.
+// Command replay-http validates or compares Go/reference replay event stream fixtures.
 // Validate-only mode checks fixture quality without running stream-level diff.
 package main
 
@@ -46,10 +46,11 @@ func main() {
 }
 
 type suiteCase struct {
-	Name             string   `json:"name"`
-	PythonEventsPath string   `json:"python"`
-	GoEventsPath     string   `json:"go"`
-	IgnoreJSONFields []string `json:"ignore_json_fields,omitempty"`
+	Name                      string   `json:"name"`
+	ReferenceEventsPath       string   `json:"reference,omitempty"`
+	LegacyReferenceEventsPath string   `json:"python,omitempty"`
+	GoEventsPath              string   `json:"go"`
+	IgnoreJSONFields          []string `json:"ignore_json_fields,omitempty"`
 }
 
 type suiteOptions struct {
@@ -63,18 +64,18 @@ type replaySuite struct {
 }
 
 type caseReport struct {
-	Name            string   `json:"name"`
-	PythonPath      string   `json:"python"`
-	GoPath          string   `json:"go"`
-	Match           bool     `json:"match"`
-	PythonCount     int      `json:"python_count"`
-	GoCount         int      `json:"go_count"`
-	PairCount       int      `json:"pair_count"`
-	MissingInGo     int      `json:"missing_in_go"`
-	MissingInPython int      `json:"missing_in_python"`
-	PairDiffs       []string `json:"pair_diffs,omitempty"`
-	Error           string   `json:"error,omitempty"`
-	Diffs           []string `json:"diffs,omitempty"`
+	Name               string   `json:"name"`
+	ReferencePath      string   `json:"reference"`
+	GoPath             string   `json:"go"`
+	Match              bool     `json:"match"`
+	ReferenceCount     int      `json:"reference_count"`
+	GoCount            int      `json:"go_count"`
+	PairCount          int      `json:"pair_count"`
+	MissingInGo        int      `json:"missing_in_go"`
+	MissingInReference int      `json:"missing_in_reference"`
+	PairDiffs          []string `json:"pair_diffs,omitempty"`
+	Error              string   `json:"error,omitempty"`
+	Diffs              []string `json:"diffs,omitempty"`
 }
 
 type suiteReport struct {
@@ -114,8 +115,8 @@ func validateSuite(suite replaySuite) error {
 		if strings.TrimSpace(c.Name) == "" {
 			return fmt.Errorf("case %d name is required", idx)
 		}
-		if strings.TrimSpace(c.PythonEventsPath) == "" {
-			return fmt.Errorf("case %q python fixture path is required", c.Name)
+		if strings.TrimSpace(c.referenceEventsPath()) == "" {
+			return fmt.Errorf("case %q reference fixture path is required", c.Name)
 		}
 		if strings.TrimSpace(c.GoEventsPath) == "" {
 			return fmt.Errorf("case %q go fixture path is required", c.Name)
@@ -137,15 +138,16 @@ func validationReport(suitePath string, suite replaySuite) (suiteReport, error) 
 		Cases:     make([]caseReport, 0, len(suite.Cases)),
 	}
 	for _, c := range suite.Cases {
+		referencePath := c.referenceEventsPath()
 		caseReport := caseReport{
-			Name:       c.Name,
-			PythonPath: c.PythonEventsPath,
-			GoPath:     c.GoEventsPath,
+			Name:          c.Name,
+			ReferencePath: referencePath,
+			GoPath:        c.GoEventsPath,
 		}
-		pythonEvents, pythonErr := replay.LoadEvents(resolveFixturePath(suitePath, c.PythonEventsPath))
-		if pythonErr != nil {
+		referenceEvents, referenceErr := replay.LoadEvents(resolveFixturePath(suitePath, referencePath))
+		if referenceErr != nil {
 			caseReport.Match = false
-			caseReport.Error = pythonErr.Error()
+			caseReport.Error = referenceErr.Error()
 			report.Match = false
 		}
 		goEvents, goErr := replay.LoadEvents(resolveFixturePath(suitePath, c.GoEventsPath))
@@ -158,11 +160,11 @@ func validationReport(suitePath string, suite replaySuite) (suiteReport, error) 
 			}
 			report.Match = false
 		}
-		if pythonErr == nil && goErr == nil {
+		if referenceErr == nil && goErr == nil {
 			caseReport.Match = true
-			caseReport.PythonCount = len(pythonEvents)
+			caseReport.ReferenceCount = len(referenceEvents)
 			caseReport.GoCount = len(goEvents)
-			caseReport.PairCount = maxInt(len(pythonEvents), len(goEvents))
+			caseReport.PairCount = maxInt(len(referenceEvents), len(goEvents))
 		}
 		report.Cases = append(report.Cases, caseReport)
 	}
@@ -178,15 +180,16 @@ func compareReport(suitePath string, suite replaySuite) (suiteReport, error) {
 		Cases:     make([]caseReport, 0, len(suite.Cases)),
 	}
 	for _, c := range suite.Cases {
+		referencePath := c.referenceEventsPath()
 		caseReport := caseReport{
-			Name:       c.Name,
-			PythonPath: c.PythonEventsPath,
-			GoPath:     c.GoEventsPath,
+			Name:          c.Name,
+			ReferencePath: referencePath,
+			GoPath:        c.GoEventsPath,
 		}
-		pythonEvents, err := replay.LoadEvents(resolveFixturePath(suitePath, c.PythonEventsPath))
+		referenceEvents, err := replay.LoadEvents(resolveFixturePath(suitePath, referencePath))
 		if err != nil {
 			caseReport.Match = false
-			caseReport.Error = fmt.Sprintf("load python fixture: %v", err)
+			caseReport.Error = fmt.Sprintf("load reference fixture: %v", err)
 			report.Match = false
 			report.Cases = append(report.Cases, caseReport)
 			continue
@@ -201,13 +204,13 @@ func compareReport(suitePath string, suite replaySuite) (suiteReport, error) {
 		}
 		options := append([]string{}, suite.Options.IgnoreJSONFields...)
 		options = append(options, c.IgnoreJSONFields...)
-		comparison := replay.CompareStreams(c.Name, pythonEvents, goEvents, replay.CompareOptions{IgnoreJSONFields: options})
+		comparison := replay.CompareStreams(c.Name, referenceEvents, goEvents, replay.CompareOptions{IgnoreJSONFields: options})
 		caseReport.Match = comparison.Match
-		caseReport.PythonCount = comparison.PythonCount
+		caseReport.ReferenceCount = comparison.ReferenceCount
 		caseReport.GoCount = comparison.GoCount
 		caseReport.PairCount = comparison.PairCount
 		caseReport.MissingInGo = comparison.MissingInGo
-		caseReport.MissingInPython = comparison.MissingInPython
+		caseReport.MissingInReference = comparison.MissingInReference
 		caseReport.PairDiffs = make([]string, len(comparison.Results))
 		for i, result := range comparison.Results {
 			caseReport.PairDiffs[i] = fmt.Sprintf("pair %d diffs=%d", result.Index, len(result.Diffs))
@@ -250,29 +253,36 @@ func markdownReport(report suiteReport) string {
 	builder.WriteString(fmt.Sprintf("| Case Count | %d |\n", report.CaseCount))
 	builder.WriteString("\n## Cases\n\n")
 	if len(report.Cases) == 0 {
-		builder.WriteString("| Name | Match | Python | Go | Summary |\n")
+		builder.WriteString("| Name | Match | Reference | Go | Summary |\n")
 		builder.WriteString("| --- | --- | --- | --- | --- |\n")
 		builder.WriteString("| none | none | none | none | none |\n")
 		return builder.String()
 	}
-	builder.WriteString("| Name | Match | Python | Go | Python Count | Go Count | Missing Go | Missing Python | Diffs |\n")
+	builder.WriteString("| Name | Match | Reference | Go | Reference Count | Go Count | Missing Go | Missing Reference | Diffs |\n")
 	builder.WriteString("| --- | --- | --- | --- | --- | --- | --- | --- | --- |\n")
 	for _, c := range report.Cases {
 		builder.WriteString(fmt.Sprintf(
 			"| %s | `%t` | %s | %s | %d | %d | %d | %d | %s |\n",
 			escapeTable(c.Name),
 			c.Match,
-			escapeTable(c.PythonPath),
+			escapeTable(c.ReferencePath),
 			escapeTable(c.GoPath),
-			c.PythonCount,
+			c.ReferenceCount,
 			c.GoCount,
 			c.MissingInGo,
-			c.MissingInPython,
+			c.MissingInReference,
 			escapeTable(strings.Join(c.Diffs, "; ")),
 		))
 	}
 	builder.WriteString("\n")
 	return builder.String()
+}
+
+func (c suiteCase) referenceEventsPath() string {
+	if value := strings.TrimSpace(c.ReferenceEventsPath); value != "" {
+		return value
+	}
+	return strings.TrimSpace(c.LegacyReferenceEventsPath)
 }
 
 func resolveFixturePath(suitePath, fixturePath string) string {

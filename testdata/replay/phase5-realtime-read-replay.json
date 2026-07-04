@@ -15,7 +15,7 @@
   "cases": [
     {
       "name": "realtime read parity",
-      "python": "phase5-realtime-read-replay-python.json",
+      "reference": "phase5-realtime-read-replay-reference.json",
       "go": "phase5-realtime-read-replay-go.json"
     }
   ]

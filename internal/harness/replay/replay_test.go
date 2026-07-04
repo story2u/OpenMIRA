@@ -53,7 +53,7 @@ func TestLoadEventsSupportsArrayAndSingleObjectFixture(t *testing.T) {
 }
 
 func TestCompareStreamsIgnoresConfiguredFields(t *testing.T) {
-	python := []Event{{
+	referenceEvents := []Event{{
 		Channel:   "conversations",
 		EventType: "conversation.message",
 		Cursor:    "1",
@@ -77,19 +77,19 @@ func TestCompareStreamsIgnoresConfiguredFields(t *testing.T) {
 			"message_id": "m-1",
 		},
 	}}
-	report := CompareStreams("replay", python, goEvents, CompareOptions{IgnoreJSONFields: []string{"trace_id"}})
+	report := CompareStreams("replay", referenceEvents, goEvents, CompareOptions{IgnoreJSONFields: []string{"trace_id"}})
 	if !report.Match {
 		t.Fatalf("report should match after ignored field: %+v", report)
 	}
 
-	report = CompareStreams("replay", python, goEvents, CompareOptions{})
+	report = CompareStreams("replay", referenceEvents, goEvents, CompareOptions{})
 	if report.Match {
 		t.Fatal("report should mismatch when volatile trace_id differs")
 	}
 }
 
 func TestCompareStreamsReportsMissingEventsAndMismatch(t *testing.T) {
-	python := []Event{{
+	referenceEvents := []Event{{
 		Channel:   "c1",
 		EventType: "evt",
 		Raw:       map[string]any{"event": "evt", "channel": "c1"},
@@ -107,12 +107,12 @@ func TestCompareStreamsReportsMissingEventsAndMismatch(t *testing.T) {
 		},
 	}
 
-	report := CompareStreams("replay", python, goEvents, CompareOptions{})
+	report := CompareStreams("replay", referenceEvents, goEvents, CompareOptions{})
 	if report.Match {
 		t.Fatal("report should mismatch for missing Go event")
 	}
-	if report.MissingInPython != 1 {
-		t.Fatalf("missing_in_python = %d, want 1", report.MissingInPython)
+	if report.MissingInReference != 1 {
+		t.Fatalf("missing_in_reference = %d, want 1", report.MissingInReference)
 	}
 	if report.PairCount != 1 {
 		t.Fatalf("pair_count = %d, want 1", report.PairCount)
@@ -127,17 +127,17 @@ func TestCompareStreamsReportsMissingEventsAndMismatch(t *testing.T) {
 
 func TestMarkdownReportIngestsReplayArtifacts(t *testing.T) {
 	report := MarkdownReport(ComparisonReport{
-		Name:        "phase5-realtime",
-		Mode:        "compare",
-		Match:       false,
-		PythonCount: 1,
-		GoCount:     1,
+		Name:           "phase5-realtime",
+		Mode:           "compare",
+		Match:          false,
+		ReferenceCount: 1,
+		GoCount:        1,
 		Results: []ComparisonResult{{
-			Index:  0,
-			Match:  false,
-			Python: EventSummary{EventType: "conversation.message", Channel: "conversations", Cursor: "1"},
-			Go:     EventSummary{EventType: "conversation.message", Channel: "conversations", Cursor: "2"},
-			Diffs:  []string{"cursor mismatch: python=\"1\" go=\"2\""},
+			Index:     0,
+			Match:     false,
+			Reference: EventSummary{EventType: "conversation.message", Channel: "conversations", Cursor: "1"},
+			Go:        EventSummary{EventType: "conversation.message", Channel: "conversations", Cursor: "2"},
+			Diffs:     []string{"cursor mismatch: reference=\"1\" go=\"2\""},
 		}},
 	})
 	for _, want := range []string{"# Replay Compare Report", "phase5-realtime", "cursor mismatch", "conversation.message"} {

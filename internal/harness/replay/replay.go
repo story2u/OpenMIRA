@@ -1,6 +1,6 @@
-// Package replay compares legacy Python and Go websocket/event stream samples.
-// It is a phase-2+ harness building block to support replay and event schema
-// compatibility work before high-risk streaming migration.
+// Package replay compares reference and Go websocket/event stream samples.
+// It is a harness building block for release evidence around streaming and
+// event-schema compatibility.
 package replay
 
 import (
@@ -38,24 +38,24 @@ type CompareOptions struct {
 
 // ComparisonResult is a deterministic event drift unit.
 type ComparisonResult struct {
-	Index  int          `json:"index"`
-	Match  bool         `json:"match"`
-	Python EventSummary `json:"python"`
-	Go     EventSummary `json:"go"`
-	Diffs  []string     `json:"diffs"`
+	Index     int          `json:"index"`
+	Match     bool         `json:"match"`
+	Reference EventSummary `json:"reference"`
+	Go        EventSummary `json:"go"`
+	Diffs     []string     `json:"diffs"`
 }
 
 // ComparisonReport is the machine-readable output for replay/gate assertions.
 type ComparisonReport struct {
-	Name            string             `json:"name"`
-	Mode            string             `json:"mode"`
-	Match           bool               `json:"match"`
-	PairCount       int                `json:"pair_count"`
-	PythonCount     int                `json:"python_count"`
-	GoCount         int                `json:"go_count"`
-	MissingInGo     int                `json:"missing_in_go"`
-	MissingInPython int                `json:"missing_in_python"`
-	Results         []ComparisonResult `json:"results"`
+	Name               string             `json:"name"`
+	Mode               string             `json:"mode"`
+	Match              bool               `json:"match"`
+	PairCount          int                `json:"pair_count"`
+	ReferenceCount     int                `json:"reference_count"`
+	GoCount            int                `json:"go_count"`
+	MissingInGo        int                `json:"missing_in_go"`
+	MissingInReference int                `json:"missing_in_reference"`
+	Results            []ComparisonResult `json:"results"`
 }
 
 // LoadEvents reads event fixtures from disk.
@@ -86,44 +86,44 @@ func LoadEvents(path string) ([]Event, error) {
 	return events, nil
 }
 
-// CompareStreams compares python and go fixture streams in index order.
-func CompareStreams(name string, pythonEvents []Event, goEvents []Event, options CompareOptions) ComparisonReport {
+// CompareStreams compares reference and Go fixture streams in index order.
+func CompareStreams(name string, referenceEvents []Event, goEvents []Event, options CompareOptions) ComparisonReport {
 	report := ComparisonReport{
-		Name:        name,
-		Mode:        "compare",
-		Match:       true,
-		PythonCount: len(pythonEvents),
-		GoCount:     len(goEvents),
-		PairCount:   minInt(len(pythonEvents), len(goEvents)),
+		Name:           name,
+		Mode:           "compare",
+		Match:          true,
+		ReferenceCount: len(referenceEvents),
+		GoCount:        len(goEvents),
+		PairCount:      minInt(len(referenceEvents), len(goEvents)),
 	}
-	maxCount := maxInt(len(pythonEvents), len(goEvents))
+	maxCount := maxInt(len(referenceEvents), len(goEvents))
 
 	for idx := 0; idx < maxCount; idx++ {
 		switch {
-		case idx >= len(pythonEvents):
-			report.MissingInPython++
+		case idx >= len(referenceEvents):
+			report.MissingInReference++
 			goSummary := eventSummary(goEvents[idx])
 			result := ComparisonResult{
 				Index: idx,
 				Match: false,
 				Go:    goSummary,
-				Diffs: []string{"python event missing"},
+				Diffs: []string{"reference event missing"},
 			}
 			report.Results = append(report.Results, result)
 			report.Match = false
 		case idx >= len(goEvents):
 			report.MissingInGo++
-			pythonSummary := eventSummary(pythonEvents[idx])
+			referenceSummary := eventSummary(referenceEvents[idx])
 			result := ComparisonResult{
-				Index:  idx,
-				Match:  false,
-				Python: pythonSummary,
-				Diffs:  []string{"go event missing"},
+				Index:     idx,
+				Match:     false,
+				Reference: referenceSummary,
+				Diffs:     []string{"go event missing"},
 			}
 			report.Results = append(report.Results, result)
 			report.Match = false
 		default:
-			result := compareEventPair(idx, pythonEvents[idx], goEvents[idx], options)
+			result := compareEventPair(idx, referenceEvents[idx], goEvents[idx], options)
 			report.Results = append(report.Results, result)
 			if !result.Match {
 				report.Match = false
@@ -133,25 +133,25 @@ func CompareStreams(name string, pythonEvents []Event, goEvents []Event, options
 	return report
 }
 
-func compareEventPair(index int, python Event, goEvent Event, options CompareOptions) ComparisonResult {
+func compareEventPair(index int, reference Event, goEvent Event, options CompareOptions) ComparisonResult {
 	result := ComparisonResult{
-		Index:  index,
-		Python: eventSummary(python),
-		Go:     eventSummary(goEvent),
+		Index:     index,
+		Reference: eventSummary(reference),
+		Go:        eventSummary(goEvent),
 	}
 
-	if python.Channel != goEvent.Channel {
-		result.Diffs = append(result.Diffs, fmt.Sprintf("channel mismatch: python=%q go=%q", python.Channel, goEvent.Channel))
+	if reference.Channel != goEvent.Channel {
+		result.Diffs = append(result.Diffs, fmt.Sprintf("channel mismatch: reference=%q go=%q", reference.Channel, goEvent.Channel))
 	}
-	if python.EventType != goEvent.EventType {
-		result.Diffs = append(result.Diffs, fmt.Sprintf("event mismatch: python=%q go=%q", python.EventType, goEvent.EventType))
+	if reference.EventType != goEvent.EventType {
+		result.Diffs = append(result.Diffs, fmt.Sprintf("event mismatch: reference=%q go=%q", reference.EventType, goEvent.EventType))
 	}
-	if python.Cursor != "" || goEvent.Cursor != "" {
-		if python.Cursor != goEvent.Cursor {
-			result.Diffs = append(result.Diffs, fmt.Sprintf("cursor mismatch: python=%q go=%q", python.Cursor, goEvent.Cursor))
+	if reference.Cursor != "" || goEvent.Cursor != "" {
+		if reference.Cursor != goEvent.Cursor {
+			result.Diffs = append(result.Diffs, fmt.Sprintf("cursor mismatch: reference=%q go=%q", reference.Cursor, goEvent.Cursor))
 		}
 	}
-	if !bytes.Equal(normalizeEventBody(python.Raw, options.IgnoreJSONFields), normalizeEventBody(goEvent.Raw, options.IgnoreJSONFields)) {
+	if !bytes.Equal(normalizeEventBody(reference.Raw, options.IgnoreJSONFields), normalizeEventBody(goEvent.Raw, options.IgnoreJSONFields)) {
 		result.Diffs = append(result.Diffs, "payload mismatch")
 	}
 	result.Match = len(result.Diffs) == 0
