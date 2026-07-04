@@ -53,7 +53,7 @@ func TestFakeWebhookConnectorBuildsInboundQueuePayload(t *testing.T) {
 		t.Fatalf("payload header = %#v", payload)
 	}
 	data := payload["data"].(map[string]any)
-	if data["connector_id"] != "internal-webhook" || data["channel"] != connector.ChannelInternalWebhook || data["wework_user_id"] != nil {
+	if data["connector_id"] != "internal-webhook" || data["channel"] != connector.ChannelInternalWebhook {
 		t.Fatalf("connector data = %#v", data)
 	}
 	if data["message_origin"] != "connector:internal.webhook" || data["conversation_key"] != "internal.webhook:account-1:external-conv-1:customer-1" {

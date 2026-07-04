@@ -71,7 +71,7 @@
 - 文本、图片、文件、语音等 payload 有统一 contract。
 - 发送任务支持幂等、重试、超时、DLQ 和人工补偿。
 - 至少一个 fake connector 和一个真实 connector 通过同一套 conformance tests。
-- `connector-outbound-message.schema.json`、`connector-delivery-receipt.schema.json` 和 task-to-connector 适配测试形成基础证据。
+- `connector-outbound-message.schema.json`、`connector-delivery-receipt.schema.json`、task-to-connector 适配测试和 fake outbound connector dispatch conformance test 形成基础证据。
 
 ## 阶段 5：实时网关与投影
 

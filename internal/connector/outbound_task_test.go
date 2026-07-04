@@ -110,7 +110,7 @@ func TestDeliveryReceiptFromTaskAndOutgoingUpdateFromReceipt(t *testing.T) {
 }
 
 func TestOutboundMessageFromTaskRejectsNonSendTasks(t *testing.T) {
-	if _, ok := connector.OutboundMessageFromTask(tasks.Record{TaskID: "task-1", TaskType: "wework_login_status"}, connector.OutboundTaskOptions{}); ok {
+	if _, ok := connector.OutboundMessageFromTask(tasks.Record{TaskID: "task-1", TaskType: "device_screenshot"}, connector.OutboundTaskOptions{}); ok {
 		t.Fatal("non-send task mapped to outbound message")
 	}
 }
