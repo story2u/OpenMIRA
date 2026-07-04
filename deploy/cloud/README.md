@@ -48,6 +48,7 @@ Use `-strict` in a release gate so disabled flags or missing settings fail befor
 - `SESSION_JWT_SECRET`
 - `CLOUD_WS_REDIS_URL` and `CLOUD_EVENTBUS_REDIS_URL` when using realtime or queues
 - `CLOUD_CACHE_REDIS_URL` when using locks, provider leases, or cache-backed diagnostics
+- `CLOUD_CACHE_REDIS_PREFIX` for the cache namespace; defaults to `im`
 - Object storage upload URL/token when media or archive workers are enabled
 
 Provider-specific settings are optional unless the matching connector or provider is enabled.

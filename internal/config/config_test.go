@@ -878,6 +878,8 @@ func TestLoadKeepsSessionMeCandidateDisabledByDefault(t *testing.T) {
 	t.Setenv("RTC_BRIDGE_ACTIVE_TTL_SEC", "")
 	t.Setenv("RTC_CONTROL_TTL_SEC", "")
 	t.Setenv("CLOUD_CACHE_REDIS_PREFIX", "")
+	t.Setenv("IM_CACHE_REDIS_PREFIX", "")
+	t.Setenv("WEWORK_CACHE_REDIS_PREFIX", "")
 	t.Setenv("GO_ENABLE_P1_SCREEN_CANDIDATE", "")
 	t.Setenv("GO_ENABLE_CONTACT_EXTERNAL_CANDIDATE", "")
 	t.Setenv("GO_ENABLE_CONTACT_CORP_USER_CANDIDATE", "")
@@ -1298,7 +1300,7 @@ func TestLoadKeepsSessionMeCandidateDisabledByDefault(t *testing.T) {
 	if cfg.LiveKitURL != "" || cfg.LiveKitAPIKey != "" || cfg.LiveKitAPISecret != "" || cfg.LiveKitTokenTTLSeconds != 3600 || cfg.LiveKitDeviceRoomPrefix != "device" {
 		t.Fatalf("default LiveKit config = url=%q key=%q secret=%q ttl=%d prefix=%q", cfg.LiveKitURL, cfg.LiveKitAPIKey, cfg.LiveKitAPISecret, cfg.LiveKitTokenTTLSeconds, cfg.LiveKitDeviceRoomPrefix)
 	}
-	if cfg.RTCModeDefault != "" || cfg.RTCBridgeActiveTTLSeconds != 90 || cfg.RTCControlTTLSeconds != 120 || cfg.CacheRedisPrefix != "wework" {
+	if cfg.RTCModeDefault != "" || cfg.RTCBridgeActiveTTLSeconds != 90 || cfg.RTCControlTTLSeconds != 120 || cfg.CacheRedisPrefix != "im" {
 		t.Fatalf("default RTC config = mode=%q active_ttl=%d control_ttl=%d prefix=%q", cfg.RTCModeDefault, cfg.RTCBridgeActiveTTLSeconds, cfg.RTCControlTTLSeconds, cfg.CacheRedisPrefix)
 	}
 	if cfg.RTCControlExecutorBaseURL != "" || cfg.RTCControlExecutorToken != "" || cfg.RTCControlExecutorTimeoutSec != 2 || cfg.RTCControlScreenWidth != 0 || cfg.RTCControlScreenHeight != 0 {
@@ -1414,6 +1416,30 @@ func TestLoadReadsLegacyCallAudioBridgeEnv(t *testing.T) {
 
 	if cfg.CallAudioBridgeStatusFile != "/tmp/legacy-bridge-status.json" || cfg.CallAudioBridgeTargetsFile != "/tmp/legacy-bridge-targets.json" || cfg.CallAudioBridgeHostDataRoot != "/tmp/legacy-host-data" || cfg.CallAudioBridgeStaleSec != 90 {
 		t.Fatalf("legacy call audio bridge config = status=%q targets=%q host_data=%q stale=%.1f", cfg.CallAudioBridgeStatusFile, cfg.CallAudioBridgeTargetsFile, cfg.CallAudioBridgeHostDataRoot, cfg.CallAudioBridgeStaleSec)
+	}
+}
+
+func TestLoadCacheRedisPrefixUsesStandaloneAliases(t *testing.T) {
+	t.Setenv("CLOUD_CACHE_REDIS_PREFIX", "")
+	t.Setenv("IM_CACHE_REDIS_PREFIX", " im-prefix ")
+	t.Setenv("WEWORK_CACHE_REDIS_PREFIX", "legacy-prefix")
+
+	cfg := Load()
+	if cfg.CacheRedisPrefix != "im-prefix" {
+		t.Fatalf("IM cache prefix = %q, want im-prefix", cfg.CacheRedisPrefix)
+	}
+
+	t.Setenv("CLOUD_CACHE_REDIS_PREFIX", " cloud-prefix ")
+	cfg = Load()
+	if cfg.CacheRedisPrefix != "cloud-prefix" {
+		t.Fatalf("cloud cache prefix = %q, want cloud-prefix", cfg.CacheRedisPrefix)
+	}
+
+	t.Setenv("CLOUD_CACHE_REDIS_PREFIX", "")
+	t.Setenv("IM_CACHE_REDIS_PREFIX", "")
+	cfg = Load()
+	if cfg.CacheRedisPrefix != "legacy-prefix" {
+		t.Fatalf("legacy cache prefix = %q, want legacy-prefix", cfg.CacheRedisPrefix)
 	}
 }
 

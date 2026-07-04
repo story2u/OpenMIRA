@@ -426,7 +426,7 @@ func Load() Config {
 		RTCControlExecutorTimeoutSec:                 envIntRange(firstEnvValue("P1_RTC_CONTROL_EXECUTOR_TIMEOUT_SEC"), 2, 1, 10),
 		RTCControlScreenWidth:                        envIntMin("P1_RTC_CONTROL_SCREEN_WIDTH", 0, 0),
 		RTCControlScreenHeight:                       envIntMin("P1_RTC_CONTROL_SCREEN_HEIGHT", 0, 0),
-		CacheRedisPrefix:                             envString("CLOUD_CACHE_REDIS_PREFIX", "wework"),
+		CacheRedisPrefix:                             firstEnvDefault("im", "CLOUD_CACHE_REDIS_PREFIX", "IM_CACHE_REDIS_PREFIX", "WEWORK_CACHE_REDIS_PREFIX"),
 		P1InternalIP:                                 envString("P1_INTERNAL_IP", "192.168.1.30"),
 		P1WebplayerPublicBaseURL:                     envString("P1_WEBPLAYER_PUBLIC_BASE_URL", ""),
 		P1WebRTCPublicHost:                           envString("P1_WEBRTC_PUBLIC_HOST", ""),
