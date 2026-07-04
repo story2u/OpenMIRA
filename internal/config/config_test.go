@@ -1417,6 +1417,62 @@ func TestLoadReadsLegacyCallAudioBridgeEnv(t *testing.T) {
 	}
 }
 
+func TestLoadUsesStandaloneDataRootDefaults(t *testing.T) {
+	t.Setenv("GO_PROJECT_ROOT", "/srv/im")
+	t.Setenv("IM_PROJECT_ROOT", "")
+	t.Setenv("PYTHON_PROJECT_ROOT", "")
+	t.Setenv("GO_CONTRACT_ROOT", "")
+	t.Setenv("IM_CONTRACT_ROOT", "")
+	t.Setenv("WEWORK_CONTRACT_ROOT", "")
+	t.Setenv("CLOUD_DATA_DIR", "")
+	t.Setenv("APP_DATA_DIR", "")
+	t.Setenv("GO_DATA_DIR", "")
+	t.Setenv("SYSTEM_LOG_DIR", "")
+	t.Setenv("KNOWLEDGE_UPLOAD_ROOT", "")
+	t.Setenv("RPA_CALL_AUDIO_BRIDGE_STATUS_FILE", "")
+	t.Setenv("MYT_CALL_AUDIO_BRIDGE_STATUS_FILE", "")
+	t.Setenv("P1_MANAGER_CACHE_FILE", "")
+
+	cfg := Load()
+
+	if cfg.DataRoot != "/srv/im/data" {
+		t.Fatalf("DataRoot = %q, want /srv/im/data", cfg.DataRoot)
+	}
+	if cfg.PythonProjectRoot != "" {
+		t.Fatalf("PythonProjectRoot = %q, want empty standalone default", cfg.PythonProjectRoot)
+	}
+	if cfg.ContractRoot != "/srv/im/contracts/v1" {
+		t.Fatalf("ContractRoot = %q, want /srv/im/contracts/v1", cfg.ContractRoot)
+	}
+	if cfg.SystemLogDir != "/srv/im/data/logs" || cfg.KnowledgeUploadRoot != "/srv/im/data/uploads/knowledge" {
+		t.Fatalf("data-derived dirs = logs:%q uploads:%q", cfg.SystemLogDir, cfg.KnowledgeUploadRoot)
+	}
+	if cfg.CallAudioBridgeStatusFile != "/srv/im/data/rpa-audio-bridge/bridge-status.json" || cfg.P1ManagerCacheFile != "/srv/im/data/p1_manager_cache.json" {
+		t.Fatalf("data-derived files = bridge:%q cache:%q", cfg.CallAudioBridgeStatusFile, cfg.P1ManagerCacheFile)
+	}
+}
+
+func TestLoadKeepsPythonProjectRootAsContractCompatibilityAlias(t *testing.T) {
+	t.Setenv("GO_PROJECT_ROOT", "")
+	t.Setenv("IM_PROJECT_ROOT", "")
+	t.Setenv("PYTHON_PROJECT_ROOT", "/srv/python")
+	t.Setenv("GO_CONTRACT_ROOT", "")
+	t.Setenv("IM_CONTRACT_ROOT", "")
+	t.Setenv("WEWORK_CONTRACT_ROOT", "")
+	t.Setenv("CLOUD_DATA_DIR", "")
+	t.Setenv("APP_DATA_DIR", "")
+	t.Setenv("GO_DATA_DIR", "")
+
+	cfg := Load()
+
+	if cfg.DataRoot != "data" {
+		t.Fatalf("DataRoot = %q, want standalone data", cfg.DataRoot)
+	}
+	if cfg.ContractRoot != filepath.Join("/srv/python", "contracts", "v1") {
+		t.Fatalf("ContractRoot = %q, want legacy contract root alias", cfg.ContractRoot)
+	}
+}
+
 func TestLoadClampsConversationCallLockTTL(t *testing.T) {
 	t.Setenv("WEWORK_CALL_LOCK_TTL_SEC", "60")
 

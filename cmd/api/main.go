@@ -1,6 +1,5 @@
-// Command api starts the phase-one Go HTTP skeleton.
-// It intentionally exposes only compatibility probes until business routes are
-// migrated behind explicit contract tests.
+// Command api starts the standalone Go HTTP API.
+// Product routes are enabled by explicit release flags and contract tests.
 package main
 
 import (
@@ -10,7 +9,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -1332,7 +1330,7 @@ func buildContactAvatarStorage(cfg config.Config) avatarstorage.Service {
 	}
 	return avatarstorage.Service{
 		Uploader:      uploader,
-		LocalDataRoot: filepath.Join(cfg.PythonProjectRoot, "backend", "data"),
+		LocalDataRoot: cfg.DataRoot,
 		Access: archivemedia.AccessURLBuilder{
 			BaseURL:               cfg.ArchiveMediaBaseURL,
 			ObjectPublicBaseURL:   cfg.ArchiveMediaObjectPublicBaseURL,
@@ -1685,7 +1683,7 @@ func buildSOPMediaLocalHandler(cfg config.Config) (*archivehttp.Handler, error) 
 	}
 	handler := archivehttp.New(auth.Guard{Verifier: verifier}, nil)
 	handler.Download = archivemedia.DownloadService{
-		LocalDataRoot: filepath.Join(cfg.PythonProjectRoot, "backend", "data"),
+		LocalDataRoot: cfg.DataRoot,
 	}
 	return &handler, nil
 }
@@ -1781,7 +1779,7 @@ func buildArchiveHandler(cfg config.Config, runtime *app.Runtime, requireMediaRu
 		Tasks:                 mediaTaskRepository,
 		Access:                mediaAccessBuilder,
 		ObjectInternalBaseURL: cfg.ArchiveMediaObjectInternalBaseURL,
-		LocalDataRoot:         filepath.Join(cfg.PythonProjectRoot, "backend", "data"),
+		LocalDataRoot:         cfg.DataRoot,
 		HTTPTimeout:           time.Duration(cfg.ArchiveMediaUploadTimeoutSec) * time.Second,
 	}
 	if runtime.ArchiveMedia != nil {

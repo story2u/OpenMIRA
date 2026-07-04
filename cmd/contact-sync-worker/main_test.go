@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"errors"
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -75,7 +74,7 @@ func TestRunLoopRejectsMissingTick(t *testing.T) {
 
 func TestBuildContactAvatarStorageUsesArchiveMediaConfig(t *testing.T) {
 	storage := buildContactAvatarStorage(config.Config{
-		PythonProjectRoot:               "/srv/python",
+		DataRoot:                        "/srv/im/data",
 		ArchiveMediaUploadURL:           "http://object-storage/internal/upload",
 		ArchiveMediaUploadToken:         "upload-token",
 		ArchiveMediaUploadTimeoutSec:    7,
@@ -86,7 +85,7 @@ func TestBuildContactAvatarStorageUsesArchiveMediaConfig(t *testing.T) {
 		ArchiveMediaTokenTTLSeconds:     600,
 	})
 
-	if storage.LocalDataRoot != filepath.Join("/srv/python", "backend", "data") {
+	if storage.LocalDataRoot != "/srv/im/data" {
 		t.Fatalf("LocalDataRoot = %q", storage.LocalDataRoot)
 	}
 	uploader, ok := storage.Uploader.(archivemedia.HTTPUploader)
@@ -106,12 +105,12 @@ func TestBuildContactAvatarStorageUsesArchiveMediaConfig(t *testing.T) {
 }
 
 func TestBuildContactAvatarStorageKeepsUploaderOptional(t *testing.T) {
-	storage := buildContactAvatarStorage(config.Config{PythonProjectRoot: "/srv/python"})
+	storage := buildContactAvatarStorage(config.Config{DataRoot: "/srv/im/data"})
 
 	if storage.Uploader != nil {
 		t.Fatalf("Uploader = %T, want nil without upload URL", storage.Uploader)
 	}
-	if storage.LocalDataRoot != filepath.Join("/srv/python", "backend", "data") {
+	if storage.LocalDataRoot != "/srv/im/data" {
 		t.Fatalf("LocalDataRoot = %q", storage.LocalDataRoot)
 	}
 	if storage.Access == nil {

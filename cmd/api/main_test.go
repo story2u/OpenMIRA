@@ -923,9 +923,9 @@ func TestBuildHandlerRequiresDatabaseForArchiveMediaDownloadCandidate(t *testing
 
 // TestBuildHandlerDoesNotRequireDatabaseForSOPMediaLocalCandidate keeps local preview file-only.
 func TestBuildHandlerDoesNotRequireDatabaseForSOPMediaLocalCandidate(t *testing.T) {
-	pythonRoot := t.TempDir()
+	dataRoot := t.TempDir()
 	handler, cleanup, err := buildHandler(context.Background(), config.Config{
-		PythonProjectRoot:      pythonRoot,
+		DataRoot:               dataRoot,
 		SOPMediaLocalCandidate: true,
 		SessionJWTSecret:       "session-secret",
 	})

@@ -1,6 +1,6 @@
 // Stream channel startup tests cover the non-database candidate assembly.
 // They keep the realtime catalog route explicitly gated by JWT configuration
-// until the full WebSocket gateway is migrated.
+// until the full WebSocket gateway is enabled.
 package main
 
 import (

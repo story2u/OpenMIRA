@@ -6,7 +6,6 @@ import (
 	"errors"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"syscall"
 	"time"
 
@@ -86,7 +85,7 @@ func buildContactAvatarStorage(cfg config.Config) avatarstorage.Service {
 	}
 	return avatarstorage.Service{
 		Uploader:      uploader,
-		LocalDataRoot: filepath.Join(cfg.PythonProjectRoot, "backend", "data"),
+		LocalDataRoot: cfg.DataRoot,
 		Access: archivemedia.AccessURLBuilder{
 			BaseURL:               cfg.ArchiveMediaBaseURL,
 			ObjectPublicBaseURL:   cfg.ArchiveMediaObjectPublicBaseURL,

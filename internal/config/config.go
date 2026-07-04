@@ -14,6 +14,7 @@ type Config struct {
 	Addr                                         string
 	RuntimeRole                                  string
 	Version                                      string
+	DataRoot                                     string
 	PythonProjectRoot                            string
 	ContractRoot                                 string
 	DatabaseDSN                                  string
@@ -319,8 +320,16 @@ type Config struct {
 // Load reads environment variables without mutating process-global state.
 func Load() Config {
 	runtimeRole := envString("CLOUD_RUNTIME_ROLE", "api")
-	pythonRoot := envString("PYTHON_PROJECT_ROOT", "../Python")
-	contractRoot := envString("WEWORK_CONTRACT_ROOT", filepath.Join(pythonRoot, "contracts", "v1"))
+	projectRoot := firstEnvDefault(".", "GO_PROJECT_ROOT", "IM_PROJECT_ROOT")
+	pythonRoot := envString("PYTHON_PROJECT_ROOT", "")
+	contractRoot := firstEnv("GO_CONTRACT_ROOT", "IM_CONTRACT_ROOT", "WEWORK_CONTRACT_ROOT")
+	if contractRoot == "" {
+		if pythonRoot != "" {
+			contractRoot = filepath.Join(pythonRoot, "contracts", "v1")
+		} else {
+			contractRoot = filepath.Join(projectRoot, "contracts", "v1")
+		}
+	}
 	backendBaseURL := envString("CLOUD_BACKEND_BASE_URL", "")
 	archiveMediaBaseURL := firstEnv("ARCHIVE_MEDIA_BASE_URL", "CLOUD_BACKEND_BASE_URL")
 	archiveMediaObjectPublicBaseURL := envString("ARCHIVE_MEDIA_OBJECT_PUBLIC_BASE_URL", "")
@@ -347,9 +356,9 @@ func Load() Config {
 	archiveSyncLockTTLSeconds := envIntMin("ARCHIVE_SYNC_LOCK_TTL_SEC", 30, 10)
 	archiveMediaLockTTLSeconds := parseIntMin(firstEnvValue("ARCHIVE_MEDIA_LOCK_TTL_SEC", "ARCHIVE_SYNC_LOCK_TTL_SEC"), 30, 10)
 	callAudioBridgeStatusFile := firstEnv("RPA_CALL_AUDIO_BRIDGE_STATUS_FILE", "MYT_CALL_AUDIO_BRIDGE_STATUS_FILE")
-	dataDir := firstEnv("CLOUD_DATA_DIR", "APP_DATA_DIR")
+	dataDir := firstEnv("CLOUD_DATA_DIR", "APP_DATA_DIR", "GO_DATA_DIR")
 	if dataDir == "" {
-		dataDir = filepath.Join(pythonRoot, "backend", "data")
+		dataDir = filepath.Join(projectRoot, "data")
 	}
 	if callAudioBridgeStatusFile == "" {
 		callAudioBridgeStatusFile = filepath.Join(dataDir, "rpa-audio-bridge", "bridge-status.json")
@@ -362,11 +371,12 @@ func Load() Config {
 		Addr:                                         envString("GO_BACKEND_ADDR", ":9000"),
 		RuntimeRole:                                  runtimeRole,
 		Version:                                      envString("GO_BACKEND_VERSION", "0.1.0-phase1"),
+		DataRoot:                                     dataDir,
 		PythonProjectRoot:                            pythonRoot,
 		ContractRoot:                                 contractRoot,
 		DatabaseDSN:                                  firstEnv("CLOUD_DB_DSN", "DATABASE_URL"),
-		SystemLogDir:                                 envString("SYSTEM_LOG_DIR", filepath.Join(pythonRoot, "backend", "data", "logs")),
-		KnowledgeUploadRoot:                          envString("KNOWLEDGE_UPLOAD_ROOT", filepath.Join(pythonRoot, "backend", "data", "uploads", "knowledge")),
+		SystemLogDir:                                 envString("SYSTEM_LOG_DIR", filepath.Join(dataDir, "logs")),
+		KnowledgeUploadRoot:                          envString("KNOWLEDGE_UPLOAD_ROOT", filepath.Join(dataDir, "uploads", "knowledge")),
 		WSRedisURL:                                   envString("CLOUD_WS_REDIS_URL", ""),
 		WSRedisTopic:                                 envString("CLOUD_WS_REDIS_TOPIC", "cloud_ws_events"),
 		WSClientPresenceEnabled:                      wsClientPresenceEnabled(runtimeRole),
