@@ -321,7 +321,7 @@ type Config struct {
 func Load() Config {
 	runtimeRole := envString("CLOUD_RUNTIME_ROLE", "api")
 	projectRoot := firstEnvDefault(".", "GO_PROJECT_ROOT", "IM_PROJECT_ROOT")
-	contractRoot := firstEnv("GO_CONTRACT_ROOT", "IM_CONTRACT_ROOT", "WEWORK_CONTRACT_ROOT")
+	contractRoot := firstEnv("GO_CONTRACT_ROOT", "IM_CONTRACT_ROOT")
 	if contractRoot == "" {
 		contractRoot = filepath.Join(projectRoot, "contracts", "v1")
 	}
@@ -350,7 +350,7 @@ func Load() Config {
 	archiveSyncAllEnterprises := envBool("ARCHIVE_SYNC_ALL_ENTERPRISES") || envBool("GO_ARCHIVE_SYNC_SCOPE_ALL")
 	archiveSyncLockTTLSeconds := envIntMin("ARCHIVE_SYNC_LOCK_TTL_SEC", 30, 10)
 	archiveMediaLockTTLSeconds := parseIntMin(firstEnvValue("ARCHIVE_MEDIA_LOCK_TTL_SEC", "ARCHIVE_SYNC_LOCK_TTL_SEC"), 30, 10)
-	callAudioBridgeStatusFile := firstEnv("RPA_CALL_AUDIO_BRIDGE_STATUS_FILE", "MYT_CALL_AUDIO_BRIDGE_STATUS_FILE")
+	callAudioBridgeStatusFile := firstEnv("RPA_CALL_AUDIO_BRIDGE_STATUS_FILE")
 	dataDir := firstEnv("CLOUD_DATA_DIR", "APP_DATA_DIR", "GO_DATA_DIR")
 	if dataDir == "" {
 		dataDir = filepath.Join(projectRoot, "data")
@@ -397,9 +397,9 @@ func Load() Config {
 		PlatformDefaultPaymentID:                     envIntMin("PLATFORM_DEFAULT_PAYMENT_ID", 12, 0),
 		PlatformTimeoutSec:                           envIntMin("PLATFORM_TIMEOUT_SEC", 15, 1),
 		CallAudioBridgeStatusFile:                    callAudioBridgeStatusFile,
-		CallAudioBridgeTargetsFile:                   firstEnv("RPA_CALL_AUDIO_BRIDGE_TARGETS_FILE", "MYT_CALL_AUDIO_BRIDGE_TARGETS_FILE"),
-		CallAudioBridgeHostDataRoot:                  firstEnv("RPA_CALL_AUDIO_BRIDGE_HOST_DATA_ROOT", "MYT_CALL_AUDIO_BRIDGE_HOST_DATA_ROOT"),
-		CallAudioBridgeStaleSec:                      parseFloatMin(firstEnvValue("RPA_CALL_AUDIO_BRIDGE_STATUS_STALE_SEC", "MYT_CALL_AUDIO_BRIDGE_STATUS_STALE_SEC"), 3600, 30),
+		CallAudioBridgeTargetsFile:                   firstEnv("RPA_CALL_AUDIO_BRIDGE_TARGETS_FILE"),
+		CallAudioBridgeHostDataRoot:                  firstEnv("RPA_CALL_AUDIO_BRIDGE_HOST_DATA_ROOT"),
+		CallAudioBridgeStaleSec:                      parseFloatMin(firstEnvValue("RPA_CALL_AUDIO_BRIDGE_STATUS_STALE_SEC"), 3600, 30),
 		P1ManagerCacheFile:                           p1ManagerCacheFile,
 		RTCMediaCameraAddrTemplate:                   envString("RTC_MEDIA_CAMERA_ADDR_TEMPLATE", ""),
 		RTCMediaWHIPPublishURLTemplate:               envString("RTC_MEDIA_WHIP_PUBLISH_URL_TEMPLATE", ""),
@@ -421,7 +421,7 @@ func Load() Config {
 		RTCControlExecutorTimeoutSec:                 envIntRange(firstEnvValue("P1_RTC_CONTROL_EXECUTOR_TIMEOUT_SEC"), 2, 1, 10),
 		RTCControlScreenWidth:                        envIntMin("P1_RTC_CONTROL_SCREEN_WIDTH", 0, 0),
 		RTCControlScreenHeight:                       envIntMin("P1_RTC_CONTROL_SCREEN_HEIGHT", 0, 0),
-		CacheRedisPrefix:                             firstEnvDefault("im", "CLOUD_CACHE_REDIS_PREFIX", "IM_CACHE_REDIS_PREFIX", "WEWORK_CACHE_REDIS_PREFIX"),
+		CacheRedisPrefix:                             firstEnvDefault("im", "CLOUD_CACHE_REDIS_PREFIX", "IM_CACHE_REDIS_PREFIX"),
 		P1InternalIP:                                 envString("P1_INTERNAL_IP", "192.168.1.30"),
 		P1WebplayerPublicBaseURL:                     envString("P1_WEBPLAYER_PUBLIC_BASE_URL", ""),
 		P1WebRTCPublicHost:                           envString("P1_WEBRTC_PUBLIC_HOST", ""),

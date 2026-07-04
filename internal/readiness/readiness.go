@@ -901,14 +901,6 @@ func DefaultProfiles() []Profile {
 								"RPA_CALL_AUDIO_BRIDGE_HOST_DATA_ROOT",
 							},
 						},
-						{
-							Name: "legacy call-audio bridge env",
-							Keys: []string{
-								"MYT_CALL_AUDIO_BRIDGE_STATUS_FILE",
-								"MYT_CALL_AUDIO_BRIDGE_TARGETS_FILE",
-								"MYT_CALL_AUDIO_BRIDGE_HOST_DATA_ROOT",
-							},
-						},
 					},
 				},
 			},

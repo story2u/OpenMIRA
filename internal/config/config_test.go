@@ -855,10 +855,6 @@ func TestLoadKeepsSessionMeCandidateDisabledByDefault(t *testing.T) {
 	t.Setenv("RPA_CALL_AUDIO_BRIDGE_TARGETS_FILE", "")
 	t.Setenv("RPA_CALL_AUDIO_BRIDGE_HOST_DATA_ROOT", "")
 	t.Setenv("RPA_CALL_AUDIO_BRIDGE_STATUS_STALE_SEC", "")
-	t.Setenv("MYT_CALL_AUDIO_BRIDGE_STATUS_FILE", "")
-	t.Setenv("MYT_CALL_AUDIO_BRIDGE_TARGETS_FILE", "")
-	t.Setenv("MYT_CALL_AUDIO_BRIDGE_HOST_DATA_ROOT", "")
-	t.Setenv("MYT_CALL_AUDIO_BRIDGE_STATUS_STALE_SEC", "")
 	t.Setenv("P1_MANAGER_CACHE_FILE", "")
 	t.Setenv("RTC_MEDIA_CAMERA_ADDR_TEMPLATE", "")
 	t.Setenv("RTC_MEDIA_WHIP_PUBLISH_URL_TEMPLATE", "")
@@ -879,7 +875,6 @@ func TestLoadKeepsSessionMeCandidateDisabledByDefault(t *testing.T) {
 	t.Setenv("RTC_CONTROL_TTL_SEC", "")
 	t.Setenv("CLOUD_CACHE_REDIS_PREFIX", "")
 	t.Setenv("IM_CACHE_REDIS_PREFIX", "")
-	t.Setenv("WEWORK_CACHE_REDIS_PREFIX", "")
 	t.Setenv("GO_ENABLE_P1_SCREEN_CANDIDATE", "")
 	t.Setenv("GO_ENABLE_CONTACT_EXTERNAL_CANDIDATE", "")
 	t.Setenv("GO_ENABLE_CONTACT_CORP_USER_CANDIDATE", "")
@@ -1402,27 +1397,9 @@ func TestLoadKeepsSessionMeCandidateDisabledByDefault(t *testing.T) {
 	}
 }
 
-func TestLoadReadsLegacyCallAudioBridgeEnv(t *testing.T) {
-	t.Setenv("RPA_CALL_AUDIO_BRIDGE_STATUS_FILE", "")
-	t.Setenv("RPA_CALL_AUDIO_BRIDGE_TARGETS_FILE", "")
-	t.Setenv("RPA_CALL_AUDIO_BRIDGE_HOST_DATA_ROOT", "")
-	t.Setenv("RPA_CALL_AUDIO_BRIDGE_STATUS_STALE_SEC", "")
-	t.Setenv("MYT_CALL_AUDIO_BRIDGE_STATUS_FILE", "/tmp/legacy-bridge-status.json")
-	t.Setenv("MYT_CALL_AUDIO_BRIDGE_TARGETS_FILE", "/tmp/legacy-bridge-targets.json")
-	t.Setenv("MYT_CALL_AUDIO_BRIDGE_HOST_DATA_ROOT", "/tmp/legacy-host-data")
-	t.Setenv("MYT_CALL_AUDIO_BRIDGE_STATUS_STALE_SEC", "90")
-
-	cfg := Load()
-
-	if cfg.CallAudioBridgeStatusFile != "/tmp/legacy-bridge-status.json" || cfg.CallAudioBridgeTargetsFile != "/tmp/legacy-bridge-targets.json" || cfg.CallAudioBridgeHostDataRoot != "/tmp/legacy-host-data" || cfg.CallAudioBridgeStaleSec != 90 {
-		t.Fatalf("legacy call audio bridge config = status=%q targets=%q host_data=%q stale=%.1f", cfg.CallAudioBridgeStatusFile, cfg.CallAudioBridgeTargetsFile, cfg.CallAudioBridgeHostDataRoot, cfg.CallAudioBridgeStaleSec)
-	}
-}
-
 func TestLoadCacheRedisPrefixUsesStandaloneAliases(t *testing.T) {
 	t.Setenv("CLOUD_CACHE_REDIS_PREFIX", "")
 	t.Setenv("IM_CACHE_REDIS_PREFIX", " im-prefix ")
-	t.Setenv("WEWORK_CACHE_REDIS_PREFIX", "legacy-prefix")
 
 	cfg := Load()
 	if cfg.CacheRedisPrefix != "im-prefix" {
@@ -1438,8 +1415,8 @@ func TestLoadCacheRedisPrefixUsesStandaloneAliases(t *testing.T) {
 	t.Setenv("CLOUD_CACHE_REDIS_PREFIX", "")
 	t.Setenv("IM_CACHE_REDIS_PREFIX", "")
 	cfg = Load()
-	if cfg.CacheRedisPrefix != "legacy-prefix" {
-		t.Fatalf("legacy cache prefix = %q, want legacy-prefix", cfg.CacheRedisPrefix)
+	if cfg.CacheRedisPrefix != "im" {
+		t.Fatalf("default cache prefix = %q, want im", cfg.CacheRedisPrefix)
 	}
 }
 
@@ -1448,14 +1425,12 @@ func TestLoadUsesStandaloneDataRootDefaults(t *testing.T) {
 	t.Setenv("IM_PROJECT_ROOT", "")
 	t.Setenv("GO_CONTRACT_ROOT", "")
 	t.Setenv("IM_CONTRACT_ROOT", "")
-	t.Setenv("WEWORK_CONTRACT_ROOT", "")
 	t.Setenv("CLOUD_DATA_DIR", "")
 	t.Setenv("APP_DATA_DIR", "")
 	t.Setenv("GO_DATA_DIR", "")
 	t.Setenv("SYSTEM_LOG_DIR", "")
 	t.Setenv("KNOWLEDGE_UPLOAD_ROOT", "")
 	t.Setenv("RPA_CALL_AUDIO_BRIDGE_STATUS_FILE", "")
-	t.Setenv("MYT_CALL_AUDIO_BRIDGE_STATUS_FILE", "")
 	t.Setenv("P1_MANAGER_CACHE_FILE", "")
 
 	cfg := Load()
