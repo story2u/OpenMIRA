@@ -144,7 +144,7 @@ func (service Service) queueLiveStatusProbe(ctx context.Context, deviceID string
 		TaskID:    taskID,
 		Source:    "cloud-web",
 		Target:    tasks.Target{AgentID: resolveAgentID(deviceID, ""), DeviceID: deviceID},
-		TaskType:  "wework_login_status",
+		TaskType:  "connector_login_status",
 		Payload:   map[string]any{"username": "__status__", "include_qrcode": false},
 		CreatedAt: now,
 		TraceID:   &traceID,

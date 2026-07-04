@@ -41,7 +41,7 @@ func (service Service) Logout(ctx context.Context, request LogoutRequest) (map[s
 		TaskID:    taskID,
 		Source:    normalizeSDKTaskSource(request.Source),
 		Target:    tasks.Target{AgentID: resolveAgentID(deviceID, request.AgentID), DeviceID: deviceID},
-		TaskType:  "wework_logout",
+		TaskType:  "connector_logout",
 		Payload:   map[string]any{"username": "__logout__"},
 		CreatedAt: now,
 		TraceID:   &traceID,

@@ -42,6 +42,11 @@ var validTaskTypes = map[string]bool{
 	"share_bundle_send":                true,
 	"revoke_text_message":              true,
 	"cancel_message":                   true,
+	"connector_login_qrcode":           true,
+	"connector_login_status":           true,
+	"connector_login_verify":           true,
+	"connector_user_info":              true,
+	"connector_logout":                 true,
 	"wework_login_qrcode":              true,
 	"wework_login_status":              true,
 	"wework_login_verify":              true,
@@ -143,6 +148,7 @@ var taskRequiredPayloadFields = map[string][]string{
 	"share_bundle_send":                {"username", "receiver", "entity", "msg_id", "messages", "share_mode"},
 	"revoke_text_message":              {"username", "receiver", "target_trace_id", "target_content", "target_msg_type", "occurrence_from_bottom"},
 	"cancel_message":                   {"username", "receiver", "entity", "msg_id"},
+	"connector_login_verify":           {"username", "verify_code", "verify_type"},
 	"wework_login_verify":              {"username", "verify_code", "verify_type"},
 }
 

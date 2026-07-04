@@ -161,6 +161,28 @@ func TestValidateCreateJSONSupportsDeviceAppControlPayload(t *testing.T) {
 	}
 }
 
+func TestValidateCreateJSONSupportsConnectorLoginTaskTypes(t *testing.T) {
+	cases := []struct {
+		name string
+		task string
+	}{
+		{name: "neutral", task: "connector_login_verify"},
+		{name: "compat", task: "wework_login_verify"},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			body := `{"task_id":"task-login-` + testCase.name + `","source":"cloud-web","target":{"agent_id":"sdk:zimo","device_id":"zimo"},"task_type":"` + testCase.task + `","payload":{"username":"__login__","verify_code":"123456","verify_type":"sms"},"created_at":"2026-06-29T09:00:00Z"}`
+			request, err := ValidateCreateJSON([]byte(body))
+			if err != nil {
+				t.Fatalf("ValidateCreateJSON returned error: %v", err)
+			}
+			if request.TaskType != testCase.task {
+				t.Fatalf("TaskType = %q, want %q", request.TaskType, testCase.task)
+			}
+		})
+	}
+}
+
 func validTaskCreateBody() string {
 	return `{"task_id":"task-golden-0001","source":"cloud-web","target":{"agent_id":"sdk:zimo","device_id":"zimo"},"task_type":"send_text","payload":{"username":"Qiu","receiver":"Qiu","text":"hello","queue":"fast","client_batch_id":"batch-1","client_batch_index":0},"created_at":"2026-06-29T09:00:00Z","trace_id":"trace-golden-0001"}`
 }

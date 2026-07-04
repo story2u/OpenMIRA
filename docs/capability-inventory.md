@@ -74,6 +74,7 @@
 | `phase1` 脚本和 artifact 命名 | `scripts/phase1_gate.sh`, `tmp/phase1`, golden case names | 使用 `scripts/release_gate.sh` 作为推荐入口，旧脚本保留为内部执行和兼容入口 |
 | `GO_ENABLE_*_CANDIDATE` | `internal/config`, `cmd/api`, cloud compose | 改为 `GO_ENABLE_*` 或 release/readiness flag，保留 env alias 一段时间 |
 | 供应商字段兼容别名 | `wework_user_id`, `GO_SEND_PROVIDER_BASE_URL` 等 | 新写路径使用 `channel_user_id`、`connector_*`、`provider_*` |
+| 供应商命名 task type | `wework_login_*`, `wework_user_info`, `wework_logout` | 新创建任务使用 `connector_login_*`、`connector_user_info`、`connector_logout`，旧 task type 保留为兼容输入 |
 | 以具体通道命名的 HTTP routes | `/api/v1/connectors/*`、`/api/v1/devices/{device_id}/apps/*` 主入口，`/wework/*` 和 device SDK open/stop 兼容入口，notify routes | 继续移到 connector/provider admin namespace，保留旧 route 作为 adapter-only 兼容入口并补下线条件 |
 | 阶段编号 golden fixtures | `testdata/golden/phase*` | 保留为证据集合，新增按产品能力命名的 manifest |
 

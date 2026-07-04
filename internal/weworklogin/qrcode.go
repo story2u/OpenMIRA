@@ -95,7 +95,7 @@ func (service Service) QRCode(ctx context.Context, request QRCodeRequest) (map[s
 		TaskID:    taskID,
 		Source:    normalizeSDKTaskSource(request.Source),
 		Target:    tasks.Target{AgentID: resolveAgentID(deviceID, request.AgentID), DeviceID: deviceID},
-		TaskType:  "wework_login_qrcode",
+		TaskType:  "connector_login_qrcode",
 		Payload:   map[string]any{"username": "__login__", "timeout_seconds": timeoutSeconds},
 		CreatedAt: now,
 		TraceID:   &traceID,

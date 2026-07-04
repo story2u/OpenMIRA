@@ -53,7 +53,7 @@ func TestLogoutCreatesTaskAndIdleSession(t *testing.T) {
 	if request.TaskID != "task-01" || request.TraceID == nil || *request.TraceID != "trace-02" || request.Source != "system" {
 		t.Fatalf("task identity = %+v trace=%v", request, request.TraceID)
 	}
-	if request.Target.AgentID != "sdk:device-1" || request.Target.DeviceID != "device-1" || request.TaskType != "wework_logout" {
+	if request.Target.AgentID != "sdk:device-1" || request.Target.DeviceID != "device-1" || request.TaskType != "connector_logout" {
 		t.Fatalf("task target/type = %+v", request)
 	}
 	if request.Payload["username"] != "__logout__" {

@@ -93,7 +93,7 @@ func TestStatusLiveWithoutQRCodeQueuesBackgroundProbe(t *testing.T) {
 	if request.TaskID != "task-01" || request.TraceID == nil || *request.TraceID != "trace-02" || request.Source != "cloud-web" {
 		t.Fatalf("task identity = %+v trace=%v", request, request.TraceID)
 	}
-	if request.Target.AgentID != "sdk:device-1" || request.Target.DeviceID != "device-1" || request.TaskType != "wework_login_status" {
+	if request.Target.AgentID != "sdk:device-1" || request.Target.DeviceID != "device-1" || request.TaskType != "connector_login_status" {
 		t.Fatalf("task target/type = %+v", request)
 	}
 	if request.Payload["username"] != "__status__" || request.Payload["include_qrcode"] != false {
@@ -123,7 +123,7 @@ func TestStatusLiveWithReusableQRCodeQueuesBackgroundProbe(t *testing.T) {
 	if payload["qrcode_base64"] != "qr-base64" || payload["live_refresh_mode"] != "background" || payload["live_refresh_state"] != "scheduled" {
 		t.Fatalf("payload = %#v", payload)
 	}
-	if len(creator.requests) != 1 || creator.requests[0].TaskType != "wework_login_status" || creator.requests[0].Payload["include_qrcode"] != false {
+	if len(creator.requests) != 1 || creator.requests[0].TaskType != "connector_login_status" || creator.requests[0].Payload["include_qrcode"] != false {
 		t.Fatalf("task requests = %+v", creator.requests)
 	}
 }

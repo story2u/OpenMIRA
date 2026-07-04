@@ -44,7 +44,7 @@ func TestVerifyCodeCreatesTaskAndMarksSessionVerifying(t *testing.T) {
 		t.Fatalf("task requests = %+v", creator.requests)
 	}
 	request := creator.requests[0]
-	if request.TaskType != "wework_login_verify" || request.Source != "cloud-backend" || request.Target.AgentID != "sdk:device-1" {
+	if request.TaskType != "connector_login_verify" || request.Source != "cloud-backend" || request.Target.AgentID != "sdk:device-1" {
 		t.Fatalf("task request = %+v", request)
 	}
 	if request.Payload["username"] != "__login__" || request.Payload["verify_code"] != "123456" || request.Payload["verify_type"] != "sms" {

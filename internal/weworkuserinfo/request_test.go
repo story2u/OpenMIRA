@@ -41,7 +41,7 @@ func TestRequestUserInfoCreatesDurableTask(t *testing.T) {
 	if request.TaskID != "task-02" || request.TraceID == nil || *request.TraceID != "trace-03" || request.Source != "system" {
 		t.Fatalf("task identity = %+v trace=%v", request, request.TraceID)
 	}
-	if request.Target.AgentID != "sdk:device-1" || request.Target.DeviceID != "device-1" || request.TaskType != "wework_user_info" {
+	if request.Target.AgentID != "sdk:device-1" || request.Target.DeviceID != "device-1" || request.TaskType != "connector_user_info" {
 		t.Fatalf("task target/type = %+v", request)
 	}
 	if request.Payload["username"] != "__user_info__" || request.Payload["msg_id"] != "user-info-01" {

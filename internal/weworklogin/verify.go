@@ -54,7 +54,7 @@ func (service Service) VerifyCode(ctx context.Context, request VerifyCodeRequest
 		TaskID:    taskID,
 		Source:    normalizeSDKTaskSource(request.Source),
 		Target:    tasks.Target{AgentID: resolveAgentID(deviceID, request.AgentID), DeviceID: deviceID},
-		TaskType:  "wework_login_verify",
+		TaskType:  "connector_login_verify",
 		Payload:   map[string]any{"username": "__login__", "verify_code": verifyCode, "verify_type": verifyType},
 		CreatedAt: now,
 		TraceID:   &traceID,

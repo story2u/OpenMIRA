@@ -58,7 +58,7 @@ func (service Service) RequestUserInfo(ctx context.Context, request RequestUserI
 		TaskID:    taskID,
 		Source:    normalizeSDKTaskSource(request.Source),
 		Target:    tasks.Target{AgentID: resolveAgentID(deviceID, request.AgentID), DeviceID: deviceID},
-		TaskType:  "wework_user_info",
+		TaskType:  "connector_user_info",
 		Payload:   map[string]any{"username": "__user_info__", "msg_id": msgID},
 		CreatedAt: now,
 		TraceID:   &traceID,
