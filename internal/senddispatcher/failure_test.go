@@ -2,7 +2,7 @@ package senddispatcher
 
 import "testing"
 
-// TestClassifySDKFailureSeparatesCommitRisk mirrors Python retry safety coverage.
+// TestClassifySDKFailureSeparatesCommitRisk freezes retry safety coverage.
 func TestClassifySDKFailureSeparatesCommitRisk(t *testing.T) {
 	beforeCommit := ClassifySDKFailure("click_plus_button plus button not found", "send_image")
 	afterCommit := ClassifySDKFailure("wait_chat_compose_ready timeout context=album_send", "send_image")

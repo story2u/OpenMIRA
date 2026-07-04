@@ -63,8 +63,8 @@ type SDKContactRefreshRetryDecision struct {
 	Error         string
 }
 
-// BuildSDKPreCommitRetryDecision mirrors Python _retry_sdk_same_payload_pre_commit_failure gates.
-func BuildSDKPreCommitRetryDecision(record tasks.Record, result SDKExecutorResult, lookup EnvLookup) SDKPreCommitRetryDecision {
+// BuildSDKPreCommitRetryDecision applies safe same-payload retry gates before commit.
+func BuildSDKPreCommitRetryDecision(record tasks.Record, result OutboundExecutionResult, lookup EnvLookup) SDKPreCommitRetryDecision {
 	if executorResultSuccess(result) {
 		return SDKPreCommitRetryDecision{}
 	}
@@ -91,9 +91,9 @@ func BuildSDKPreCommitRetryDecision(record tasks.Record, result SDKExecutorResul
 	}
 }
 
-// MergeSDKPreCommitRetryResult attaches retry metadata and Python-compatible error context.
-func MergeSDKPreCommitRetryResult(result SDKExecutorResult, decision SDKPreCommitRetryDecision) SDKExecutorResult {
-	merged := cloneSDKExecutorResult(result)
+// MergeSDKPreCommitRetryResult attaches retry metadata and final error context.
+func MergeSDKPreCommitRetryResult(result OutboundExecutionResult, decision SDKPreCommitRetryDecision) OutboundExecutionResult {
+	merged := cloneOutboundExecutionResult(result)
 	if _, ok := merged["success"]; !ok {
 		merged["success"] = false
 	}
@@ -108,8 +108,8 @@ func MergeSDKPreCommitRetryResult(result SDKExecutorResult, decision SDKPreCommi
 	return merged
 }
 
-// BuildSDKTransientNavigationRetryDecision mirrors Python _retry_sdk_after_transient_navigation_failure gates.
-func BuildSDKTransientNavigationRetryDecision(record tasks.Record, result SDKExecutorResult) SDKTransientNavigationRetryDecision {
+// BuildSDKTransientNavigationRetryDecision applies retry gates for transient navigation failures.
+func BuildSDKTransientNavigationRetryDecision(record tasks.Record, result OutboundExecutionResult) SDKTransientNavigationRetryDecision {
 	if executorResultSuccess(result) || !contactRetryTaskType(record.TaskType) {
 		return SDKTransientNavigationRetryDecision{}
 	}
@@ -124,9 +124,9 @@ func BuildSDKTransientNavigationRetryDecision(record tasks.Record, result SDKExe
 	}
 }
 
-// MergeSDKTransientNavigationRetryResult attaches Python-compatible retry metadata.
-func MergeSDKTransientNavigationRetryResult(result SDKExecutorResult, decision SDKTransientNavigationRetryDecision) SDKExecutorResult {
-	merged := cloneSDKExecutorResult(result)
+// MergeSDKTransientNavigationRetryResult attaches transient navigation retry metadata.
+func MergeSDKTransientNavigationRetryResult(result OutboundExecutionResult, decision SDKTransientNavigationRetryDecision) OutboundExecutionResult {
+	merged := cloneOutboundExecutionResult(result)
 	if _, ok := merged["success"]; !ok {
 		merged["success"] = false
 	}
@@ -140,8 +140,8 @@ func MergeSDKTransientNavigationRetryResult(result SDKExecutorResult, decision S
 	return merged
 }
 
-// BuildSDKContactRefreshRetryDecision mirrors Python contact-refresh retry gates after resolution.
-func BuildSDKContactRefreshRetryDecision(record tasks.Record, result SDKExecutorResult, target SDKContactRetryTarget) SDKContactRefreshRetryDecision {
+// BuildSDKContactRefreshRetryDecision applies contact-refresh retry gates after resolution.
+func BuildSDKContactRefreshRetryDecision(record tasks.Record, result OutboundExecutionResult, target SDKContactRetryTarget) SDKContactRefreshRetryDecision {
 	if executorResultSuccess(result) || !contactRetryTaskType(record.TaskType) {
 		return SDKContactRefreshRetryDecision{}
 	}
@@ -184,9 +184,9 @@ func BuildSDKContactRefreshRetryDecision(record tasks.Record, result SDKExecutor
 	return decision
 }
 
-// MergeSDKContactRefreshRetryResult attaches Python-compatible contact retry metadata.
-func MergeSDKContactRefreshRetryResult(result SDKExecutorResult, decision SDKContactRefreshRetryDecision) SDKExecutorResult {
-	merged := cloneSDKExecutorResult(result)
+// MergeSDKContactRefreshRetryResult attaches contact retry metadata.
+func MergeSDKContactRefreshRetryResult(result OutboundExecutionResult, decision SDKContactRefreshRetryDecision) OutboundExecutionResult {
+	merged := cloneOutboundExecutionResult(result)
 	if _, ok := merged["success"]; !ok {
 		merged["success"] = false
 	}
@@ -336,8 +336,8 @@ func sdkPreCommitRetryDelay(taskType string, kind string, lookup EnvLookup) time
 	return secondsDuration(value)
 }
 
-func cloneSDKExecutorResult(input SDKExecutorResult) SDKExecutorResult {
-	output := SDKExecutorResult{}
+func cloneOutboundExecutionResult(input OutboundExecutionResult) OutboundExecutionResult {
+	output := OutboundExecutionResult{}
 	for key, value := range input {
 		output[key] = value
 	}

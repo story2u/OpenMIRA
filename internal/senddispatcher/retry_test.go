@@ -10,7 +10,7 @@ import (
 // TestSDKPreCommitRetryDecisionTransportAcquire mirrors safe transport retry gates.
 func TestSDKPreCommitRetryDecisionTransportAcquire(t *testing.T) {
 	record := tasks.Record{TaskType: "send_text", Payload: map[string]any{}}
-	decision := BuildSDKPreCommitRetryDecision(record, SDKExecutorResult{
+	decision := BuildSDKPreCommitRetryDecision(record, OutboundExecutionResult{
 		"success": false,
 		"error":   "P1 device p1-slot-18 connection failed",
 	}, nil)
@@ -19,10 +19,10 @@ func TestSDKPreCommitRetryDecisionTransportAcquire(t *testing.T) {
 	}
 
 	record.Payload["sdk_transport_retry_attempted"] = true
-	if retry := BuildSDKPreCommitRetryDecision(record, SDKExecutorResult{"success": false, "error": "P1 device p1-slot-18 connection failed"}, nil); retry.Retry {
+	if retry := BuildSDKPreCommitRetryDecision(record, OutboundExecutionResult{"success": false, "error": "P1 device p1-slot-18 connection failed"}, nil); retry.Retry {
 		t.Fatalf("already attempted decision = %#v", retry)
 	}
-	recent := BuildSDKPreCommitRetryDecision(tasks.Record{TaskType: "send_text", Payload: map[string]any{}}, SDKExecutorResult{
+	recent := BuildSDKPreCommitRetryDecision(tasks.Record{TaskType: "send_text", Payload: map[string]any{}}, OutboundExecutionResult{
 		"success": false,
 		"error":   "recent SDK transport failure for p1-slot-18: P1 device p1-slot-18 connection failed",
 	}, nil)
@@ -34,7 +34,7 @@ func TestSDKPreCommitRetryDecisionTransportAcquire(t *testing.T) {
 // TestSDKPreCommitRetryDecisionComposeSurface mirrors one safe same-payload UI retry.
 func TestSDKPreCommitRetryDecisionComposeSurface(t *testing.T) {
 	record := tasks.Record{TaskType: "send_text", Payload: map[string]any{}}
-	decision := BuildSDKPreCommitRetryDecision(record, SDKExecutorResult{
+	decision := BuildSDKPreCommitRetryDecision(record, OutboundExecutionResult{
 		"success": false,
 		"error":   "type_message input box not found",
 	}, nil)
@@ -42,7 +42,7 @@ func TestSDKPreCommitRetryDecisionComposeSurface(t *testing.T) {
 		t.Fatalf("decision = %#v", decision)
 	}
 
-	mixed := BuildSDKPreCommitRetryDecision(tasks.Record{TaskType: "send_mixed_messages", Payload: map[string]any{}}, SDKExecutorResult{
+	mixed := BuildSDKPreCommitRetryDecision(tasks.Record{TaskType: "send_mixed_messages", Payload: map[string]any{}}, OutboundExecutionResult{
 		"success": false,
 		"error":   "type_message input box not found",
 	}, nil)
@@ -51,10 +51,10 @@ func TestSDKPreCommitRetryDecisionComposeSurface(t *testing.T) {
 	}
 }
 
-// TestSDKPreCommitRetryDecisionAppointmentDelay freezes the Python env-controlled wait.
+// TestSDKPreCommitRetryDecisionAppointmentDelay freezes the env-controlled wait.
 func TestSDKPreCommitRetryDecisionAppointmentDelay(t *testing.T) {
 	record := tasks.Record{TaskType: "appointment_billing", Payload: map[string]any{}}
-	result := SDKExecutorResult{"success": false, "error": "appointment_billing: sidebar entry did not open"}
+	result := OutboundExecutionResult{"success": false, "error": "appointment_billing: sidebar entry did not open"}
 	decision := BuildSDKPreCommitRetryDecision(record, result, mapLookup(map[string]string{
 		"APPOINTMENT_BILLING_RETRY_DELAY_SECONDS": "0.25",
 	}))
@@ -65,7 +65,7 @@ func TestSDKPreCommitRetryDecisionAppointmentDelay(t *testing.T) {
 
 // TestMergeSDKPreCommitRetryResultAnnotatesFailedRetry keeps final error context.
 func TestMergeSDKPreCommitRetryResultAnnotatesFailedRetry(t *testing.T) {
-	merged := MergeSDKPreCommitRetryResult(SDKExecutorResult{
+	merged := MergeSDKPreCommitRetryResult(OutboundExecutionResult{
 		"success": false,
 		"error":   "type_message input box not found",
 	}, SDKPreCommitRetryDecision{
@@ -84,7 +84,7 @@ func TestMergeSDKPreCommitRetryResultAnnotatesFailedRetry(t *testing.T) {
 // TestSDKTransientNavigationRetryDecision mirrors retry_same_payload_once navigation failures.
 func TestSDKTransientNavigationRetryDecision(t *testing.T) {
 	record := tasks.Record{TaskType: "send_text", Payload: map[string]any{}}
-	decision := BuildSDKTransientNavigationRetryDecision(record, SDKExecutorResult{
+	decision := BuildSDKTransientNavigationRetryDecision(record, OutboundExecutionResult{
 		"success": false,
 		"error":   "navigate_to_chat input_search failed receiver=Qiu",
 	})
@@ -93,14 +93,14 @@ func TestSDKTransientNavigationRetryDecision(t *testing.T) {
 	}
 
 	record.Payload["sdk_navigation_retry_attempted"] = true
-	if retry := BuildSDKTransientNavigationRetryDecision(record, SDKExecutorResult{"success": false, "error": "navigate_to_chat input_search failed"}); retry.Retry {
+	if retry := BuildSDKTransientNavigationRetryDecision(record, OutboundExecutionResult{"success": false, "error": "navigate_to_chat input_search failed"}); retry.Retry {
 		t.Fatalf("already attempted decision = %#v", retry)
 	}
 }
 
-// TestMergeSDKTransientNavigationRetryResultAnnotatesFailedRetry keeps Python error suffix.
+// TestMergeSDKTransientNavigationRetryResultAnnotatesFailedRetry keeps retry error suffix.
 func TestMergeSDKTransientNavigationRetryResultAnnotatesFailedRetry(t *testing.T) {
-	merged := MergeSDKTransientNavigationRetryResult(SDKExecutorResult{
+	merged := MergeSDKTransientNavigationRetryResult(OutboundExecutionResult{
 		"success": false,
 		"error":   "navigate_to_chat search_button not found receiver=Qiu",
 	}, SDKTransientNavigationRetryDecision{
@@ -124,7 +124,7 @@ func TestSDKContactRefreshRetryDecisionUsesFreshReceiver(t *testing.T) {
 			"username": "old",
 		},
 	}
-	result := SDKExecutorResult{"success": false, "error": "navigate_to_chat search_result not found receiver=old tried=old"}
+	result := OutboundExecutionResult{"success": false, "error": "navigate_to_chat search_result not found receiver=old tried=old"}
 	decision := BuildSDKContactRefreshRetryDecision(record, result, SDKContactRetryTarget{Receiver: "fresh", Aliases: "alias-1"})
 	if !decision.Retry || decision.Receiver != "fresh" || decision.Aliases != "alias-1" || decision.Marker != "sdk_contact_retry_attempted" {
 		t.Fatalf("decision = %#v", decision)
@@ -142,7 +142,7 @@ func TestSDKContactRefreshRetryDecisionBlocksUnsafeSafeCodeDowngrade(t *testing.
 		TaskType: "send_text",
 		Payload:  map[string]any{"receiver": "26.6 #ABC"},
 	}
-	result := SDKExecutorResult{"success": false, "error": "navigate_to_chat search_result not found receiver=26.6 #ABC"}
+	result := OutboundExecutionResult{"success": false, "error": "navigate_to_chat search_result not found receiver=26.6 #ABC"}
 	decision := BuildSDKContactRefreshRetryDecision(record, result, SDKContactRetryTarget{Receiver: "26.6"})
 	if !decision.Blocked || decision.Error == "" {
 		t.Fatalf("decision = %#v", decision)
@@ -151,7 +151,7 @@ func TestSDKContactRefreshRetryDecisionBlocksUnsafeSafeCodeDowngrade(t *testing.
 
 // TestMergeSDKContactRefreshRetryResultAnnotatesFailedRetry keeps contact retry metadata.
 func TestMergeSDKContactRefreshRetryResultAnnotatesFailedRetry(t *testing.T) {
-	merged := MergeSDKContactRefreshRetryResult(SDKExecutorResult{
+	merged := MergeSDKContactRefreshRetryResult(OutboundExecutionResult{
 		"success": false,
 		"error":   "navigate_to_chat input_search failed receiver=fresh",
 	}, SDKContactRefreshRetryDecision{

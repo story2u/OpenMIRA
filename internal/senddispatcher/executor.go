@@ -78,7 +78,7 @@ func RecordToOutboundExecutionPayload(record tasks.Record) OutboundExecutionPayl
 		},
 		"task_type":  record.TaskType,
 		"payload":    cloneSDKPayloadMap(record.Payload),
-		"created_at": formatPythonISO(record.CreatedAt),
+		"created_at": formatTaskTimestamp(record.CreatedAt),
 		"trace_id":   optionalStringValue(record.TraceID),
 	}
 }
@@ -139,7 +139,7 @@ func NewOutboundExecutorBatchFunc(executor OutboundExecutor, options OutboundExe
 			if err != nil {
 				return nil, err
 			}
-			result = annotateSDKFailureResult(records[0].TaskType, result)
+			result = annotateOutboundExecutionFailureResult(records[0].TaskType, result)
 			finalized, err := finalizeOutboundExecutionRecord(ctx, records[0], result, startedAt, adapterNow(options), options)
 			if err != nil {
 				return nil, err
@@ -163,7 +163,7 @@ func NewOutboundExecutorBatchFunc(executor OutboundExecutor, options OutboundExe
 			if index < len(results) && results[index] != nil {
 				result = results[index]
 			}
-			result = annotateSDKFailureResult(record.TaskType, result)
+			result = annotateOutboundExecutionFailureResult(record.TaskType, result)
 			task, err := finalizeOutboundExecutionRecord(ctx, record, result, startedAt, adapterNow(options), options)
 			if err != nil {
 				return nil, err
@@ -268,10 +268,6 @@ func finalizeOutboundExecutionRecord(ctx context.Context, record tasks.Record, r
 		ScriptStartedAt: finalized.ScriptStartedAt,
 	}
 	return options.StatusWriter.UpdateTerminalStatus(ctx, finalized.TaskID, update)
-}
-
-func finalizeSDKExecutorRecord(ctx context.Context, record tasks.Record, result SDKExecutorResult, startedAt time.Time, finishedAt time.Time, options SDKExecutorAdapterOptions) (tasks.Record, error) {
-	return finalizeOutboundExecutionRecord(ctx, record, result, startedAt, finishedAt, options)
 }
 
 func retrySDKPreCommitIfNeeded(ctx context.Context, executor OutboundExecutor, deviceID string, record tasks.Record, result OutboundExecutionResult, options OutboundExecutorAdapterOptions) (OutboundExecutionResult, error) {
@@ -385,10 +381,6 @@ func syncOutboundExecutorTerminal(ctx context.Context, record tasks.Record, resu
 	_ = SyncSDKTerminalState(ctx, record, terminalOptions)
 }
 
-func syncSDKExecutorTerminal(ctx context.Context, record tasks.Record, result SDKExecutorResult, source string, options SDKExecutorAdapterOptions) {
-	syncOutboundExecutorTerminal(ctx, record, result, source, options)
-}
-
 func recordOutboundExecutorDeviceHealth(ctx context.Context, deviceID string, record tasks.Record, result OutboundExecutionResult, options OutboundExecutorAdapterOptions) {
 	if options.DeviceHealth == nil {
 		return
@@ -405,10 +397,6 @@ func recordOutboundExecutorDeviceHealth(ctx context.Context, deviceID string, re
 	_ = options.DeviceHealth.RecordSDKDeviceTaskResult(ctx, health)
 }
 
-func recordSDKExecutorDeviceHealth(ctx context.Context, deviceID string, record tasks.Record, result SDKExecutorResult, options SDKExecutorAdapterOptions) {
-	recordOutboundExecutorDeviceHealth(ctx, deviceID, record, result, options)
-}
-
 func outboundExecutionResultPayload(source string, result OutboundExecutionResult) map[string]any {
 	payload := map[string]any{"source": source}
 	for key, value := range result {
@@ -417,11 +405,7 @@ func outboundExecutionResultPayload(source string, result OutboundExecutionResul
 	return payload
 }
 
-func sdkExecutorResultPayload(source string, result SDKExecutorResult) map[string]any {
-	return outboundExecutionResultPayload(source, result)
-}
-
-func formatPythonISO(value time.Time) string {
+func formatTaskTimestamp(value time.Time) string {
 	current := value
 	base := current.Format("2006-01-02T15:04:05")
 	microseconds := current.Nanosecond() / 1000

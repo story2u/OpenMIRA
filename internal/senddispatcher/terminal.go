@@ -9,7 +9,7 @@ import (
 	"im-go/internal/tasks"
 )
 
-// TaskStatusEvent is the legacy ws_hub.publish envelope for task.status.
+// TaskStatusEvent is the realtime ws_hub.publish envelope for task.status.
 type TaskStatusEvent struct {
 	Channel string
 	Event   string
@@ -43,7 +43,7 @@ type TerminalStateSyncResult struct {
 	AIError         error
 }
 
-// BuildTaskStatusEvent mirrors Python _publish_task_status_async envelope fields.
+// BuildTaskStatusEvent builds the task.status realtime envelope.
 func BuildTaskStatusEvent(record tasks.Record, resultPayload map[string]any) TaskStatusEvent {
 	return TaskStatusEvent{
 		Channel: "tasks",
@@ -53,7 +53,7 @@ func BuildTaskStatusEvent(record tasks.Record, resultPayload map[string]any) Tas
 	}
 }
 
-// BuildTaskStatusPayload mirrors Python _build_task_status_payload.
+// BuildTaskStatusPayload builds the task.status realtime payload.
 func BuildTaskStatusPayload(record tasks.Record, resultPayload map[string]any) map[string]any {
 	payload := record.Payload
 	if payload == nil {
@@ -74,8 +74,8 @@ func BuildTaskStatusPayload(record tasks.Record, resultPayload map[string]any) m
 		"aliases":           payloadString(payload, "aliases"),
 		"target_trace_id":   payloadString(payload, "target_trace_id"),
 		"result_payload":    cloneOptionalResultPayload(resultPayload),
-		"updated_at":        formatPythonISO(record.UpdatedAt),
-		"created_at":        formatPythonISO(record.CreatedAt),
+		"updated_at":        formatTaskTimestamp(record.UpdatedAt),
+		"created_at":        formatTaskTimestamp(record.CreatedAt),
 		"dispatched_at":     optionalTimeISO(record.DispatchedAt),
 		"script_started_at": optionalTimeISO(record.ScriptStartedAt),
 	}
@@ -164,5 +164,5 @@ func optionalTimeISO(value *time.Time) any {
 	if value == nil {
 		return nil
 	}
-	return formatPythonISO(*value)
+	return formatTaskTimestamp(*value)
 }

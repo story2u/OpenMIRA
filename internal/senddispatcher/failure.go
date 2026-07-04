@@ -2,7 +2,7 @@ package senddispatcher
 
 import "strings"
 
-// SDKFailureClassification is the stable failure semantics attached to failed SDK results.
+// SDKFailureClassification is the stable failure semantics attached to failed outbound results.
 type SDKFailureClassification struct {
 	Stage              string
 	RetryPolicy        string
@@ -20,7 +20,7 @@ func (classification SDKFailureClassification) ResultFields() map[string]any {
 	}
 }
 
-// ClassifySDKFailure mirrors Python classify_sdk_failure.
+// ClassifySDKFailure classifies outbound execution failures for retry and review policy.
 func ClassifySDKFailure(errorText string, taskType string) SDKFailureClassification {
 	text := strings.ToLower(strings.TrimSpace(errorText))
 	task := strings.TrimSpace(taskType)
@@ -108,12 +108,12 @@ func ClassifySDKFailure(errorText string, taskType string) SDKFailureClassificat
 	return sdkFailure("unknown", "manual_review", "unknown", "unknown")
 }
 
-func annotateSDKFailureResult(recordTaskType string, result SDKExecutorResult) SDKExecutorResult {
+func annotateOutboundExecutionFailureResult(recordTaskType string, result OutboundExecutionResult) OutboundExecutionResult {
 	if executorResultSuccess(result) {
 		return result
 	}
 	if result == nil {
-		result = SDKExecutorResult{}
+		result = OutboundExecutionResult{}
 	}
 	classification := ClassifySDKFailure(executorResultError(result), recordTaskType)
 	for key, value := range classification.ResultFields() {
