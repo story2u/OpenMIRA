@@ -54,6 +54,11 @@
         "share_bundle_send",
         "revoke_text_message",
         "cancel_message",
+        "connector_login_qrcode",
+        "connector_login_status",
+        "connector_login_verify",
+        "connector_user_info",
+        "connector_logout",
         "wework_login_qrcode",
         "wework_login_status",
         "wework_login_verify",
@@ -746,7 +751,7 @@
     {
       "if": {
         "properties": {
-          "task_type": { "const": "wework_login_verify" }
+          "task_type": { "enum": ["connector_login_verify", "wework_login_verify"] }
         }
       },
       "then": {
