@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-// Suite is a deterministic set of HTTP requests for Python/Go comparison.
+// Suite is a deterministic set of HTTP requests for reference/Go comparison.
 type Suite struct {
 	Name    string       `json:"name"`
 	Options SuiteOptions `json:"options,omitempty"`
@@ -71,7 +71,7 @@ func LoadSuite(path string) (Suite, error) {
 	return suite, nil
 }
 
-// Validate rejects ambiguous fixtures before they become migration evidence.
+// Validate rejects ambiguous fixtures before they become release evidence.
 func (suite Suite) Validate() error {
 	if strings.TrimSpace(suite.Name) == "" {
 		return fmt.Errorf("suite name is required")
@@ -113,7 +113,7 @@ func ValidationReport(suite Suite) SuiteReport {
 }
 
 // RunSuite replays every case against both endpoints and records all drift.
-func RunSuite(ctx context.Context, client *http.Client, python Endpoint, goTarget Endpoint, suite Suite) (SuiteReport, error) {
+func RunSuite(ctx context.Context, client *http.Client, reference Endpoint, goTarget Endpoint, suite Suite) (SuiteReport, error) {
 	if err := suite.Validate(); err != nil {
 		return SuiteReport{}, err
 	}
@@ -125,7 +125,7 @@ func RunSuite(ctx context.Context, client *http.Client, python Endpoint, goTarge
 		Cases:     suite.caseSummaries(),
 	}
 	for _, spec := range suite.Cases {
-		result, err := Compare(ctx, client, python, goTarget, spec.toCase(), suite.optionsFor(spec))
+		result, err := Compare(ctx, client, reference, goTarget, spec.toCase(), suite.optionsFor(spec))
 		if err != nil {
 			result = Result{
 				Case:  spec.Name,

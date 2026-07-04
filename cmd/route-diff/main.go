@@ -1,6 +1,6 @@
-// Command route-diff emits Python-vs-Go route coverage reports.
-// It is a phase-one harness artifact and does not fail because business
-// routes are still owned by the legacy Python service.
+// Command route-diff emits optional reference-vs-Go route coverage reports.
+// It is a transitional harness artifact; standalone product checks do not
+// require an external reference project.
 package main
 
 import (
@@ -16,21 +16,33 @@ import (
 )
 
 func main() {
-	pythonRoot := flag.String("python-root", "../Python", "legacy Python project root")
-	pythonContractRoot := flag.String("python-contract-root", "../Python/contracts/v1", "legacy Python schema contract root")
+	referenceRoot := flag.String("reference-root", "", "external reference project root")
+	referenceContractRoot := flag.String("reference-contract-root", "", "external reference schema contract root")
 	pretty := flag.Bool("pretty", false, "indent JSON output")
 	format := flag.String("format", "json", "output format: json or markdown")
 	goRouteSet := flag.String("go-routes", "default", "Go route metadata set: default or candidate")
 	reportMode := flag.String("mode", "route", "report mode: route (default), schema-drift, or openapi-drift")
 	maxSchemaMismatch := flag.Int("max-schema-mismatch", -1, "schema-drift mode fail threshold; default -1 disables gate checks")
 	maxOpenAPIMismatch := flag.Int("max-openapi-mismatch", -1, "openapi-drift mode fail threshold; default -1 disables gate checks")
-	maxPythonOnly := flag.Int("max-python-only", -1, "route-only fail threshold for Python-only route count; default -1 disables")
+	maxReferenceOnly := flag.Int("max-reference-only", -1, "route-only fail threshold for reference-only route count; default -1 disables")
 	maxGoOnly := flag.Int("max-go-only", -1, "route-only fail threshold for Go-only route count; default -1 disables")
-	pythonOpenAPI := flag.String("python-openapi", "", "optional legacy Python OpenAPI JSON/YAML file")
+	referenceOpenAPI := flag.String("reference-openapi", "", "optional reference OpenAPI JSON/YAML file")
 	goOpenAPI := flag.String("go-openapi", "", "optional Go OpenAPI JSON/YAML file")
 	flag.Parse()
 
-	snapshot, err := inventory.Build(*pythonRoot)
+	root := *referenceRoot
+	if root == "" {
+		fmt.Fprintln(os.Stderr, "route diff failed: -reference-root is required")
+		os.Exit(1)
+	}
+	contractRoot := *referenceContractRoot
+	if contractRoot == "" {
+		contractRoot = root + "/contracts/v1"
+	}
+	maxReferenceOnlyValue := *maxReferenceOnly
+	referenceOpenAPIPath := *referenceOpenAPI
+
+	snapshot, err := inventory.Build(root)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "route diff failed: %v\n", err)
 		os.Exit(1)
@@ -40,7 +52,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "route diff failed: %v\n", err)
 		os.Exit(1)
 	}
-	report, err := buildRouteDiffReport(snapshot.Routes, goRoutes, *pythonContractRoot)
+	report, err := buildRouteDiffReport(snapshot.Routes, goRoutes, contractRoot)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "route diff failed: %v\n", err)
 		os.Exit(1)
@@ -58,7 +70,7 @@ func main() {
 			os.Exit(1)
 		}
 	case "schema-drift":
-		schemaReport, err := buildSchemaDriftReport(snapshot.Routes, goRoutes, *pythonContractRoot)
+		schemaReport, err := buildSchemaDriftReport(snapshot.Routes, goRoutes, contractRoot)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "route schema drift failed: %v\n", err)
 			os.Exit(1)
@@ -72,12 +84,12 @@ func main() {
 			fmt.Fprintf(os.Stderr, "unsupported schema drift format %q\n", *format)
 			os.Exit(1)
 		}
-		if err := enforceRouteDiffGates("schema-drift", report, &schemaReport, *maxPythonOnly, *maxGoOnly, *maxSchemaMismatch); err != nil {
+		if err := enforceRouteDiffGates("schema-drift", report, &schemaReport, maxReferenceOnlyValue, *maxGoOnly, *maxSchemaMismatch); err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
 	case "openapi-drift":
-		openAPIReport, err := buildOpenAPIDriftReport(snapshot.Routes, goRoutes, *pythonContractRoot, *pythonOpenAPI, *goOpenAPI)
+		openAPIReport, err := buildOpenAPIDriftReport(snapshot.Routes, goRoutes, contractRoot, referenceOpenAPIPath, *goOpenAPI)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "route OpenAPI drift failed: %v\n", err)
 			os.Exit(1)
@@ -99,34 +111,34 @@ func main() {
 		fmt.Fprintf(os.Stderr, "unsupported mode %q\n", *reportMode)
 		os.Exit(1)
 	}
-	if err := enforceRouteDiffGates("route", report, nil, *maxPythonOnly, *maxGoOnly, *maxSchemaMismatch); err != nil {
+	if err := enforceRouteDiffGates("route", report, nil, maxReferenceOnlyValue, *maxGoOnly, *maxSchemaMismatch); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 }
 
-func buildRouteDiffReport(pythonRoutes []inventory.Route, goRoutes []httpserver.Route, contractRoot string) (routediff.Report, error) {
+func buildRouteDiffReport(referenceRoutes []inventory.Route, goRoutes []httpserver.Route, contractRoot string) (routediff.Report, error) {
 	catalog, err := contracts.LoadCatalog(contractRoot)
 	if err != nil {
-		return routediff.Compare(pythonRoutes, goRoutes), nil
+		return routediff.Compare(referenceRoutes, goRoutes), nil
 	}
-	return routediff.CompareWithContracts(pythonRoutes, goRoutes, catalog), nil
+	return routediff.CompareWithContracts(referenceRoutes, goRoutes, catalog), nil
 }
 
-func buildSchemaDriftReport(pythonRoutes []inventory.Route, goRoutes []httpserver.Route, contractRoot string) (routediff.SchemaDriftReport, error) {
+func buildSchemaDriftReport(referenceRoutes []inventory.Route, goRoutes []httpserver.Route, contractRoot string) (routediff.SchemaDriftReport, error) {
 	catalog, err := contracts.LoadCatalog(contractRoot)
 	if err != nil {
 		return routediff.SchemaDriftReport{}, err
 	}
-	return routediff.BuildSchemaDriftReport(pythonRoutes, goRoutes, catalog), nil
+	return routediff.BuildSchemaDriftReport(referenceRoutes, goRoutes, catalog), nil
 }
 
-func buildOpenAPIDriftReport(pythonRoutes []inventory.Route, goRoutes []httpserver.Route, contractRoot string, pythonOpenAPI string, goOpenAPI string) (routediff.OpenAPIDriftReport, error) {
+func buildOpenAPIDriftReport(referenceRoutes []inventory.Route, goRoutes []httpserver.Route, contractRoot string, referenceOpenAPI string, goOpenAPI string) (routediff.OpenAPIDriftReport, error) {
 	catalog, err := contracts.LoadCatalog(contractRoot)
 	if err != nil {
 		return routediff.OpenAPIDriftReport{}, err
 	}
-	return routediff.BuildOpenAPIDriftReport(pythonRoutes, goRoutes, catalog, pythonOpenAPI, goOpenAPI), nil
+	return routediff.BuildOpenAPIDriftReport(referenceRoutes, goRoutes, catalog, referenceOpenAPI, goOpenAPI), nil
 }
 
 func selectGoRoutes(routeSet string) ([]httpserver.Route, error) {
@@ -173,13 +185,13 @@ func encodeOpenAPIJSON(report routediff.OpenAPIDriftReport, pretty bool) {
 	}
 }
 
-func enforceRouteDiffGates(mode string, report routediff.Report, schemaReport *routediff.SchemaDriftReport, maxPythonOnly, maxGoOnly, maxSchemaMismatch int) error {
-	if maxPythonOnly >= 0 && len(report.PythonOnly) > maxPythonOnly {
+func enforceRouteDiffGates(mode string, report routediff.Report, schemaReport *routediff.SchemaDriftReport, maxReferenceOnly, maxGoOnly, maxSchemaMismatch int) error {
+	if maxReferenceOnly >= 0 && len(report.PythonOnly) > maxReferenceOnly {
 		return fmt.Errorf(
-			"%s mode gate failed: python_only=%d exceeds max=%d",
+			"%s mode gate failed: reference_only=%d exceeds max=%d",
 			mode,
 			len(report.PythonOnly),
-			maxPythonOnly,
+			maxReferenceOnly,
 		)
 	}
 	if maxGoOnly >= 0 && len(report.GoOnly) > maxGoOnly {

@@ -59,9 +59,11 @@ lines.push(`| inventory_diff_profile | ${display(manifest?.inventory_diff_profil
 lines.push(`| inventory_diff_effective_profile | ${display(manifest?.inventory_diff_effective_profile)} |`);
 lines.push(`| inventory_diff_branch | ${display(manifest?.inventory_diff_branch)} |`);
 lines.push(`| inventory_baseline_source | ${display(manifest?.inventory_baseline_source)} |`);
+lines.push(`| run_reference_gates | ${display(manifest?.run_reference_gates)} |`);
+lines.push(`| reference_gates_reason | ${display(manifest?.reference_gates_reason)} |`);
 lines.push(`| schema_drift_threshold | ${display(manifest?.schema_drift_mismatch_threshold)} |`);
 lines.push(`| openapi_drift_threshold | ${display(manifest?.openapi_drift_mismatch_threshold)} |`);
-lines.push(`| route_diff_max_reference_only | ${display(manifest?.route_diff_max_python_only)} |`);
+lines.push(`| route_diff_max_reference_only | ${display(manifest?.route_diff_max_reference_only ?? manifest?.route_diff_max_python_only)} |`);
 lines.push(`| route_diff_max_go_only | ${display(manifest?.route_diff_max_go_only)} |`);
 lines.push("");
 

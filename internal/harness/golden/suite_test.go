@@ -28,17 +28,17 @@ func TestLoadSuiteAndValidationReport(t *testing.T) {
 }
 
 func TestRunSuiteComparesEveryCase(t *testing.T) {
-	python := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	reference := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(`{"ok":true}`))
 	}))
-	defer python.Close()
+	defer reference.Close()
 
 	goTarget := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(`{"ok":true}`))
 	}))
 	defer goTarget.Close()
 
-	report, err := RunSuite(context.Background(), nil, Endpoint{Name: "python", BaseURL: python.URL}, Endpoint{Name: "go", BaseURL: goTarget.URL}, Suite{
+	report, err := RunSuite(context.Background(), nil, Endpoint{Name: "reference", BaseURL: reference.URL}, Endpoint{Name: "go", BaseURL: goTarget.URL}, Suite{
 		Name: "phase1",
 		Cases: []CaseSpec{
 			{Name: "healthz", Path: "/healthz"},

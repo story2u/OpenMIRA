@@ -1,18 +1,19 @@
 #!/usr/bin/env bash
-# Phase 1 validation gate for the Go/Next migration workspace.
-# It keeps local and CI verification on the same path before any old Python
-# traffic is migrated to the new implementation.
+# Phase 1 validation gate for the standalone Go/Next.js IM project.
+# Product-local checks run by default. External reference comparison is optional
+# evidence and must never be required for a clean standalone checkout.
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 GO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-PYTHON_ROOT="${PYTHON_ROOT:-$GO_ROOT/../Python}"
+REFERENCE_ROOT="${REFERENCE_ROOT:-}"
+RUN_REFERENCE_GATES="${RUN_REFERENCE_GATES:-0}"
 ARTIFACT_DIR="${ARTIFACT_DIR:-$GO_ROOT/tmp/phase1}"
 RUN_WEB_E2E="${RUN_WEB_E2E:-0}"
 SCHEMA_DRIFT_MISMATCH_THRESHOLD="${SCHEMA_DRIFT_MISMATCH_THRESHOLD:-}"
 OPENAPI_DRIFT_MISMATCH_THRESHOLD="${OPENAPI_DRIFT_MISMATCH_THRESHOLD:-}"
-PYTHON_OPENAPI_SPEC="${PYTHON_OPENAPI_SPEC:-}"
+REFERENCE_OPENAPI_SPEC="${REFERENCE_OPENAPI_SPEC:-}"
 GO_OPENAPI_SPEC="${GO_OPENAPI_SPEC:-}"
 INVENTORY_BASELINE_JSON="${INVENTORY_BASELINE_JSON:-}"
 DEFAULT_INVENTORY_BASELINE_JSON="$GO_ROOT/testdata/inventory/baseline.json"
@@ -23,28 +24,51 @@ INVENTORY_DIFF_EFFECTIVE_PROFILE="$INVENTORY_DIFF_PROFILE"
 SCHEMA_DRIFT_THRESHOLD_TEXT=""
 OPENAPI_DRIFT_THRESHOLD_TEXT=""
 INVENTORY_DIFF_RUN=0
-SCHEMA_DRIFT_RUN=1
-OPENAPI_DRIFT_RUN=1
+SCHEMA_DRIFT_RUN=0
+OPENAPI_DRIFT_RUN=0
 NEXT_REQUIRED_ROUTES="${NEXT_REQUIRED_ROUTES:-/,/admin,/login,/admin-login,/cs-login,/version.txt}"
 SKIP_WEB_ROUTE_CHECK="${SKIP_WEB_ROUTE_CHECK:-0}"
-ROUTE_DIFF_MAX_PYTHON_ONLY="${ROUTE_DIFF_MAX_PYTHON_ONLY:-}"
+ROUTE_DIFF_MAX_REFERENCE_ONLY="${ROUTE_DIFF_MAX_REFERENCE_ONLY:-}"
 ROUTE_DIFF_MAX_GO_ONLY="${ROUTE_DIFF_MAX_GO_ONLY:-}"
-ROUTE_DIFF_THRESHOLD_TEXT_PYTHON=""
+ROUTE_DIFF_THRESHOLD_TEXT_REFERENCE=""
 ROUTE_DIFF_THRESHOLD_TEXT_GO=""
 ROUTE_DIFF_THRESHOLD_ARGS=()
-if [[ -n "$ROUTE_DIFF_MAX_PYTHON_ONLY" ]]; then
-  ROUTE_DIFF_THRESHOLD_ARGS+=(-max-python-only "$ROUTE_DIFF_MAX_PYTHON_ONLY")
-  ROUTE_DIFF_THRESHOLD_TEXT_PYTHON="$ROUTE_DIFF_MAX_PYTHON_ONLY"
+if [[ -n "$ROUTE_DIFF_MAX_REFERENCE_ONLY" ]]; then
+  ROUTE_DIFF_THRESHOLD_ARGS+=(-max-reference-only "$ROUTE_DIFF_MAX_REFERENCE_ONLY")
+  ROUTE_DIFF_THRESHOLD_TEXT_REFERENCE="$ROUTE_DIFF_MAX_REFERENCE_ONLY"
 fi
 if [[ -n "$ROUTE_DIFF_MAX_GO_ONLY" ]]; then
   ROUTE_DIFF_THRESHOLD_ARGS+=(-max-go-only "$ROUTE_DIFF_MAX_GO_ONLY")
   ROUTE_DIFF_THRESHOLD_TEXT_GO="$ROUTE_DIFF_MAX_GO_ONLY"
 fi
 
-if [[ ! -d "$PYTHON_ROOT" ]]; then
-  echo "Python root not found: $PYTHON_ROOT" >&2
-  exit 1
-fi
+REFERENCE_GATES_ENABLED=0
+REFERENCE_GATES_REASON=""
+case "$RUN_REFERENCE_GATES" in
+  auto)
+    if [[ -d "$REFERENCE_ROOT" ]]; then
+      REFERENCE_GATES_ENABLED=1
+      REFERENCE_GATES_REASON="reference root found"
+    else
+      REFERENCE_GATES_REASON="reference root not found: $REFERENCE_ROOT"
+    fi
+    ;;
+  1 | true | yes)
+    if [[ ! -d "$REFERENCE_ROOT" ]]; then
+      echo "Reference root not found: $REFERENCE_ROOT" >&2
+      exit 1
+    fi
+    REFERENCE_GATES_ENABLED=1
+    REFERENCE_GATES_REASON="explicitly enabled"
+    ;;
+  0 | false | no)
+    REFERENCE_GATES_REASON="explicitly disabled"
+    ;;
+  *)
+    echo "Unsupported RUN_REFERENCE_GATES: $RUN_REFERENCE_GATES" >&2
+    exit 1
+    ;;
+esac
 
 if [[ -z "$INVENTORY_BASELINE_JSON" ]]; then
   if [[ -f "$DEFAULT_INVENTORY_BASELINE_JSON" ]]; then
@@ -94,93 +118,109 @@ echo "==> go test ./..."
 echo "==> go vet ./..."
 (cd "$GO_ROOT" && go vet ./...)
 
-echo "==> inventory JSON"
-(cd "$GO_ROOT" && go run ./cmd/inventory -python-root "$PYTHON_ROOT" -pretty > "$ARTIFACT_DIR/inventory-report.json")
+if [[ "$REFERENCE_GATES_ENABLED" == "1" ]]; then
+  SCHEMA_DRIFT_RUN=1
+  OPENAPI_DRIFT_RUN=1
 
-echo "==> inventory Markdown"
-(cd "$GO_ROOT" && go run ./cmd/inventory -python-root "$PYTHON_ROOT" -format markdown > "$ARTIFACT_DIR/inventory-report.md")
+  echo "==> reference inventory JSON"
+  (cd "$GO_ROOT" && go run ./cmd/inventory -reference-root "$REFERENCE_ROOT" -pretty > "$ARTIFACT_DIR/inventory-report.json")
 
-INVENTORY_DIFF_ARGS=()
-if [[ -n "${INVENTORY_DIFF_MAX_ROUTES:-}" ]]; then
-  INVENTORY_DIFF_ARGS+=(-max-routes "$INVENTORY_DIFF_MAX_ROUTES")
+  echo "==> reference inventory Markdown"
+  (cd "$GO_ROOT" && go run ./cmd/inventory -reference-root "$REFERENCE_ROOT" -format markdown > "$ARTIFACT_DIR/inventory-report.md")
+
+  INVENTORY_DIFF_ARGS=()
+  if [[ -n "${INVENTORY_DIFF_MAX_ROUTES:-}" ]]; then
+    INVENTORY_DIFF_ARGS+=(-max-routes "$INVENTORY_DIFF_MAX_ROUTES")
+  fi
+  if [[ -n "${INVENTORY_DIFF_MAX_CONTRACTS:-}" ]]; then
+    INVENTORY_DIFF_ARGS+=(-max-contracts "$INVENTORY_DIFF_MAX_CONTRACTS")
+  fi
+  if [[ -n "${INVENTORY_DIFF_MAX_FEATURE_DOCS:-}" ]]; then
+    INVENTORY_DIFF_ARGS+=(-max-feature-docs "$INVENTORY_DIFF_MAX_FEATURE_DOCS")
+  fi
+  if [[ -n "${INVENTORY_DIFF_MAX_COMPOSE_SERVICES:-}" ]]; then
+    INVENTORY_DIFF_ARGS+=(-max-compose-services "$INVENTORY_DIFF_MAX_COMPOSE_SERVICES")
+  fi
+  if [[ -n "${INVENTORY_DIFF_MAX_WS_EVENTS:-}" ]]; then
+    INVENTORY_DIFF_ARGS+=(-max-ws-events "$INVENTORY_DIFF_MAX_WS_EVENTS")
+  fi
+  if [[ -n "${INVENTORY_DIFF_MAX_REDIS_KEYS:-}" ]]; then
+    INVENTORY_DIFF_ARGS+=(-max-redis-keys "$INVENTORY_DIFF_MAX_REDIS_KEYS")
+  fi
+  if [[ -n "${INVENTORY_DIFF_MAX_DB_TABLES:-}" ]]; then
+    INVENTORY_DIFF_ARGS+=(-max-db-tables "$INVENTORY_DIFF_MAX_DB_TABLES")
+  fi
+  if [[ -n "${INVENTORY_DIFF_MAX_TASK_TYPES:-}" ]]; then
+    INVENTORY_DIFF_ARGS+=(-max-task-types "$INVENTORY_DIFF_MAX_TASK_TYPES")
+  fi
+  if [[ -n "$INVENTORY_BASELINE_JSON" ]]; then
+    INVENTORY_DIFF_RUN=1
+    echo "==> inventory diff JSON"
+    (cd "$GO_ROOT" && go run ./cmd/inventory-diff -baseline "$INVENTORY_BASELINE_JSON" -current "$ARTIFACT_DIR/inventory-report.json" -pretty "${INVENTORY_DIFF_ARGS[@]}" > "$ARTIFACT_DIR/inventory-diff.json")
+    echo "==> inventory diff Markdown"
+    (cd "$GO_ROOT" && go run ./cmd/inventory-diff -baseline "$INVENTORY_BASELINE_JSON" -current "$ARTIFACT_DIR/inventory-report.json" -format markdown "${INVENTORY_DIFF_ARGS[@]}" > "$ARTIFACT_DIR/inventory-diff.md")
+  fi
+
+  echo "==> route diff JSON"
+  (cd "$GO_ROOT" && go run ./cmd/route-diff -reference-root "$REFERENCE_ROOT" -pretty "${ROUTE_DIFF_THRESHOLD_ARGS[@]}" > "$ARTIFACT_DIR/route-diff.json")
+
+  echo "==> route diff Markdown"
+  (cd "$GO_ROOT" && go run ./cmd/route-diff -reference-root "$REFERENCE_ROOT" -format markdown "${ROUTE_DIFF_THRESHOLD_ARGS[@]}" > "$ARTIFACT_DIR/route-diff.md")
+
+  echo "==> candidate route diff JSON"
+  (cd "$GO_ROOT" && go run ./cmd/route-diff -reference-root "$REFERENCE_ROOT" -go-routes candidate -pretty "${ROUTE_DIFF_THRESHOLD_ARGS[@]}" > "$ARTIFACT_DIR/route-diff-candidate.json")
+
+  echo "==> candidate route diff Markdown"
+  (cd "$GO_ROOT" && go run ./cmd/route-diff -reference-root "$REFERENCE_ROOT" -go-routes candidate -format markdown "${ROUTE_DIFF_THRESHOLD_ARGS[@]}" > "$ARTIFACT_DIR/route-diff-candidate.md")
+
+  SCHEMA_DRIFT_THRESHOLD_ARGS=()
+  if [[ -n "$SCHEMA_DRIFT_MISMATCH_THRESHOLD" ]]; then
+    SCHEMA_DRIFT_THRESHOLD_ARGS=(-max-schema-mismatch "$SCHEMA_DRIFT_MISMATCH_THRESHOLD")
+    SCHEMA_DRIFT_THRESHOLD_TEXT="$SCHEMA_DRIFT_MISMATCH_THRESHOLD"
+  fi
+
+  OPENAPI_DRIFT_THRESHOLD_ARGS=()
+  if [[ -n "$OPENAPI_DRIFT_MISMATCH_THRESHOLD" ]]; then
+    OPENAPI_DRIFT_THRESHOLD_ARGS=(-max-openapi-mismatch "$OPENAPI_DRIFT_MISMATCH_THRESHOLD")
+    OPENAPI_DRIFT_THRESHOLD_TEXT="$OPENAPI_DRIFT_MISMATCH_THRESHOLD"
+  fi
+  OPENAPI_SPEC_ARGS=()
+  if [[ -n "$REFERENCE_OPENAPI_SPEC" ]]; then
+    OPENAPI_SPEC_ARGS+=(-reference-openapi "$REFERENCE_OPENAPI_SPEC")
+  fi
+  if [[ -n "$GO_OPENAPI_SPEC" ]]; then
+    OPENAPI_SPEC_ARGS+=(-go-openapi "$GO_OPENAPI_SPEC")
+  fi
+
+  echo "==> route schema drift JSON"
+  (cd "$GO_ROOT" && go run ./cmd/route-diff -reference-root "$REFERENCE_ROOT" -mode schema-drift -pretty "${SCHEMA_DRIFT_THRESHOLD_ARGS[@]}" "${ROUTE_DIFF_THRESHOLD_ARGS[@]}" > "$ARTIFACT_DIR/route-schema-drift.json")
+
+  echo "==> route schema drift Markdown"
+  (cd "$GO_ROOT" && go run ./cmd/route-diff -reference-root "$REFERENCE_ROOT" -mode schema-drift -format markdown "${SCHEMA_DRIFT_THRESHOLD_ARGS[@]}" "${ROUTE_DIFF_THRESHOLD_ARGS[@]}" > "$ARTIFACT_DIR/route-schema-drift.md")
+
+  echo "==> route OpenAPI drift JSON"
+  (cd "$GO_ROOT" && go run ./cmd/route-diff -reference-root "$REFERENCE_ROOT" -mode openapi-drift -pretty "${OPENAPI_DRIFT_THRESHOLD_ARGS[@]}" "${OPENAPI_SPEC_ARGS[@]}" "${ROUTE_DIFF_THRESHOLD_ARGS[@]}" > "$ARTIFACT_DIR/route-openapi-drift.json")
+
+  echo "==> route OpenAPI drift Markdown"
+  (cd "$GO_ROOT" && go run ./cmd/route-diff -reference-root "$REFERENCE_ROOT" -mode openapi-drift -format markdown "${OPENAPI_DRIFT_THRESHOLD_ARGS[@]}" "${OPENAPI_SPEC_ARGS[@]}" "${ROUTE_DIFF_THRESHOLD_ARGS[@]}" > "$ARTIFACT_DIR/route-openapi-drift.md")
+
+  echo "==> candidate route OpenAPI drift JSON"
+  (cd "$GO_ROOT" && go run ./cmd/route-diff -reference-root "$REFERENCE_ROOT" -go-routes candidate -mode openapi-drift -pretty "${OPENAPI_DRIFT_THRESHOLD_ARGS[@]}" "${OPENAPI_SPEC_ARGS[@]}" "${ROUTE_DIFF_THRESHOLD_ARGS[@]}" > "$ARTIFACT_DIR/route-openapi-drift-candidate.json")
+
+  echo "==> candidate route OpenAPI drift Markdown"
+  (cd "$GO_ROOT" && go run ./cmd/route-diff -reference-root "$REFERENCE_ROOT" -go-routes candidate -mode openapi-drift -format markdown "${OPENAPI_DRIFT_THRESHOLD_ARGS[@]}" "${OPENAPI_SPEC_ARGS[@]}" "${ROUTE_DIFF_THRESHOLD_ARGS[@]}" > "$ARTIFACT_DIR/route-openapi-drift-candidate.md")
+else
+  echo "==> reference comparison skipped: $REFERENCE_GATES_REASON"
+  cat <<EOF > "$ARTIFACT_DIR/reference-gates.md"
+# Reference Gates
+
+External reference comparison was skipped.
+
+Reason: $REFERENCE_GATES_REASON
+
+Standalone Go/Next.js validation continues without requiring another project checkout.
+EOF
 fi
-if [[ -n "${INVENTORY_DIFF_MAX_CONTRACTS:-}" ]]; then
-  INVENTORY_DIFF_ARGS+=(-max-contracts "$INVENTORY_DIFF_MAX_CONTRACTS")
-fi
-if [[ -n "${INVENTORY_DIFF_MAX_FEATURE_DOCS:-}" ]]; then
-  INVENTORY_DIFF_ARGS+=(-max-feature-docs "$INVENTORY_DIFF_MAX_FEATURE_DOCS")
-fi
-if [[ -n "${INVENTORY_DIFF_MAX_COMPOSE_SERVICES:-}" ]]; then
-  INVENTORY_DIFF_ARGS+=(-max-compose-services "$INVENTORY_DIFF_MAX_COMPOSE_SERVICES")
-fi
-if [[ -n "${INVENTORY_DIFF_MAX_WS_EVENTS:-}" ]]; then
-  INVENTORY_DIFF_ARGS+=(-max-ws-events "$INVENTORY_DIFF_MAX_WS_EVENTS")
-fi
-if [[ -n "${INVENTORY_DIFF_MAX_REDIS_KEYS:-}" ]]; then
-  INVENTORY_DIFF_ARGS+=(-max-redis-keys "$INVENTORY_DIFF_MAX_REDIS_KEYS")
-fi
-if [[ -n "${INVENTORY_DIFF_MAX_DB_TABLES:-}" ]]; then
-  INVENTORY_DIFF_ARGS+=(-max-db-tables "$INVENTORY_DIFF_MAX_DB_TABLES")
-fi
-if [[ -n "${INVENTORY_DIFF_MAX_TASK_TYPES:-}" ]]; then
-  INVENTORY_DIFF_ARGS+=(-max-task-types "$INVENTORY_DIFF_MAX_TASK_TYPES")
-fi
-if [[ -n "$INVENTORY_BASELINE_JSON" ]]; then
-  INVENTORY_DIFF_RUN=1
-  echo "==> inventory diff JSON"
-  (cd "$GO_ROOT" && go run ./cmd/inventory-diff -baseline "$INVENTORY_BASELINE_JSON" -current "$ARTIFACT_DIR/inventory-report.json" -pretty "${INVENTORY_DIFF_ARGS[@]}" > "$ARTIFACT_DIR/inventory-diff.json")
-  echo "==> inventory diff Markdown"
-  (cd "$GO_ROOT" && go run ./cmd/inventory-diff -baseline "$INVENTORY_BASELINE_JSON" -current "$ARTIFACT_DIR/inventory-report.json" -format markdown "${INVENTORY_DIFF_ARGS[@]}" > "$ARTIFACT_DIR/inventory-diff.md")
-fi
-
-echo "==> route diff JSON"
-(cd "$GO_ROOT" && go run ./cmd/route-diff -python-root "$PYTHON_ROOT" -pretty "${ROUTE_DIFF_THRESHOLD_ARGS[@]}" > "$ARTIFACT_DIR/route-diff.json")
-
-echo "==> route diff Markdown"
-(cd "$GO_ROOT" && go run ./cmd/route-diff -python-root "$PYTHON_ROOT" -format markdown "${ROUTE_DIFF_THRESHOLD_ARGS[@]}" > "$ARTIFACT_DIR/route-diff.md")
-
-echo "==> candidate route diff JSON"
-(cd "$GO_ROOT" && go run ./cmd/route-diff -python-root "$PYTHON_ROOT" -go-routes candidate -pretty "${ROUTE_DIFF_THRESHOLD_ARGS[@]}" > "$ARTIFACT_DIR/route-diff-candidate.json")
-
-echo "==> candidate route diff Markdown"
-(cd "$GO_ROOT" && go run ./cmd/route-diff -python-root "$PYTHON_ROOT" -go-routes candidate -format markdown "${ROUTE_DIFF_THRESHOLD_ARGS[@]}" > "$ARTIFACT_DIR/route-diff-candidate.md")
-
-SCHEMA_DRIFT_THRESHOLD_ARGS=()
-if [[ -n "$SCHEMA_DRIFT_MISMATCH_THRESHOLD" ]]; then
-  SCHEMA_DRIFT_THRESHOLD_ARGS=(-max-schema-mismatch "$SCHEMA_DRIFT_MISMATCH_THRESHOLD")
-  SCHEMA_DRIFT_THRESHOLD_TEXT="$SCHEMA_DRIFT_MISMATCH_THRESHOLD"
-fi
-
-OPENAPI_DRIFT_THRESHOLD_ARGS=()
-if [[ -n "$OPENAPI_DRIFT_MISMATCH_THRESHOLD" ]]; then
-  OPENAPI_DRIFT_THRESHOLD_ARGS=(-max-openapi-mismatch "$OPENAPI_DRIFT_MISMATCH_THRESHOLD")
-  OPENAPI_DRIFT_THRESHOLD_TEXT="$OPENAPI_DRIFT_MISMATCH_THRESHOLD"
-fi
-OPENAPI_SPEC_ARGS=()
-if [[ -n "$PYTHON_OPENAPI_SPEC" ]]; then
-  OPENAPI_SPEC_ARGS+=(-python-openapi "$PYTHON_OPENAPI_SPEC")
-fi
-if [[ -n "$GO_OPENAPI_SPEC" ]]; then
-  OPENAPI_SPEC_ARGS+=(-go-openapi "$GO_OPENAPI_SPEC")
-fi
-
-echo "==> route schema drift JSON"
-(cd "$GO_ROOT" && go run ./cmd/route-diff -python-root "$PYTHON_ROOT" -mode schema-drift -pretty "${SCHEMA_DRIFT_THRESHOLD_ARGS[@]}" "${ROUTE_DIFF_THRESHOLD_ARGS[@]}" > "$ARTIFACT_DIR/route-schema-drift.json")
-
-echo "==> route schema drift Markdown"
-(cd "$GO_ROOT" && go run ./cmd/route-diff -python-root "$PYTHON_ROOT" -mode schema-drift -format markdown "${SCHEMA_DRIFT_THRESHOLD_ARGS[@]}" "${ROUTE_DIFF_THRESHOLD_ARGS[@]}" > "$ARTIFACT_DIR/route-schema-drift.md")
-
-echo "==> route OpenAPI drift JSON"
-(cd "$GO_ROOT" && go run ./cmd/route-diff -python-root "$PYTHON_ROOT" -mode openapi-drift -pretty "${OPENAPI_DRIFT_THRESHOLD_ARGS[@]}" "${OPENAPI_SPEC_ARGS[@]}" "${ROUTE_DIFF_THRESHOLD_ARGS[@]}" > "$ARTIFACT_DIR/route-openapi-drift.json")
-
-echo "==> route OpenAPI drift Markdown"
-(cd "$GO_ROOT" && go run ./cmd/route-diff -python-root "$PYTHON_ROOT" -mode openapi-drift -format markdown "${OPENAPI_DRIFT_THRESHOLD_ARGS[@]}" "${OPENAPI_SPEC_ARGS[@]}" "${ROUTE_DIFF_THRESHOLD_ARGS[@]}" > "$ARTIFACT_DIR/route-openapi-drift.md")
-
-echo "==> candidate route OpenAPI drift JSON"
-(cd "$GO_ROOT" && go run ./cmd/route-diff -python-root "$PYTHON_ROOT" -go-routes candidate -mode openapi-drift -pretty "${OPENAPI_DRIFT_THRESHOLD_ARGS[@]}" "${OPENAPI_SPEC_ARGS[@]}" "${ROUTE_DIFF_THRESHOLD_ARGS[@]}" > "$ARTIFACT_DIR/route-openapi-drift-candidate.json")
-
-echo "==> candidate route OpenAPI drift Markdown"
-(cd "$GO_ROOT" && go run ./cmd/route-diff -python-root "$PYTHON_ROOT" -go-routes candidate -mode openapi-drift -format markdown "${OPENAPI_DRIFT_THRESHOLD_ARGS[@]}" "${OPENAPI_SPEC_ARGS[@]}" "${ROUTE_DIFF_THRESHOLD_ARGS[@]}" > "$ARTIFACT_DIR/route-openapi-drift-candidate.md")
 
 echo "==> cloud candidate flag surface"
 (cd "$GO_ROOT" && rg -o "GO_ENABLE_[A-Z0-9_]+" internal/config/config.go cmd/api internal/app | sed 's/.*GO_ENABLE_/GO_ENABLE_/' | sort -u > "$ARTIFACT_DIR/candidate-flags-code.txt")
@@ -208,13 +248,13 @@ run_live_golden_suite() {
   echo "==> golden live compare JSON: ${artifact}"
   (cd "$GO_ROOT" && go run ./cmd/golden-http \
     -cases "testdata/golden/${suite}" \
-    -python-url "$PYTHON_BASE_URL" \
+    -reference-url "$REFERENCE_BASE_URL" \
     -go-url "$GO_BASE_URL" \
     -pretty > "$ARTIFACT_DIR/${artifact}.json")
   echo "==> golden live compare Markdown: ${artifact}"
   (cd "$GO_ROOT" && go run ./cmd/golden-http \
     -cases "testdata/golden/${suite}" \
-    -python-url "$PYTHON_BASE_URL" \
+    -reference-url "$REFERENCE_BASE_URL" \
     -go-url "$GO_BASE_URL" \
     -format markdown > "$ARTIFACT_DIR/${artifact}.md")
 }
@@ -276,22 +316,29 @@ else
 fi
 
 sanitize_cutover_profiles() {
-  local -n out_profiles=$1
   local raw
-  declare -A seen_profiles=()
+  local trimmed
+  local seen_profiles="|"
 
-  for raw in "${out_profiles[@]}"; do
-    local trimmed
+  for raw in "$@"; do
     trimmed="${raw//[[:space:]]/}"
     [[ -z "$trimmed" ]] && continue
-    if [[ -z "${seen_profiles[$trimmed]:-}" ]]; then
-      seen_profiles[$trimmed]=1
-      echo "$trimmed"
-    fi
+    case "$seen_profiles" in
+      *"|$trimmed|"*)
+        ;;
+      *)
+        seen_profiles="${seen_profiles}${trimmed}|"
+        echo "$trimmed"
+        ;;
+    esac
   done
 }
 
-readarray -t selected_cutover_profiles < <(sanitize_cutover_profiles selected_cutover_profiles)
+sanitized_cutover_profiles=()
+while IFS= read -r profile; do
+  sanitized_cutover_profiles+=("$profile")
+done < <(sanitize_cutover_profiles "${selected_cutover_profiles[@]}")
+selected_cutover_profiles=("${sanitized_cutover_profiles[@]}")
 
 manifest_profiles() {
   local first=true
@@ -310,7 +357,9 @@ cat <<EOF > "$ARTIFACT_DIR/phase1_gate_manifest.json"
 {
   "generated_at_utc": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
   "go_root": "$GO_ROOT",
-  "python_root": "$PYTHON_ROOT",
+  "reference_root": "$REFERENCE_ROOT",
+  "run_reference_gates": ${REFERENCE_GATES_ENABLED},
+  "reference_gates_reason": "$REFERENCE_GATES_REASON",
   "artifact_dir": "$ARTIFACT_DIR",
   "run_web_routes": 1,
   "required_next_routes": "$NEXT_REQUIRED_ROUTES",
@@ -320,7 +369,7 @@ cat <<EOF > "$ARTIFACT_DIR/phase1_gate_manifest.json"
   "schema_drift_mismatch_threshold": "${SCHEMA_DRIFT_THRESHOLD_TEXT}",
   "run_openapi_drift": ${OPENAPI_DRIFT_RUN},
   "openapi_drift_mismatch_threshold": "${OPENAPI_DRIFT_THRESHOLD_TEXT}",
-  "python_openapi_spec": "${PYTHON_OPENAPI_SPEC}",
+  "reference_openapi_spec": "${REFERENCE_OPENAPI_SPEC}",
   "go_openapi_spec": "${GO_OPENAPI_SPEC}",
   "run_inventory_diff": ${INVENTORY_DIFF_RUN},
   "inventory_diff_profile": "${INVENTORY_DIFF_PROFILE}",
@@ -343,7 +392,7 @@ cat <<EOF > "$ARTIFACT_DIR/phase1_gate_manifest.json"
     "inventory-diff.json",
     "inventory-diff.md"
   ],
-  "route_diff_max_python_only": "${ROUTE_DIFF_THRESHOLD_TEXT_PYTHON}",
+  "route_diff_max_reference_only": "${ROUTE_DIFF_THRESHOLD_TEXT_REFERENCE}",
   "route_diff_max_go_only": "${ROUTE_DIFF_THRESHOLD_TEXT_GO}",
   "schema_drift_artifacts": [
     "route-schema-drift.json",
@@ -1227,8 +1276,9 @@ echo "==> phase11 conversation resend golden validation Markdown"
 (cd "$GO_ROOT" && go run ./cmd/golden-http -cases testdata/golden/phase11-conversation-resend.json -validate-only -format markdown > "$ARTIFACT_DIR/golden-phase11-conversation-resend.md")
 
 if [[ "${RUN_LIVE_GOLDEN:-0}" == "1" ]]; then
-  if [[ -z "${PYTHON_BASE_URL:-}" || -z "${GO_BASE_URL:-}" ]]; then
-    echo "Skip live golden compare: PYTHON_BASE_URL and GO_BASE_URL are required when RUN_LIVE_GOLDEN=1" >&2
+  REFERENCE_BASE_URL="${REFERENCE_BASE_URL:-}"
+  if [[ -z "${REFERENCE_BASE_URL:-}" || -z "${GO_BASE_URL:-}" ]]; then
+    echo "Skip live golden compare: REFERENCE_BASE_URL and GO_BASE_URL are required when RUN_LIVE_GOLDEN=1" >&2
   else
     echo "==> golden live compare (runtime probes)"
     run_live_golden_suite "phase1-runtime-probes.json" "golden-phase1-runtime-probes"

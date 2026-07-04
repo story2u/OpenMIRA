@@ -1,7 +1,7 @@
-// Package golden compares legacy Python HTTP responses with Go candidates.
-// It is a phase-one harness building block: callers provide running endpoint
-// URLs and deterministic cases, while this package handles request replay,
-// response normalization, and drift reporting.
+// Package golden compares external reference HTTP responses with Go candidates.
+// It is a harness building block: callers provide running endpoint URLs and
+// deterministic cases, while this package handles request replay, response
+// normalization, and drift reporting.
 package golden
 
 import (
@@ -23,7 +23,7 @@ const (
 	defaultMaxBodyBytes = 1 << 20
 )
 
-// Endpoint describes one side of a Python/Go response comparison.
+// Endpoint describes one side of a reference/Go response comparison.
 type Endpoint struct {
 	Name    string
 	BaseURL string
@@ -63,8 +63,8 @@ type Result struct {
 	Diffs  []string
 }
 
-// Compare replays one case against Python and Go endpoints and compares output.
-func Compare(ctx context.Context, client *http.Client, python Endpoint, goTarget Endpoint, testCase Case, options Options) (Result, error) {
+// Compare replays one case against reference and Go endpoints and compares output.
+func Compare(ctx context.Context, client *http.Client, reference Endpoint, goTarget Endpoint, testCase Case, options Options) (Result, error) {
 	if client == nil {
 		client = http.DefaultClient
 	}
@@ -75,9 +75,9 @@ func Compare(ctx context.Context, client *http.Client, python Endpoint, goTarget
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	pythonResponse, err := doRequest(ctx, client, python, testCase, options)
+	referenceResponse, err := doRequest(ctx, client, reference, testCase, options)
 	if err != nil {
-		return Result{}, fmt.Errorf("request python endpoint: %w", err)
+		return Result{}, fmt.Errorf("request reference endpoint: %w", err)
 	}
 	goResponse, err := doRequest(ctx, client, goTarget, testCase, options)
 	if err != nil {
@@ -86,13 +86,13 @@ func Compare(ctx context.Context, client *http.Client, python Endpoint, goTarget
 
 	result := Result{
 		Case:   testCase.Name,
-		Python: pythonResponse,
+		Python: referenceResponse,
 		Go:     goResponse,
 	}
-	if pythonResponse.StatusCode != goResponse.StatusCode {
-		result.Diffs = append(result.Diffs, fmt.Sprintf("status: python=%d go=%d", pythonResponse.StatusCode, goResponse.StatusCode))
+	if referenceResponse.StatusCode != goResponse.StatusCode {
+		result.Diffs = append(result.Diffs, fmt.Sprintf("status: reference=%d go=%d", referenceResponse.StatusCode, goResponse.StatusCode))
 	}
-	if !testCase.SkipBodyCompare && pythonResponse.Body != goResponse.Body {
+	if !testCase.SkipBodyCompare && referenceResponse.Body != goResponse.Body {
 		result.Diffs = append(result.Diffs, "body: normalized response differs")
 	}
 	result.Match = len(result.Diffs) == 0

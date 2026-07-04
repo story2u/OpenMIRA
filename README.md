@@ -42,12 +42,18 @@ SKIP_NPM_CI=1 bash scripts/phase1_gate.sh
 
 `phase1_gate.sh` 会产出：
 
-- `inventory-report.json` / `inventory-report.md`：当前 Go 项目的接口、契约、运行角色、事件和数据面清单。
-- `route-diff.json` / `route-diff.md`：当前路由元数据覆盖报告，作为过渡期审计信息。
+- `reference-gates.md`：说明 external reference comparison 是否启用；默认关闭，不要求另一个项目 checkout。
 - `web-routes.json` / `web-routes.md`：Next.js 路由清单与入口检查。
 - `web-unit-test.out` / `web-unit-test.json` / `web-unit-test.md`：前端单元测试摘要。
 - `web-build.out` / `web-build.json` / `web-build.md`：前端构建摘要。
 - `cutover-*.json` / `cutover-*.md`：现有 readiness profile 的机器产物。命名会在后续里程碑中调整为 release readiness。
+
+如需临时对照外部 reference，可显式启用：
+
+```bash
+cd go
+RUN_REFERENCE_GATES=1 REFERENCE_ROOT=/path/to/reference SKIP_NPM_CI=1 bash scripts/phase1_gate.sh
+```
 
 前端验证：
 

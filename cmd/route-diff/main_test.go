@@ -49,7 +49,7 @@ func TestEnforceRouteDiffGatesRouteMode(t *testing.T) {
 		t.Fatalf("route gate unexpectedly failed: %v", err)
 	}
 	if err := enforceRouteDiffGates("route", report, nil, 2, 6, -1); err == nil {
-		t.Fatalf("route gate expected python-only failure")
+		t.Fatalf("route gate expected reference-only failure")
 	}
 	if err := enforceRouteDiffGates("route", report, nil, 4, 4, -1); err == nil {
 		t.Fatalf("route gate expected go-only failure")

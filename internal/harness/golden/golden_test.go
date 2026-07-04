@@ -9,12 +9,12 @@ import (
 )
 
 func TestCompareMatchesCanonicalJSON(t *testing.T) {
-	python := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	reference := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assertHeader(t, r, "X-Case", "phase1")
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"ok":true,"trace_id":"python","data":{"items":[{"name":"a","updated_at":"old"}]}}`))
 	}))
-	defer python.Close()
+	defer reference.Close()
 
 	goTarget := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assertHeader(t, r, "X-Case", "phase1")
@@ -24,8 +24,8 @@ func TestCompareMatchesCanonicalJSON(t *testing.T) {
 	defer goTarget.Close()
 
 	result, err := Compare(context.Background(), nil, Endpoint{
-		Name:    "python",
-		BaseURL: python.URL,
+		Name:    "reference",
+		BaseURL: reference.URL,
 	}, Endpoint{
 		Name:    "go",
 		BaseURL: goTarget.URL,
@@ -45,11 +45,11 @@ func TestCompareMatchesCanonicalJSON(t *testing.T) {
 }
 
 func TestCompareReportsStatusAndBodyDrift(t *testing.T) {
-	python := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	reference := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"ok":true}`))
 	}))
-	defer python.Close()
+	defer reference.Close()
 
 	goTarget := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusServiceUnavailable)
@@ -57,7 +57,7 @@ func TestCompareReportsStatusAndBodyDrift(t *testing.T) {
 	}))
 	defer goTarget.Close()
 
-	result, err := Compare(context.Background(), nil, Endpoint{Name: "python", BaseURL: python.URL}, Endpoint{Name: "go", BaseURL: goTarget.URL}, Case{Name: "probe"}, Options{})
+	result, err := Compare(context.Background(), nil, Endpoint{Name: "reference", BaseURL: reference.URL}, Endpoint{Name: "go", BaseURL: goTarget.URL}, Case{Name: "probe"}, Options{})
 	if err != nil {
 		t.Fatalf("Compare returned error: %v", err)
 	}
@@ -65,7 +65,7 @@ func TestCompareReportsStatusAndBodyDrift(t *testing.T) {
 		t.Fatal("result.Match = true, want false")
 	}
 	lines := strings.Join(StableDiffLines(result), "\n")
-	if !strings.Contains(lines, "status: python=200 go=503") {
+	if !strings.Contains(lines, "status: reference=200 go=503") {
 		t.Fatalf("missing status drift: %s", lines)
 	}
 	if !strings.Contains(lines, "body: normalized response differs") {
@@ -75,11 +75,11 @@ func TestCompareReportsStatusAndBodyDrift(t *testing.T) {
 
 // TestCompareCanSkipBodyComparison keeps volatile probe bodies out of diffs.
 func TestCompareCanSkipBodyComparison(t *testing.T) {
-	python := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	reference := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("python metrics"))
+		_, _ = w.Write([]byte("reference metrics"))
 	}))
-	defer python.Close()
+	defer reference.Close()
 
 	goTarget := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -87,7 +87,7 @@ func TestCompareCanSkipBodyComparison(t *testing.T) {
 	}))
 	defer goTarget.Close()
 
-	result, err := Compare(context.Background(), nil, Endpoint{Name: "python", BaseURL: python.URL}, Endpoint{Name: "go", BaseURL: goTarget.URL}, Case{
+	result, err := Compare(context.Background(), nil, Endpoint{Name: "reference", BaseURL: reference.URL}, Endpoint{Name: "go", BaseURL: goTarget.URL}, Case{
 		Name:            "metrics",
 		Path:            "/metrics",
 		SkipBodyCompare: true,

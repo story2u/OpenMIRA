@@ -1,6 +1,6 @@
-// Command inventory emits a read-only snapshot or report of the legacy Python app.
-// It is used in phase one to keep route, contract, feature, and runtime
-// coverage visible before any business migration starts.
+// Command inventory emits a read-only snapshot or report of an optional
+// external reference app. It remains available as transitional evidence while
+// the Go/Next.js IM project becomes independently verifiable.
 package main
 
 import (
@@ -13,12 +13,18 @@ import (
 )
 
 func main() {
-	pythonRoot := flag.String("python-root", "../Python", "legacy Python project root")
+	referenceRoot := flag.String("reference-root", "", "external reference project root")
 	pretty := flag.Bool("pretty", false, "indent JSON output")
 	format := flag.String("format", "json", "output format: json or markdown")
 	flag.Parse()
 
-	snapshot, err := inventory.Build(*pythonRoot)
+	root := *referenceRoot
+	if root == "" {
+		fmt.Fprintln(os.Stderr, "inventory failed: -reference-root is required")
+		os.Exit(1)
+	}
+
+	snapshot, err := inventory.Build(root)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "inventory failed: %v\n", err)
 		os.Exit(1)
