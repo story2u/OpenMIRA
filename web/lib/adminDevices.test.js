@@ -468,14 +468,14 @@ test("device action normalizers keep status and task fields", () => {
   const action = normalizeDeviceActionResult({
     success: true,
     status: "waiting",
-    task: { task_id: "task-1", task_type: "wework_login_qrcode" },
+    task: { task_id: "task-1", task_type: "connector_login_qrcode" },
     qrcode: "qr-data",
     expires_at: "2026-07-02T10:00:00Z",
   });
   assert.equal(action.success, true);
   assert.equal(action.status, "waiting");
   assert.equal(action.taskID, "task-1");
-  assert.equal(action.taskType, "wework_login_qrcode");
+  assert.equal(action.taskType, "connector_login_qrcode");
   assert.equal(action.qrcode, "qr-data");
   assert.equal(action.expiresAt, "2026-07-02T10:00:00Z");
 

@@ -30,14 +30,14 @@ func TestLoadReadsSessionMeCandidateFlag(t *testing.T) {
 	t.Setenv("DEVICE_OFFLINE_BLOCK_MAX_AGE_SEC", "45")
 	t.Setenv("GO_ENABLE_TASKS_CANDIDATE", "1")
 	t.Setenv("GO_ENABLE_AGENT_RETIRED_CANDIDATE", "true")
-	t.Setenv("GO_ENABLE_WEWORK_LOGIN_QRCODE_CANDIDATE", "true")
-	t.Setenv("GO_ENABLE_WEWORK_LOGIN_VERIFY_CANDIDATE", "yes")
-	t.Setenv("GO_ENABLE_WEWORK_LOGOUT_CANDIDATE", "on")
-	t.Setenv("GO_ENABLE_WEWORK_LOGIN_STATUS_CANDIDATE", "true")
-	t.Setenv("GO_ENABLE_WEWORK_NOTIFY_CALLBACK_CANDIDATE", "true")
-	t.Setenv("GO_ENABLE_WEWORK_USER_INFO_LAST_CANDIDATE", "yes")
-	t.Setenv("GO_ENABLE_WEWORK_USER_INFO_REQUEST_CANDIDATE", "true")
-	t.Setenv("GO_ENABLE_WEWORK_USER_INFO_CANDIDATES_CANDIDATE", "true")
+	t.Setenv("GO_ENABLE_CONNECTOR_LOGIN_QRCODE_CANDIDATE", "true")
+	t.Setenv("GO_ENABLE_CONNECTOR_LOGIN_VERIFY_CANDIDATE", "yes")
+	t.Setenv("GO_ENABLE_CONNECTOR_LOGOUT_CANDIDATE", "on")
+	t.Setenv("GO_ENABLE_CONNECTOR_LOGIN_STATUS_CANDIDATE", "true")
+	t.Setenv("GO_ENABLE_CONNECTOR_NOTIFY_CALLBACK_CANDIDATE", "true")
+	t.Setenv("GO_ENABLE_CONNECTOR_USER_INFO_LAST_CANDIDATE", "yes")
+	t.Setenv("GO_ENABLE_CONNECTOR_USER_INFO_REQUEST_CANDIDATE", "true")
+	t.Setenv("GO_ENABLE_CONNECTOR_USER_INFO_CANDIDATES_CANDIDATE", "true")
 	t.Setenv("GO_ENABLE_WS_GATEWAY_CANDIDATE", "true")
 	t.Setenv("GO_ENABLE_STREAM_CHANNELS_CANDIDATE", "true")
 	t.Setenv("GO_ENABLE_CONVERSATION_MESSAGES_CANDIDATE", "1")
@@ -732,6 +732,25 @@ func TestLoadReadsSessionMeCandidateFlag(t *testing.T) {
 	}
 }
 
+func TestLoadAcceptsLegacyWeWorkConnectorCandidateAliases(t *testing.T) {
+	t.Setenv("GO_ENABLE_WEWORK_LOGIN_QRCODE_CANDIDATE", "true")
+	t.Setenv("GO_ENABLE_WEWORK_LOGIN_VERIFY_CANDIDATE", "true")
+	t.Setenv("GO_ENABLE_WEWORK_LOGOUT_CANDIDATE", "true")
+	t.Setenv("GO_ENABLE_WEWORK_LOGIN_STATUS_CANDIDATE", "true")
+	t.Setenv("GO_ENABLE_WEWORK_NOTIFY_CALLBACK_CANDIDATE", "true")
+	t.Setenv("GO_ENABLE_WEWORK_USER_INFO_LAST_CANDIDATE", "true")
+	t.Setenv("GO_ENABLE_WEWORK_USER_INFO_REQUEST_CANDIDATE", "true")
+	t.Setenv("GO_ENABLE_WEWORK_USER_INFO_CANDIDATES_CANDIDATE", "true")
+
+	cfg := Load()
+	if !cfg.WeWorkLoginQRCodeCandidate || !cfg.WeWorkLoginVerifyCandidate || !cfg.WeWorkLogoutCandidate || !cfg.WeWorkLoginStatusCandidate {
+		t.Fatalf("legacy login aliases were not accepted: %+v", cfg)
+	}
+	if !cfg.WeWorkNotifyCallbackCandidate || !cfg.WeWorkUserInfoLastCandidate || !cfg.WeWorkUserInfoRequestCandidate || !cfg.WeWorkUserInfoCandidatesCandidate {
+		t.Fatalf("legacy connector aliases were not accepted: %+v", cfg)
+	}
+}
+
 func TestLoadUsesNeutralCallAudioBridgeEnvBeforeLegacyAlias(t *testing.T) {
 	clearCallAudioBridgeEnv(t)
 	t.Setenv("RPA_CALL_AUDIO_BRIDGE_STATUS_FILE", "/tmp/rpa-status.json")
@@ -787,8 +806,17 @@ func TestLoadKeepsSessionMeCandidateDisabledByDefault(t *testing.T) {
 	t.Setenv("DEVICE_OFFLINE_BLOCK_MAX_AGE_SEC", "")
 	t.Setenv("GO_ENABLE_TASKS_CANDIDATE", "")
 	t.Setenv("GO_ENABLE_AGENT_RETIRED_CANDIDATE", "")
+	t.Setenv("GO_ENABLE_CONNECTOR_LOGIN_QRCODE_CANDIDATE", "")
+	t.Setenv("GO_ENABLE_CONNECTOR_LOGIN_VERIFY_CANDIDATE", "")
+	t.Setenv("GO_ENABLE_CONNECTOR_LOGOUT_CANDIDATE", "")
+	t.Setenv("GO_ENABLE_CONNECTOR_LOGIN_STATUS_CANDIDATE", "")
+	t.Setenv("GO_ENABLE_CONNECTOR_NOTIFY_CALLBACK_CANDIDATE", "")
+	t.Setenv("GO_ENABLE_CONNECTOR_USER_INFO_LAST_CANDIDATE", "")
+	t.Setenv("GO_ENABLE_CONNECTOR_USER_INFO_REQUEST_CANDIDATE", "")
+	t.Setenv("GO_ENABLE_CONNECTOR_USER_INFO_CANDIDATES_CANDIDATE", "")
 	t.Setenv("GO_ENABLE_WEWORK_LOGIN_QRCODE_CANDIDATE", "")
 	t.Setenv("GO_ENABLE_WEWORK_LOGIN_VERIFY_CANDIDATE", "")
+	t.Setenv("GO_ENABLE_WEWORK_LOGOUT_CANDIDATE", "")
 	t.Setenv("GO_ENABLE_WEWORK_LOGIN_STATUS_CANDIDATE", "")
 	t.Setenv("GO_ENABLE_WEWORK_NOTIFY_CALLBACK_CANDIDATE", "")
 	t.Setenv("GO_ENABLE_WEWORK_USER_INFO_LAST_CANDIDATE", "")

@@ -56,6 +56,8 @@ Provider-specific settings are optional unless the matching connector or provide
 
 `go-send-dispatcher` is part of the standalone worker set, but it does not assume a bundled message platform. Set `GO_SEND_CONNECTOR_MODE=fake` plus `SEND_DEVICE_ALLOWLIST` for local/CI send smoke validation without an external connector. Leave `GO_SEND_CONNECTOR_BASE_URL` empty in that mode. Set the base URL only when an HTTP-compatible outbound connector is enabled for real delivery. `GO_SEND_PROVIDER_BASE_URL` remains a compatibility alias.
 
+Connector session, user-info, and notify routes should be enabled with `GO_ENABLE_CONNECTOR_*_CANDIDATE` flags. Older `GO_ENABLE_WEWORK_*_CANDIDATE` names remain compatibility aliases for existing deployments.
+
 ## Runtime Roles
 
 Core roles:

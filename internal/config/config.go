@@ -451,14 +451,14 @@ func Load() Config {
 		SessionLogoutCandidate:                       envBool("GO_ENABLE_SESSION_LOGOUT_CANDIDATE"),
 		TasksCandidate:                               envBool("GO_ENABLE_TASKS_CANDIDATE"),
 		AgentRetiredCandidate:                        envBool("GO_ENABLE_AGENT_RETIRED_CANDIDATE"),
-		WeWorkLoginQRCodeCandidate:                   envBool("GO_ENABLE_WEWORK_LOGIN_QRCODE_CANDIDATE"),
-		WeWorkLoginVerifyCandidate:                   envBool("GO_ENABLE_WEWORK_LOGIN_VERIFY_CANDIDATE"),
-		WeWorkLogoutCandidate:                        envBool("GO_ENABLE_WEWORK_LOGOUT_CANDIDATE"),
-		WeWorkLoginStatusCandidate:                   envBool("GO_ENABLE_WEWORK_LOGIN_STATUS_CANDIDATE"),
-		WeWorkNotifyCallbackCandidate:                envBool("GO_ENABLE_WEWORK_NOTIFY_CALLBACK_CANDIDATE"),
-		WeWorkUserInfoLastCandidate:                  envBool("GO_ENABLE_WEWORK_USER_INFO_LAST_CANDIDATE"),
-		WeWorkUserInfoRequestCandidate:               envBool("GO_ENABLE_WEWORK_USER_INFO_REQUEST_CANDIDATE"),
-		WeWorkUserInfoCandidatesCandidate:            envBool("GO_ENABLE_WEWORK_USER_INFO_CANDIDATES_CANDIDATE"),
+		WeWorkLoginQRCodeCandidate:                   envBoolAny("GO_ENABLE_CONNECTOR_LOGIN_QRCODE_CANDIDATE", "GO_ENABLE_WEWORK_LOGIN_QRCODE_CANDIDATE"),
+		WeWorkLoginVerifyCandidate:                   envBoolAny("GO_ENABLE_CONNECTOR_LOGIN_VERIFY_CANDIDATE", "GO_ENABLE_WEWORK_LOGIN_VERIFY_CANDIDATE"),
+		WeWorkLogoutCandidate:                        envBoolAny("GO_ENABLE_CONNECTOR_LOGOUT_CANDIDATE", "GO_ENABLE_WEWORK_LOGOUT_CANDIDATE"),
+		WeWorkLoginStatusCandidate:                   envBoolAny("GO_ENABLE_CONNECTOR_LOGIN_STATUS_CANDIDATE", "GO_ENABLE_WEWORK_LOGIN_STATUS_CANDIDATE"),
+		WeWorkNotifyCallbackCandidate:                envBoolAny("GO_ENABLE_CONNECTOR_NOTIFY_CALLBACK_CANDIDATE", "GO_ENABLE_WEWORK_NOTIFY_CALLBACK_CANDIDATE"),
+		WeWorkUserInfoLastCandidate:                  envBoolAny("GO_ENABLE_CONNECTOR_USER_INFO_LAST_CANDIDATE", "GO_ENABLE_WEWORK_USER_INFO_LAST_CANDIDATE"),
+		WeWorkUserInfoRequestCandidate:               envBoolAny("GO_ENABLE_CONNECTOR_USER_INFO_REQUEST_CANDIDATE", "GO_ENABLE_WEWORK_USER_INFO_REQUEST_CANDIDATE"),
+		WeWorkUserInfoCandidatesCandidate:            envBoolAny("GO_ENABLE_CONNECTOR_USER_INFO_CANDIDATES_CANDIDATE", "GO_ENABLE_WEWORK_USER_INFO_CANDIDATES_CANDIDATE"),
 		WSGatewayCandidate:                           envBool("GO_ENABLE_WS_GATEWAY_CANDIDATE"),
 		StreamChannelsCandidate:                      envBool("GO_ENABLE_STREAM_CHANNELS_CANDIDATE"),
 		IncomingMessagesCandidate:                    envBool("GO_ENABLE_INCOMING_MESSAGES_CANDIDATE"),
@@ -708,6 +708,15 @@ func firstEnvValue(keys ...string) string {
 
 func envBool(key string) bool {
 	switch strings.ToLower(strings.TrimSpace(os.Getenv(key))) {
+	case "1", "true", "yes", "on":
+		return true
+	default:
+		return false
+	}
+}
+
+func envBoolAny(keys ...string) bool {
+	switch strings.ToLower(firstEnvValue(keys...)) {
 	case "1", "true", "yes", "on":
 		return true
 	default:
