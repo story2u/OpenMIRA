@@ -99,7 +99,7 @@ func main() {
 
 func markdownRunbook(profileNames []string) string {
 	var b strings.Builder
-	b.WriteString("# Cutover Profile Runbooks\n\n")
+	b.WriteString("# Release Profile Runbooks\n\n")
 	b.WriteString("These runbooks are generated from `internal/cutover.DefaultProfiles()` and define the minimum route, flag, env, service, and golden-fixture evidence expected before a profile can be released.\n\n")
 	b.WriteString("Common sequence:\n\n")
 	b.WriteString("1. Run `go run ./cmd/cutover-readiness -profile <profile> -format markdown` and inspect failures.\n")
@@ -277,7 +277,7 @@ func evaluateProfiles(profileNames []string, inputs cutover.Inputs) aggregateRep
 
 func markdownAggregateReport(report aggregateReport) string {
 	var b strings.Builder
-	b.WriteString("# Cutover Readiness Aggregate Report\n\n")
+	b.WriteString("# Release Readiness Aggregate Report\n\n")
 	b.WriteString("| Field | Value |\n")
 	b.WriteString("| --- | --- |\n")
 	b.WriteString(fmt.Sprintf("| Total profiles | %d |\n", report.TotalCount))

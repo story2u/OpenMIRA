@@ -72,7 +72,7 @@ func TestMarkdownRunbookIncludesProfileRequirements(t *testing.T) {
 	runbook := markdownRunbook([]string{"session-access", "archive-voice-transcription"})
 
 	for _, want := range []string{
-		"# Cutover Profile Runbooks",
+		"# Release Profile Runbooks",
 		"[session-access](#session-access)",
 		"## session-access",
 		"go run ./cmd/cutover-readiness -profile session-access -strict",

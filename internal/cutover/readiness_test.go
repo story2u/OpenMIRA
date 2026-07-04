@@ -459,10 +459,10 @@ func TestEvaluateWorkbenchActionsProfile(t *testing.T) {
 	}
 }
 
-func TestEvaluateWeWorkEventsProfile(t *testing.T) {
-	profile, ok := ProfileByName("wework-events")
+func TestEvaluateConnectorEventsProfile(t *testing.T) {
+	profile, ok := ProfileByName("connector-events")
 	if !ok {
-		t.Fatal("wework-events profile missing")
+		t.Fatal("connector-events profile missing")
 	}
 	report := Evaluate(profile, Inputs{
 		Routes: httpserver.CandidateRoutes(),
@@ -482,6 +482,16 @@ func TestEvaluateWeWorkEventsProfile(t *testing.T) {
 
 	if !report.Ready {
 		t.Fatalf("report.Ready = false, checks=%+v", report.Checks)
+	}
+}
+
+func TestProfileByNameKeepsWeWorkEventsAlias(t *testing.T) {
+	profile, ok := ProfileByName("wework-events")
+	if !ok {
+		t.Fatal("wework-events alias missing")
+	}
+	if profile.Name != "connector-events" {
+		t.Fatalf("alias resolved to %q, want connector-events", profile.Name)
 	}
 }
 

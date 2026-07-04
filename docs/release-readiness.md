@@ -124,13 +124,13 @@ go run ./cmd/release-readiness -profile <profile> -strict
 - 同步失败不影响消息收发。
 - 外部联系人字段通过 connector adapter 进入本地身份模型。
 
-### wework-events
+### connector-events
 
-范围：企微 connector 的好友添加和客户联系回调。
+范围：消息 connector 的外部事件回调。当前 golden fixture 覆盖企微 connector 的好友添加和客户联系回调。
 
 发布前确认：
 
-- 该 profile 只验证企微 connector，不定义 core 消息模型。
+- 该 profile 只验证 connector adapter，不定义 core 消息模型。
 - 回调验签、去重、重放和错误分类完整。
 
 ### send-dispatch

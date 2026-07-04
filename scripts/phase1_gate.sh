@@ -307,7 +307,7 @@ else
     realtime-workbench
     contact-sync
     workbench-actions
-    wework-events
+    connector-events
     platform-proxy
     ai-outreach
     archive-pipeline

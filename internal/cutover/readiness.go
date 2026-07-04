@@ -578,8 +578,8 @@ func DefaultProfiles() []Profile {
 			},
 		},
 		{
-			Name:        "wework-events",
-			Description: "Optional WeWork connector friend-added and customer-contact notify callbacks with durable outbox delivery.",
+			Name:        "connector-events",
+			Description: "Optional message connector event callbacks with durable outbox delivery.",
 			Routes: []RouteRequirement{
 				{Method: "POST", Path: "/api/v1/events/friend-added"},
 				{Method: "GET", Path: "/api/v1/notify/event/{enterprise_id}"},
@@ -941,12 +941,22 @@ func DefaultProfiles() []Profile {
 
 // ProfileByName returns one default profile by name.
 func ProfileByName(name string) (Profile, bool) {
+	name = canonicalProfileName(name)
 	for _, profile := range DefaultProfiles() {
 		if profile.Name == name {
 			return profile, true
 		}
 	}
 	return Profile{}, false
+}
+
+func canonicalProfileName(name string) string {
+	switch strings.TrimSpace(name) {
+	case "wework-events":
+		return "connector-events"
+	default:
+		return strings.TrimSpace(name)
+	}
 }
 
 // Evaluate checks a profile against the supplied route, env, compose, and
