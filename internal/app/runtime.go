@@ -37,13 +37,13 @@ import (
 	"im-go/internal/infra/cacheinvalidation"
 	"im-go/internal/infra/enterprisestore"
 	"im-go/internal/infra/incomingmessagestore"
+	"im-go/internal/infra/outboundconnectorclient"
 	"im-go/internal/infra/outboxnotify"
 	"im-go/internal/infra/outboxstore"
 	"im-go/internal/infra/realtimecursor"
 	"im-go/internal/infra/realtimeeventlog"
 	"im-go/internal/infra/redisclient"
 	"im-go/internal/infra/sdkdevicehealthstore"
-	"im-go/internal/infra/sdkexecutorclient"
 	"im-go/internal/infra/sendlockstore"
 	"im-go/internal/infra/sopautoresend"
 	"im-go/internal/infra/sqldb"
@@ -212,8 +212,8 @@ func NewRuntime(ctx context.Context, cfg config.Config, options Options) (*Runti
 		var deviceHealthReader senddispatcher.SDKDeviceHealthReader
 		var taskStatusPublisher *taskstatuspublisher.Publisher
 		var realtimeHub *taskstatuspublisher.RedisHub
-		var sdkExecutor senddispatcher.SDKExecutor
-		var listSDKDevices senddispatcher.ListDevicesFunc
+		var connectorExecutor senddispatcher.SDKExecutor
+		var listConnectorDevices senddispatcher.ListDevicesFunc
 		if runtime.Redis != nil {
 			lockClient, err := runtime.Redis.Client(redisclient.KindLock)
 			if err != nil {
@@ -243,12 +243,12 @@ func NewRuntime(ctx context.Context, cfg config.Config, options Options) (*Runti
 			}
 		}
 		if strings.ToLower(strings.TrimSpace(cfg.SendConnectorMode)) != "fake" && strings.TrimSpace(cfg.SendConnectorBaseURL) != "" {
-			connector := sdkexecutorclient.New(cfg.SendConnectorBaseURL, sdkexecutorclient.Options{
+			connector := outboundconnectorclient.New(cfg.SendConnectorBaseURL, outboundconnectorclient.Options{
 				Token:   cfg.SendConnectorAPIToken,
 				Timeout: time.Duration(cfg.SendConnectorTimeoutSec) * time.Second,
 			})
-			sdkExecutor = connector
-			listSDKDevices = connector.ListDeviceIDs
+			connectorExecutor = connector
+			listConnectorDevices = connector.ListDeviceIDs
 		}
 		if deviceHealthRecorder == nil || deviceHealthReader == nil {
 			deviceHealth := sdkdevicehealthstore.NewMemory()
@@ -260,8 +260,8 @@ func NewRuntime(ctx context.Context, cfg config.Config, options Options) (*Runti
 			DB:                 runtime.DB,
 			DBDialect:          runtime.Dialect,
 			DeviceLockStore:    deviceLockStore,
-			SDKExecutor:        sdkExecutor,
-			ListDevices:        listSDKDevices,
+			SDKExecutor:        connectorExecutor,
+			ListDevices:        listConnectorDevices,
 			DeviceHealth:       deviceHealthRecorder,
 			DeviceHealthReader: deviceHealthReader,
 			TaskStatus:         taskStatusPublisher,

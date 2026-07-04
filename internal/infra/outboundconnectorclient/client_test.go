@@ -1,4 +1,4 @@
-package sdkexecutorclient
+package outboundconnectorclient
 
 import (
 	"context"
@@ -12,20 +12,20 @@ import (
 	"im-go/internal/senddispatcher"
 )
 
-// TestClientExecutePostsWrappedTaskAndDecodesResult protects the provider execute contract.
+// TestClientExecutePostsWrappedTaskAndDecodesResult protects the outbound connector execute contract.
 func TestClientExecutePostsWrappedTaskAndDecodesResult(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost || r.URL.Path != "/execute" {
 			t.Fatalf("request = %s %s", r.Method, r.URL.Path)
 		}
-		if r.Header.Get("Authorization") != "Bearer provider-token" {
+		if r.Header.Get("Authorization") != "Bearer connector-token" {
 			t.Fatalf("Authorization = %q", r.Header.Get("Authorization"))
 		}
 		var request map[string]map[string]any
 		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
 			t.Fatalf("Decode returned error: %v", err)
 		}
-		if request["task"]["task_id"] != "task-sdk-1" || request["task"]["device_id"] != "zimo" {
+		if request["task"]["task_id"] != "task-connector-1" || request["task"]["device_id"] != "zimo" {
 			t.Fatalf("request body = %#v", request)
 		}
 		_ = json.NewEncoder(w).Encode(map[string]any{
@@ -34,8 +34,8 @@ func TestClientExecutePostsWrappedTaskAndDecodesResult(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := New(server.URL+"/", Options{Token: " provider-token ", Timeout: time.Second})
-	result, err := client.Execute(context.Background(), senddispatcher.SDKTaskPayload{"task_id": "task-sdk-1", "device_id": "zimo"})
+	client := New(server.URL+"/", Options{Token: " connector-token ", Timeout: time.Second})
+	result, err := client.Execute(context.Background(), senddispatcher.SDKTaskPayload{"task_id": "task-connector-1", "device_id": "zimo"})
 	if err != nil {
 		t.Fatalf("Execute returned error: %v", err)
 	}
@@ -44,7 +44,7 @@ func TestClientExecutePostsWrappedTaskAndDecodesResult(t *testing.T) {
 	}
 }
 
-// TestClientExecuteBatchSupportsArrayResponse keeps batch provider output flexible.
+// TestClientExecuteBatchSupportsArrayResponse keeps batch connector output flexible.
 func TestClientExecuteBatchSupportsArrayResponse(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost || r.URL.Path != "/execute-batch" {
@@ -114,7 +114,7 @@ func TestClientReportsNon2xxResponse(t *testing.T) {
 	defer server.Close()
 
 	client := New(server.URL, Options{})
-	_, err := client.Execute(context.Background(), senddispatcher.SDKTaskPayload{"task_id": "task-sdk-1"})
+	_, err := client.Execute(context.Background(), senddispatcher.SDKTaskPayload{"task_id": "task-connector-1"})
 	if err == nil || !strings.Contains(err.Error(), "502") || !strings.Contains(err.Error(), "executor unavailable") {
 		t.Fatalf("Execute error = %v", err)
 	}

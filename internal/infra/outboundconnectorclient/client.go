@@ -1,6 +1,6 @@
-// Package sdkexecutorclient adapts an external HTTP outbound connector to the Go
+// Package outboundconnectorclient adapts an external HTTP outbound connector to the Go
 // send-dispatcher execution boundary.
-package sdkexecutorclient
+package outboundconnectorclient
 
 import (
 	"bytes"
@@ -71,7 +71,7 @@ func (client *Client) ExecuteBatch(ctx context.Context, tasks []senddispatcher.S
 	return decodeResults(raw)
 }
 
-// ListDeviceIDs calls GET /devices and extracts configured SDK device ids.
+// ListDeviceIDs calls GET /devices and extracts connector-visible device ids.
 func (client *Client) ListDeviceIDs(ctx context.Context) ([]string, error) {
 	var raw any
 	if err := client.doJSON(ctx, http.MethodGet, "/devices", nil, &raw); err != nil {
