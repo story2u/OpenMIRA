@@ -8,22 +8,28 @@ import (
 	"im-go/internal/tasks"
 )
 
-// TestRunningTaskRecoveryPolicyUsesProviderEnvRules protects watchdog env parsing.
-func TestRunningTaskRecoveryPolicyUsesProviderEnvRules(t *testing.T) {
+// TestRunningTaskRecoveryPolicyUsesConnectorEnvRules protects watchdog env parsing.
+func TestRunningTaskRecoveryPolicyUsesConnectorEnvRules(t *testing.T) {
 	if got := RunningTaskRecoveryTimeoutSeconds(mapLookup(map[string]string{})); got != 190 {
 		t.Fatalf("default timeout = %d", got)
 	}
-	if got := RunningTaskRecoveryTimeoutSeconds(mapLookup(map[string]string{"GO_SEND_PROVIDER_RUNNING_TASK_STALE_TIMEOUT_SEC": "30"})); got != 60 {
+	if got := RunningTaskRecoveryTimeoutSeconds(mapLookup(map[string]string{"GO_SEND_CONNECTOR_RUNNING_TASK_STALE_TIMEOUT_SEC": "30"})); got != 60 {
 		t.Fatalf("min explicit timeout = %d", got)
 	}
-	if got := RunningTaskRecoveryTimeoutSeconds(mapLookup(map[string]string{"GO_SEND_PROVIDER_RUNNING_TASK_STALE_TIMEOUT_SEC": "120"})); got != 120 {
+	if got := RunningTaskRecoveryTimeoutSeconds(mapLookup(map[string]string{"GO_SEND_CONNECTOR_RUNNING_TASK_STALE_TIMEOUT_SEC": "120"})); got != 120 {
 		t.Fatalf("explicit timeout = %d", got)
 	}
-	if got := RunningTaskRecoveryTimeoutSeconds(mapLookup(map[string]string{"GO_SEND_PROVIDER_RUNNING_TASK_STALE_TIMEOUT_SEC": "bad", "GO_SEND_PROVIDER_TIMEOUT_SEC": "20"})); got != 60 {
+	if got := RunningTaskRecoveryTimeoutSeconds(mapLookup(map[string]string{"GO_SEND_CONNECTOR_RUNNING_TASK_STALE_TIMEOUT_SEC": "bad", "GO_SEND_CONNECTOR_TIMEOUT_SEC": "20"})); got != 60 {
 		t.Fatalf("fallback timeout = %d", got)
 	}
-	if got := RunningTaskRecoveryTimeoutSeconds(mapLookup(map[string]string{"GO_SEND_PROVIDER_RUNNING_TASK_STALE_TIMEOUT_SEC": "bad", "MYTRPC_SDK_SUBPROCESS_TIMEOUT_SEC": "20"})); got != 60 {
-		t.Fatalf("compat fallback timeout = %d", got)
+	if got := RunningTaskRecoveryTimeoutSeconds(mapLookup(map[string]string{"GO_SEND_PROVIDER_RUNNING_TASK_STALE_TIMEOUT_SEC": "120"})); got != 120 {
+		t.Fatalf("provider alias explicit timeout = %d", got)
+	}
+	if got := RunningTaskRecoveryTimeoutSeconds(mapLookup(map[string]string{"GO_SEND_CONNECTOR_RUNNING_TASK_STALE_TIMEOUT_SEC": "bad", "GO_SEND_PROVIDER_TIMEOUT_SEC": "20"})); got != 60 {
+		t.Fatalf("provider timeout alias fallback = %d", got)
+	}
+	if got := RunningTaskRecoveryTimeoutSeconds(mapLookup(map[string]string{"GO_SEND_CONNECTOR_RUNNING_TASK_STALE_TIMEOUT_SEC": "bad", "MYTRPC_SDK_SUBPROCESS_TIMEOUT_SEC": "20"})); got != 60 {
+		t.Fatalf("sdk timeout compatibility fallback = %d", got)
 	}
 	if got := RunningTaskRecoveryIntervalSeconds(mapLookup(map[string]string{})); got != 30 {
 		t.Fatalf("default interval = %v", got)

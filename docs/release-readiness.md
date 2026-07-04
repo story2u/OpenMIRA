@@ -135,11 +135,11 @@ go run ./cmd/release-readiness -profile <profile> -strict
 
 ### send-dispatch
 
-范围：发送调度 worker、provider 调用、失败分类和状态回写。
+范围：发送调度 worker、outbound connector 调用、失败分类和状态回写。
 
 发布前确认：
 
-- Dispatcher 不直接绑定单一 provider。
+- Dispatcher 不直接绑定单一 outbound connector。
 - 文本、图片、文件、语音等 payload 通过统一 outbound contract。
 
 ### platform-proxy

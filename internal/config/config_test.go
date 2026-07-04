@@ -1895,7 +1895,7 @@ func TestLoadReadsSessionJWTIssuerAlias(t *testing.T) {
 func TestLoadSendConnectorConfig(t *testing.T) {
 	clearSendConnectorEnv(t)
 	cfg := Load()
-	if cfg.SendConnectorMode != "" || cfg.SendProviderBaseURL != "" || cfg.SendProviderAPIToken != "" || cfg.SendProviderTimeoutSec != 180 {
+	if cfg.SendConnectorMode != "" || cfg.SendConnectorBaseURL != "" || cfg.SendConnectorAPIToken != "" || cfg.SendConnectorTimeoutSec != 180 {
 		t.Fatalf("default send connector config = %#v", cfg)
 	}
 
@@ -1910,27 +1910,27 @@ func TestLoadSendConnectorConfig(t *testing.T) {
 	t.Setenv("GO_SEND_CONNECTOR_API_TOKEN", " connector-token ")
 	t.Setenv("GO_SEND_CONNECTOR_TIMEOUT_SEC", "2")
 	cfg = Load()
-	if cfg.SendProviderBaseURL != "https://send-connector.local" || cfg.SendProviderAPIToken != "connector-token" || cfg.SendProviderTimeoutSec != 2 {
-		t.Fatalf("send connector env base=%q token=%q timeout=%d", cfg.SendProviderBaseURL, cfg.SendProviderAPIToken, cfg.SendProviderTimeoutSec)
+	if cfg.SendConnectorBaseURL != "https://send-connector.local" || cfg.SendConnectorAPIToken != "connector-token" || cfg.SendConnectorTimeoutSec != 2 {
+		t.Fatalf("send connector env base=%q token=%q timeout=%d", cfg.SendConnectorBaseURL, cfg.SendConnectorAPIToken, cfg.SendConnectorTimeoutSec)
 	}
 
 	t.Setenv("GO_SEND_CONNECTOR_BASE_URL", "")
 	t.Setenv("GO_SEND_CONNECTOR_API_TOKEN", "")
 	t.Setenv("GO_SEND_CONNECTOR_TIMEOUT_SEC", "")
-	t.Setenv("GO_SEND_PROVIDER_BASE_URL", " https://send-provider.local ")
-	t.Setenv("GO_SEND_PROVIDER_API_TOKEN", " provider-token ")
+	t.Setenv("GO_SEND_PROVIDER_BASE_URL", " https://send-connector.local ")
+	t.Setenv("GO_SEND_PROVIDER_API_TOKEN", " connector-token ")
 	t.Setenv("GO_SEND_PROVIDER_TIMEOUT_SEC", "3")
 	cfg = Load()
-	if cfg.SendProviderBaseURL != "https://send-provider.local" || cfg.SendProviderAPIToken != "provider-token" || cfg.SendProviderTimeoutSec != 3 {
-		t.Fatalf("send provider fallback base=%q token=%q timeout=%d", cfg.SendProviderBaseURL, cfg.SendProviderAPIToken, cfg.SendProviderTimeoutSec)
+	if cfg.SendConnectorBaseURL != "https://send-connector.local" || cfg.SendConnectorAPIToken != "connector-token" || cfg.SendConnectorTimeoutSec != 3 {
+		t.Fatalf("send connector alias base=%q token=%q timeout=%d", cfg.SendConnectorBaseURL, cfg.SendConnectorAPIToken, cfg.SendConnectorTimeoutSec)
 	}
 
 	t.Setenv("GO_SEND_PROVIDER_BASE_URL", "")
-	t.Setenv("GO_SDK_EXECUTOR_BASE_URL", "http://compat-provider.local")
+	t.Setenv("GO_SDK_EXECUTOR_BASE_URL", "http://compat-connector.local")
 	t.Setenv("GO_SEND_PROVIDER_TIMEOUT_SEC", "9999")
 	cfg = Load()
-	if cfg.SendProviderBaseURL != "http://compat-provider.local" || cfg.SendProviderTimeoutSec != 1800 {
-		t.Fatalf("send provider fallback base=%q timeout=%d", cfg.SendProviderBaseURL, cfg.SendProviderTimeoutSec)
+	if cfg.SendConnectorBaseURL != "http://compat-connector.local" || cfg.SendConnectorTimeoutSec != 1800 {
+		t.Fatalf("send connector compatibility alias base=%q timeout=%d", cfg.SendConnectorBaseURL, cfg.SendConnectorTimeoutSec)
 	}
 }
 

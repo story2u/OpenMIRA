@@ -35,9 +35,9 @@ type Config struct {
 	SessionJWTIssuer                             string
 	AgentAPIToken                                string
 	SendConnectorMode                            string
-	SendProviderBaseURL                          string
-	SendProviderAPIToken                         string
-	SendProviderTimeoutSec                       int
+	SendConnectorBaseURL                         string
+	SendConnectorAPIToken                        string
+	SendConnectorTimeoutSec                      int
 	PlatformBaseURL                              string
 	PlatformAPIToken                             string
 	PlatformDefaultUserID                        int
@@ -393,9 +393,9 @@ func Load() Config {
 		SessionJWTIssuer:                             firstEnvDefault("im-cloud", "SESSION_JWT_ISS", "SESSION_JWT_ISSUER"),
 		AgentAPIToken:                                envString("AGENT_API_TOKEN", ""),
 		SendConnectorMode:                            firstEnv("GO_SEND_CONNECTOR_MODE"),
-		SendProviderBaseURL:                          firstEnv("GO_SEND_CONNECTOR_BASE_URL", "GO_SEND_PROVIDER_BASE_URL", "GO_SDK_EXECUTOR_BASE_URL", "SDK_EXECUTOR_BASE_URL", "P1_SDK_EXECUTOR_BASE_URL"),
-		SendProviderAPIToken:                         firstEnv("GO_SEND_CONNECTOR_API_TOKEN", "GO_SEND_PROVIDER_API_TOKEN", "GO_SDK_EXECUTOR_API_TOKEN", "SDK_EXECUTOR_API_TOKEN", "P1_SDK_EXECUTOR_API_TOKEN"),
-		SendProviderTimeoutSec:                       envIntRange(firstEnvValue("GO_SEND_CONNECTOR_TIMEOUT_SEC", "GO_SEND_PROVIDER_TIMEOUT_SEC", "GO_SDK_EXECUTOR_TIMEOUT_SEC", "SDK_EXECUTOR_TIMEOUT_SEC", "MYTRPC_SDK_SUBPROCESS_TIMEOUT_SEC"), 180, 1, 1800),
+		SendConnectorBaseURL:                         firstEnv("GO_SEND_CONNECTOR_BASE_URL", "GO_SEND_PROVIDER_BASE_URL", "GO_SDK_EXECUTOR_BASE_URL", "SDK_EXECUTOR_BASE_URL", "P1_SDK_EXECUTOR_BASE_URL"),
+		SendConnectorAPIToken:                        firstEnv("GO_SEND_CONNECTOR_API_TOKEN", "GO_SEND_PROVIDER_API_TOKEN", "GO_SDK_EXECUTOR_API_TOKEN", "SDK_EXECUTOR_API_TOKEN", "P1_SDK_EXECUTOR_API_TOKEN"),
+		SendConnectorTimeoutSec:                      envIntRange(firstEnvValue("GO_SEND_CONNECTOR_TIMEOUT_SEC", "GO_SEND_PROVIDER_TIMEOUT_SEC", "GO_SDK_EXECUTOR_TIMEOUT_SEC", "SDK_EXECUTOR_TIMEOUT_SEC", "MYTRPC_SDK_SUBPROCESS_TIMEOUT_SEC"), 180, 1, 1800),
 		PlatformBaseURL:                              envString("PLATFORM_BASE_URL", "https://www.henm.cn"),
 		PlatformAPIToken:                             envString("PLATFORM_API_TOKEN", ""),
 		PlatformDefaultUserID:                        envIntMin("PLATFORM_DEFAULT_USER_ID", 7294, 0),

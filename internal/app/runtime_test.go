@@ -191,9 +191,9 @@ func TestNewRuntimeBuildsTasksWithMemoryDeviceHealthStore(t *testing.T) {
 // TestNewRuntimeBuildsTasksWithSendConnectorProvider wires the optional HTTP provider boundary without pinging it.
 func TestNewRuntimeBuildsTasksWithSendConnectorProvider(t *testing.T) {
 	runtime, err := NewRuntime(context.Background(), config.Config{
-		SendProviderBaseURL:    "https://send-provider.local",
-		SendProviderAPIToken:   "provider-token",
-		SendProviderTimeoutSec: 12,
+		SendConnectorBaseURL:    "https://send-connector.local",
+		SendConnectorAPIToken:   "connector-token",
+		SendConnectorTimeoutSec: 12,
 	}, Options{BuildTasks: true})
 	if err != nil {
 		t.Fatalf("NewRuntime returned error: %v", err)
@@ -211,8 +211,8 @@ func TestNewRuntimeBuildsTasksWithSendConnectorProvider(t *testing.T) {
 func TestNewRuntimeBuildsTasksWithFakeSendConnector(t *testing.T) {
 	t.Setenv("SEND_DEVICE_ALLOWLIST", "device-1")
 	runtime, err := NewRuntime(context.Background(), config.Config{
-		SendConnectorMode:   "fake",
-		SendProviderBaseURL: "https://send-provider-should-not-be-used.local",
+		SendConnectorMode:    "fake",
+		SendConnectorBaseURL: "https://send-connector-should-not-be-used.local",
 	}, Options{BuildTasks: true})
 	if err != nil {
 		t.Fatalf("NewRuntime returned error: %v", err)
