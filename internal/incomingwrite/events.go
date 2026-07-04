@@ -27,6 +27,7 @@ type IncomingMessage struct {
 	ConversationID   string
 	ConversationKey  string
 	AccountID        string
+	ChannelUserID    string
 	WeWorkUserID     string
 	ExternalUserID   string
 	RoomID           string
@@ -48,6 +49,7 @@ type ConversationSnapshot struct {
 	ConversationID   string
 	ConversationKey  string
 	AccountID        string
+	ChannelUserID    string
 	WeWorkUserID     string
 	ExternalUserID   string
 	RoomID           string
@@ -88,6 +90,7 @@ func BuildIncomingEvents(message IncomingMessage, conversation ConversationSnaps
 	realtimeEvent := defaultText(options.PublishEventOverride, chooseRealtimeEvent(options.IsNew))
 	conversationID := defaultText(conversation.ConversationID, message.ConversationID)
 	conversationKey := defaultText(conversation.ConversationKey, conversationID)
+	channelUserID := firstNonBlank(conversation.ChannelUserID, message.ChannelUserID, conversation.WeWorkUserID, message.WeWorkUserID)
 	partitionKey := strings.TrimSpace(message.DeviceID) + ":" + strings.TrimSpace(message.SenderID)
 	events := []outbox.EventEnvelope{
 		{
@@ -105,7 +108,8 @@ func BuildIncomingEvents(message IncomingMessage, conversation ConversationSnaps
 				"resolved_conversation_id": conversationKey,
 				"tenant_id":                tenantID,
 				"trace_id":                 strings.TrimSpace(message.TraceID),
-				"wework_user_id":           defaultText(conversation.WeWorkUserID, message.WeWorkUserID),
+				"channel_user_id":          channelUserID,
+				"wework_user_id":           channelUserID,
 				"external_userid":          conversation.ExternalUserID,
 				"room_id":                  conversation.RoomID,
 				"conversation_type":        conversation.ConversationType,

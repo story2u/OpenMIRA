@@ -69,12 +69,13 @@ func TestFakeWebhookConnectorPayloadFeedsIncomingWriteInput(t *testing.T) {
 	now := time.Date(2026, 7, 4, 9, 30, 0, 0, time.UTC)
 	webhook := connector.FakeWebhookConnector{Now: func() time.Time { return now }}
 	payload := webhook.BuildIncomingQueuePayload(connector.InboundEvent{
-		EventID:     "evt-1",
-		TenantID:    "tenant-1",
-		AccountID:   "account-1",
-		MessageType: connector.MessageTypeText,
-		Content:     "hello",
-		Sender:      connector.ContactIdentity{ExternalUserID: "customer-1", DisplayName: "Alice"},
+		EventID:       "evt-1",
+		TenantID:      "tenant-1",
+		AccountID:     "account-1",
+		ChannelUserID: "channel-account-1",
+		MessageType:   connector.MessageTypeText,
+		Content:       "hello",
+		Sender:        connector.ContactIdentity{ExternalUserID: "customer-1", DisplayName: "Alice"},
 		Conversation: connector.ConversationBinding{
 			ConversationID: "conv-1",
 			Type:           "single",
@@ -86,10 +87,10 @@ func TestFakeWebhookConnectorPayloadFeedsIncomingWriteInput(t *testing.T) {
 	if input.Options.IngestSource != incominghandler.IngestSourceConnectorInbound || input.Options.CanonicalSource != incominghandler.CanonicalSourceConnector {
 		t.Fatalf("options = %+v", input.Options)
 	}
-	if input.Message.TenantID != "tenant-1" || input.Message.AccountID != "account-1" || input.Message.ExternalUserID != "customer-1" {
+	if input.Message.TenantID != "tenant-1" || input.Message.AccountID != "account-1" || input.Message.ChannelUserID != "channel-account-1" || input.Message.ExternalUserID != "customer-1" {
 		t.Fatalf("message identity = %+v", input.Message)
 	}
-	if input.Message.WeWorkUserID != "" || input.Message.MessageOrigin != "connector:internal.webhook" {
+	if input.Message.WeWorkUserID != "channel-account-1" || input.Message.MessageOrigin != "connector:internal.webhook" {
 		t.Fatalf("message channel fields = %+v", input.Message)
 	}
 }

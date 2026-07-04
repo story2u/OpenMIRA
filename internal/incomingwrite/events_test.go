@@ -9,20 +9,21 @@ func TestBuildIncomingEventsCreatesRealtimeEnvelope(t *testing.T) {
 	timestamp := time.Date(2026, 6, 30, 10, 0, 0, 123, time.UTC)
 	result := BuildIncomingEvents(
 		IncomingMessage{
-			TraceID:      "trace-1",
-			MessageID:    "msg-1",
-			TenantID:     "tenant-1",
-			DeviceID:     "device-1",
-			SenderID:     "external-1",
-			Content:      "hello",
-			MsgType:      "text",
-			Timestamp:    timestamp,
-			WeWorkUserID: "ww-1",
+			TraceID:       "trace-1",
+			MessageID:     "msg-1",
+			TenantID:      "tenant-1",
+			DeviceID:      "device-1",
+			SenderID:      "external-1",
+			Content:       "hello",
+			MsgType:       "text",
+			Timestamp:     timestamp,
+			ChannelUserID: "channel-1",
 		},
 		ConversationSnapshot{
 			ConversationID:   "conv-1",
 			ConversationKey:  "key-1",
 			AccountID:        "account-1",
+			ChannelUserID:    "conv-channel",
 			WeWorkUserID:     "conv-ww",
 			ExternalUserID:   "external-1",
 			RoomID:           "room-1",
@@ -42,7 +43,7 @@ func TestBuildIncomingEventsCreatesRealtimeEnvelope(t *testing.T) {
 	if event.EventID != "trace-1:realtime" || event.EventType != EventConversationMessage || event.PartitionKey != "device-1:external-1" {
 		t.Fatalf("event = %#v", event)
 	}
-	if event.Payload["conversation_id"] != "conv-1" || event.Payload["conversation_key"] != "key-1" || event.Payload["wework_user_id"] != "conv-ww" {
+	if event.Payload["conversation_id"] != "conv-1" || event.Payload["conversation_key"] != "key-1" || event.Payload["channel_user_id"] != "conv-channel" || event.Payload["wework_user_id"] != "conv-channel" {
 		t.Fatalf("payload identity = %#v", event.Payload)
 	}
 	if event.Payload["publish_event"] != "conversation.incoming" || event.Payload["ingest_source"] != DefaultIngestSource || event.Payload["canonical_source"] != DefaultCanonicalSource || event.Payload["reconciled_from_archive"] != true {

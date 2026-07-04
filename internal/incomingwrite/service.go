@@ -163,7 +163,7 @@ func incomingModelMessage(message IncomingMessage) incomingmodel.IncomingMessage
 		ConversationID:   message.ConversationID,
 		ConversationKey:  message.ConversationKey,
 		AccountID:        message.AccountID,
-		WeWorkUserID:     message.WeWorkUserID,
+		WeWorkUserID:     firstNonBlank(message.ChannelUserID, message.WeWorkUserID),
 		ExternalUserID:   message.ExternalUserID,
 		RoomID:           message.RoomID,
 		ConversationType: message.ConversationType,
@@ -190,6 +190,7 @@ func normalizeOutgoingMessage(message IncomingMessage, modelMessage incomingmode
 	message.AccountID = firstNonBlank(message.AccountID, normalized.AccountID)
 	message.ConversationID = firstNonBlank(message.ConversationID, normalized.ConversationID)
 	message.ConversationKey = firstNonBlank(message.ConversationKey, normalized.ConversationKey)
+	message.ChannelUserID = firstNonBlank(message.ChannelUserID, normalized.WeWorkUserID)
 	message.WeWorkUserID = firstNonBlank(message.WeWorkUserID, normalized.WeWorkUserID)
 	message.ExternalUserID = firstNonBlank(message.ExternalUserID, normalized.ExternalUserID)
 	message.RoomID = firstNonBlank(message.RoomID, normalized.RoomID)
@@ -208,6 +209,7 @@ func conversationSnapshot(snapshot incomingmodel.ConversationSnapshot) Conversat
 		ConversationID:   snapshot.ConversationID,
 		ConversationKey:  snapshot.ConversationKey,
 		AccountID:        snapshot.AccountID,
+		ChannelUserID:    snapshot.WeWorkUserID,
 		WeWorkUserID:     snapshot.WeWorkUserID,
 		ExternalUserID:   snapshot.ExternalUserID,
 		RoomID:           snapshot.RoomID,

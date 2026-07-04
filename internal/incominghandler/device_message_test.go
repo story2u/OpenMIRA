@@ -31,8 +31,8 @@ func TestBuildDeviceMessageInputMapsQueuedPayload(t *testing.T) {
 			"conversation_id":   "conv-queued",
 			"conversation_key":  "key-queued",
 			"account_id":        "account-1",
-			"wework_user_id":    "user-1",
-			"external_userid":   "customer-1",
+			"channel_user_id":   "user-1",
+			"external_user_id":  "customer-1",
 			"room_id":           "room-1",
 			"conversation_type": "single",
 			"message_id":        float64(123),
@@ -52,7 +52,7 @@ func TestBuildDeviceMessageInputMapsQueuedPayload(t *testing.T) {
 	if message.MessageID != int64(123) || message.ArchiveMsgID != "archive-1" || message.MessageOrigin != "device_realtime" {
 		t.Fatalf("message ids = %+v", message)
 	}
-	if message.ConversationID != "conv-queued" || message.ConversationKey != "key-queued" || message.AccountID != "account-1" || message.WeWorkUserID != "user-1" || message.ExternalUserID != "customer-1" || message.RoomID != "room-1" || message.ConversationType != "single" {
+	if message.ConversationID != "conv-queued" || message.ConversationKey != "key-queued" || message.AccountID != "account-1" || message.ChannelUserID != "user-1" || message.WeWorkUserID != "user-1" || message.ExternalUserID != "customer-1" || message.RoomID != "room-1" || message.ConversationType != "single" {
 		t.Fatalf("conversation fields = %+v", message)
 	}
 	if message.Timestamp.Format(time.RFC3339Nano) != "2026-06-25T00:00:00Z" {
@@ -100,7 +100,8 @@ func TestBuildDeviceMessageInputRecognizesConnectorInboundEvent(t *testing.T) {
 			"msg_type":           "text",
 			"conversation_id":    "conv-connector",
 			"conversation_key":   "internal-webhook:contact-1",
-			"external_userid":    "contact-1",
+			"channel_user_id":    "internal-account-1",
+			"external_user_id":   "contact-1",
 			"conversation_type":  "single",
 			"message_origin":     "connector:internal.webhook",
 			"connector_event_id": "external-event-1",
@@ -111,7 +112,7 @@ func TestBuildDeviceMessageInputRecognizesConnectorInboundEvent(t *testing.T) {
 		t.Fatalf("options = %+v", input.Options)
 	}
 	message := input.Message
-	if message.TraceID != "trace-connector-1" || message.WeWorkUserID != "" || message.ExternalUserID != "contact-1" || message.MessageOrigin != "connector:internal.webhook" {
+	if message.TraceID != "trace-connector-1" || message.ChannelUserID != "internal-account-1" || message.WeWorkUserID != "internal-account-1" || message.ExternalUserID != "contact-1" || message.MessageOrigin != "connector:internal.webhook" {
 		t.Fatalf("message = %+v", message)
 	}
 }

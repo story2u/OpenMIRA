@@ -12,6 +12,7 @@
     "channel": { "type": "string", "minLength": 1 },
     "tenant_id": { "type": "string", "minLength": 1 },
     "account_id": { "type": "string" },
+    "channel_user_id": { "type": "string" },
     "endpoint_id": { "type": "string" },
     "sender": { "$ref": "#/$defs/contact_identity" },
     "conversation": { "$ref": "#/$defs/conversation_binding" },

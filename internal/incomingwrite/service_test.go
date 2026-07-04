@@ -70,6 +70,7 @@ func TestServiceIngestUsesNormalizedMessageFromResultIngestor(t *testing.T) {
 		TraceID:          "trace-1",
 		TenantID:         "tenant-1",
 		DeviceID:         "device-1",
+		ChannelUserID:    "channel-account-1",
 		SenderID:         "ext-1",
 		SenderName:       "Alice",
 		Content:          "hello",
@@ -83,8 +84,11 @@ func TestServiceIngestUsesNormalizedMessageFromResultIngestor(t *testing.T) {
 	if result.OutboxRecords[0].Payload["message_id"] != int64(99) {
 		t.Fatalf("outbox payload = %#v", result.OutboxRecords[0].Payload)
 	}
-	if store.message.MessageID != 99 || store.message.MessageOrigin != incomingmodel.OriginDeviceRealtime {
+	if store.message.MessageID != 99 || store.message.MessageOrigin != incomingmodel.OriginDeviceRealtime || store.message.WeWorkUserID != "channelaccount1" {
 		t.Fatalf("store message = %+v", store.message)
+	}
+	if result.OutboxRecords[0].Payload["channel_user_id"] != "wx-1" || result.OutboxRecords[0].Payload["wework_user_id"] != "wx-1" {
+		t.Fatalf("channel identity not preserved: payload=%#v", result.OutboxRecords[0].Payload)
 	}
 }
 
