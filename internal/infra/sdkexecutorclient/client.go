@@ -1,5 +1,5 @@
-// Package sdkexecutorclient adapts an external SDK executor sidecar to the Go
-// send-dispatcher executor boundary.
+// Package sdkexecutorclient adapts an external HTTP send provider to the Go
+// send-dispatcher execution boundary.
 package sdkexecutorclient
 
 import (
@@ -17,14 +17,14 @@ import (
 
 const defaultTimeout = 180 * time.Second
 
-// Options controls optional HTTP behavior for the sidecar client.
+// Options controls optional HTTP behavior for the provider client.
 type Options struct {
 	HTTPClient *http.Client
 	Token      string
 	Timeout    time.Duration
 }
 
-// Client calls a Python-compatible SDK executor sidecar.
+// Client calls an HTTP-compatible send provider.
 type Client struct {
 	BaseURL    string
 	HTTPClient *http.Client
@@ -35,7 +35,7 @@ type Client struct {
 var _ senddispatcher.SDKExecutor = (*Client)(nil)
 var _ senddispatcher.SDKBatchExecutor = (*Client)(nil)
 
-// New builds a sidecar client. It does not ping the sidecar at startup.
+// New builds a provider client. It does not ping the provider at startup.
 func New(baseURL string, options Options) *Client {
 	timeout := options.Timeout
 	if timeout <= 0 {
@@ -82,7 +82,7 @@ func (client *Client) ListDeviceIDs(ctx context.Context) ([]string, error) {
 
 func (client *Client) doJSON(ctx context.Context, method string, path string, body any, output *any) error {
 	if client == nil || client.HTTPClient == nil || strings.TrimSpace(client.BaseURL) == "" {
-		return fmt.Errorf("sdk executor sidecar is not configured")
+		return fmt.Errorf("send provider is not configured")
 	}
 	var reader io.Reader
 	if body != nil {
@@ -112,7 +112,7 @@ func (client *Client) doJSON(ctx context.Context, method string, path string, bo
 		return err
 	}
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		return fmt.Errorf("sdk executor sidecar returned %d: %s", response.StatusCode, strings.TrimSpace(string(data)))
+		return fmt.Errorf("send provider returned %d: %s", response.StatusCode, strings.TrimSpace(string(data)))
 	}
 	if len(data) == 0 {
 		*output = map[string]any{}
@@ -131,7 +131,7 @@ func decodeResult(raw any) (senddispatcher.SDKExecutorResult, error) {
 		}
 		return senddispatcher.SDKExecutorResult(wrapped), nil
 	}
-	return nil, fmt.Errorf("sdk executor sidecar returned invalid result")
+	return nil, fmt.Errorf("send provider returned invalid result")
 }
 
 func decodeResults(raw any) ([]senddispatcher.SDKExecutorResult, error) {
@@ -146,7 +146,7 @@ func decodeResults(raw any) ([]senddispatcher.SDKExecutorResult, error) {
 	if results, ok := raw.([]any); ok {
 		return decodeResultList(results), nil
 	}
-	return nil, fmt.Errorf("sdk executor sidecar returned invalid batch result")
+	return nil, fmt.Errorf("send provider returned invalid batch result")
 }
 
 func decodeResultList(items []any) []senddispatcher.SDKExecutorResult {
@@ -154,7 +154,7 @@ func decodeResultList(items []any) []senddispatcher.SDKExecutorResult {
 	for _, item := range items {
 		result, ok := item.(map[string]any)
 		if !ok {
-			result = map[string]any{"success": false, "error": "sdk sidecar returned invalid task result"}
+			result = map[string]any{"success": false, "error": "send provider returned invalid task result"}
 		}
 		results = append(results, senddispatcher.SDKExecutorResult(result))
 	}

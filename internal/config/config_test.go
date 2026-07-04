@@ -1788,27 +1788,27 @@ func TestLoadReadsSessionJWTIssuerAlias(t *testing.T) {
 	}
 }
 
-func TestLoadSDKExecutorConfig(t *testing.T) {
-	clearSDKExecutorEnv(t)
+func TestLoadSendProviderConfig(t *testing.T) {
+	clearSendProviderEnv(t)
 	cfg := Load()
-	if cfg.SDKExecutorBaseURL != "" || cfg.SDKExecutorAPIToken != "" || cfg.SDKExecutorTimeoutSec != 180 {
-		t.Fatalf("default sdk executor config = %#v", cfg)
+	if cfg.SendProviderBaseURL != "" || cfg.SendProviderAPIToken != "" || cfg.SendProviderTimeoutSec != 180 {
+		t.Fatalf("default send provider config = %#v", cfg)
 	}
 
-	t.Setenv("GO_SDK_EXECUTOR_BASE_URL", " http://sdk-sidecar.local ")
-	t.Setenv("GO_SDK_EXECUTOR_API_TOKEN", " sidecar-token ")
-	t.Setenv("GO_SDK_EXECUTOR_TIMEOUT_SEC", "2")
+	t.Setenv("GO_SEND_PROVIDER_BASE_URL", " https://send-provider.local ")
+	t.Setenv("GO_SEND_PROVIDER_API_TOKEN", " provider-token ")
+	t.Setenv("GO_SEND_PROVIDER_TIMEOUT_SEC", "2")
 	cfg = Load()
-	if cfg.SDKExecutorBaseURL != "http://sdk-sidecar.local" || cfg.SDKExecutorAPIToken != "sidecar-token" || cfg.SDKExecutorTimeoutSec != 2 {
-		t.Fatalf("sdk executor env base=%q token=%q timeout=%d", cfg.SDKExecutorBaseURL, cfg.SDKExecutorAPIToken, cfg.SDKExecutorTimeoutSec)
+	if cfg.SendProviderBaseURL != "https://send-provider.local" || cfg.SendProviderAPIToken != "provider-token" || cfg.SendProviderTimeoutSec != 2 {
+		t.Fatalf("send provider env base=%q token=%q timeout=%d", cfg.SendProviderBaseURL, cfg.SendProviderAPIToken, cfg.SendProviderTimeoutSec)
 	}
 
-	t.Setenv("GO_SDK_EXECUTOR_BASE_URL", "")
-	t.Setenv("SDK_EXECUTOR_BASE_URL", "http://legacy-sidecar.local")
-	t.Setenv("GO_SDK_EXECUTOR_TIMEOUT_SEC", "9999")
+	t.Setenv("GO_SEND_PROVIDER_BASE_URL", "")
+	t.Setenv("GO_SDK_EXECUTOR_BASE_URL", "http://compat-provider.local")
+	t.Setenv("GO_SEND_PROVIDER_TIMEOUT_SEC", "9999")
 	cfg = Load()
-	if cfg.SDKExecutorBaseURL != "http://legacy-sidecar.local" || cfg.SDKExecutorTimeoutSec != 1800 {
-		t.Fatalf("sdk executor fallback base=%q timeout=%d", cfg.SDKExecutorBaseURL, cfg.SDKExecutorTimeoutSec)
+	if cfg.SendProviderBaseURL != "http://compat-provider.local" || cfg.SendProviderTimeoutSec != 1800 {
+		t.Fatalf("send provider fallback base=%q timeout=%d", cfg.SendProviderBaseURL, cfg.SendProviderTimeoutSec)
 	}
 }
 
@@ -1857,15 +1857,18 @@ func clearPlatformEnv(t *testing.T) {
 	}
 }
 
-func clearSDKExecutorEnv(t *testing.T) {
+func clearSendProviderEnv(t *testing.T) {
 	t.Helper()
 	for _, key := range []string{
+		"GO_SEND_PROVIDER_BASE_URL",
 		"GO_SDK_EXECUTOR_BASE_URL",
 		"SDK_EXECUTOR_BASE_URL",
 		"P1_SDK_EXECUTOR_BASE_URL",
+		"GO_SEND_PROVIDER_API_TOKEN",
 		"GO_SDK_EXECUTOR_API_TOKEN",
 		"SDK_EXECUTOR_API_TOKEN",
 		"P1_SDK_EXECUTOR_API_TOKEN",
+		"GO_SEND_PROVIDER_TIMEOUT_SEC",
 		"GO_SDK_EXECUTOR_TIMEOUT_SEC",
 		"SDK_EXECUTOR_TIMEOUT_SEC",
 		"MYTRPC_SDK_SUBPROCESS_TIMEOUT_SEC",

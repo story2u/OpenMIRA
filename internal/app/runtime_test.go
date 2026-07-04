@@ -188,22 +188,22 @@ func TestNewRuntimeBuildsTasksWithMemoryDeviceHealthStore(t *testing.T) {
 	}
 }
 
-// TestNewRuntimeBuildsTasksWithSDKExecutorSidecar wires the optional real executor boundary without pinging it.
-func TestNewRuntimeBuildsTasksWithSDKExecutorSidecar(t *testing.T) {
+// TestNewRuntimeBuildsTasksWithSendProvider wires the optional real provider boundary without pinging it.
+func TestNewRuntimeBuildsTasksWithSendProvider(t *testing.T) {
 	runtime, err := NewRuntime(context.Background(), config.Config{
-		SDKExecutorBaseURL:    "http://sdk-sidecar.local",
-		SDKExecutorAPIToken:   "sidecar-token",
-		SDKExecutorTimeoutSec: 12,
+		SendProviderBaseURL:    "https://send-provider.local",
+		SendProviderAPIToken:   "provider-token",
+		SendProviderTimeoutSec: 12,
 	}, Options{BuildTasks: true})
 	if err != nil {
 		t.Fatalf("NewRuntime returned error: %v", err)
 	}
 	defer runtime.Close()
 	if runtime.Tasks == nil || runtime.Tasks.SendDispatcher.ExecuteBatch == nil {
-		t.Fatalf("sdk executor not wired: %+v", runtime.Tasks)
+		t.Fatalf("send provider not wired: %+v", runtime.Tasks)
 	}
 	if runtime.Tasks.SendDispatcher.ListDevices == nil {
-		t.Fatalf("sdk device lister not wired: %+v", runtime.Tasks)
+		t.Fatalf("send provider device lister not wired: %+v", runtime.Tasks)
 	}
 }
 

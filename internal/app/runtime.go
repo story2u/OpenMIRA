@@ -242,13 +242,13 @@ func NewRuntime(ctx context.Context, cfg config.Config, options Options) (*Runti
 				taskStatusPublisher = taskstatuspublisher.New(realtimeHub)
 			}
 		}
-		if strings.TrimSpace(cfg.SDKExecutorBaseURL) != "" {
-			sidecar := sdkexecutorclient.New(cfg.SDKExecutorBaseURL, sdkexecutorclient.Options{
-				Token:   cfg.SDKExecutorAPIToken,
-				Timeout: time.Duration(cfg.SDKExecutorTimeoutSec) * time.Second,
+		if strings.TrimSpace(cfg.SendProviderBaseURL) != "" {
+			provider := sdkexecutorclient.New(cfg.SendProviderBaseURL, sdkexecutorclient.Options{
+				Token:   cfg.SendProviderAPIToken,
+				Timeout: time.Duration(cfg.SendProviderTimeoutSec) * time.Second,
 			})
-			sdkExecutor = sidecar
-			listSDKDevices = sidecar.ListDeviceIDs
+			sdkExecutor = provider
+			listSDKDevices = provider.ListDeviceIDs
 		}
 		if deviceHealthRecorder == nil || deviceHealthReader == nil {
 			deviceHealth := sdkdevicehealthstore.NewMemory()

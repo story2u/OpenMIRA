@@ -12,9 +12,9 @@ import (
 
 const sdkLastErrorMaxLen = 500
 
-// RunningTaskRecoveryTimeoutSeconds returns when stale SDK running tasks are recovered.
+// RunningTaskRecoveryTimeoutSeconds returns when stale provider tasks are recovered.
 func RunningTaskRecoveryTimeoutSeconds(lookup EnvLookup) int {
-	raw := strings.TrimSpace(envLookup(lookup, "P1_SDK_RUNNING_TASK_STALE_TIMEOUT_SEC"))
+	raw := strings.TrimSpace(firstEnv(lookup, "GO_SEND_PROVIDER_RUNNING_TASK_STALE_TIMEOUT_SEC", "P1_SDK_RUNNING_TASK_STALE_TIMEOUT_SEC"))
 	if raw != "" {
 		value, err := strconv.Atoi(raw)
 		if err == nil {
@@ -24,18 +24,18 @@ func RunningTaskRecoveryTimeoutSeconds(lookup EnvLookup) int {
 			return value
 		}
 	}
-	sdkTimeoutRaw := strings.TrimSpace(envLookup(lookup, "MYTRPC_SDK_SUBPROCESS_TIMEOUT_SEC"))
-	if sdkTimeoutRaw == "" {
-		sdkTimeoutRaw = "180"
+	providerTimeoutRaw := strings.TrimSpace(firstEnv(lookup, "GO_SEND_PROVIDER_TIMEOUT_SEC", "GO_SDK_EXECUTOR_TIMEOUT_SEC", "SDK_EXECUTOR_TIMEOUT_SEC", "MYTRPC_SDK_SUBPROCESS_TIMEOUT_SEC"))
+	if providerTimeoutRaw == "" {
+		providerTimeoutRaw = "180"
 	}
-	sdkTimeout, err := strconv.Atoi(sdkTimeoutRaw)
+	providerTimeout, err := strconv.Atoi(providerTimeoutRaw)
 	if err != nil {
-		sdkTimeout = 180
+		providerTimeout = 180
 	}
-	if sdkTimeout < 10 {
-		sdkTimeout = 10
+	if providerTimeout < 10 {
+		providerTimeout = 10
 	}
-	timeout := sdkTimeout + 10
+	timeout := providerTimeout + 10
 	if timeout < 60 {
 		return 60
 	}

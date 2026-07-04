@@ -1,6 +1,5 @@
-// Package config centralizes phase-one runtime settings for the Go rewrite.
-// It mirrors the legacy Python environment names where compatibility matters,
-// while keeping this skeleton read-only toward the existing production system.
+// Package config centralizes runtime settings for the standalone Go services.
+// Older environment names are accepted only as compatibility aliases.
 package config
 
 import (
@@ -10,7 +9,7 @@ import (
 	"strings"
 )
 
-// Config describes the minimal process settings needed by the phase-one API.
+// Config describes the process settings needed by API and worker roles.
 type Config struct {
 	Addr                                         string
 	RuntimeRole                                  string
@@ -34,9 +33,9 @@ type Config struct {
 	SessionJWTSecret                             string
 	SessionJWTIssuer                             string
 	AgentAPIToken                                string
-	SDKExecutorBaseURL                           string
-	SDKExecutorAPIToken                          string
-	SDKExecutorTimeoutSec                        int
+	SendProviderBaseURL                          string
+	SendProviderAPIToken                         string
+	SendProviderTimeoutSec                       int
 	PlatformBaseURL                              string
 	PlatformAPIToken                             string
 	PlatformDefaultUserID                        int
@@ -382,9 +381,9 @@ func Load() Config {
 		SessionJWTSecret:                             envString("SESSION_JWT_SECRET", ""),
 		SessionJWTIssuer:                             firstEnvDefault("wework-cloud", "SESSION_JWT_ISS", "SESSION_JWT_ISSUER"),
 		AgentAPIToken:                                envString("AGENT_API_TOKEN", ""),
-		SDKExecutorBaseURL:                           firstEnv("GO_SDK_EXECUTOR_BASE_URL", "SDK_EXECUTOR_BASE_URL", "P1_SDK_EXECUTOR_BASE_URL"),
-		SDKExecutorAPIToken:                          firstEnv("GO_SDK_EXECUTOR_API_TOKEN", "SDK_EXECUTOR_API_TOKEN", "P1_SDK_EXECUTOR_API_TOKEN"),
-		SDKExecutorTimeoutSec:                        envIntRange(firstEnvValue("GO_SDK_EXECUTOR_TIMEOUT_SEC", "SDK_EXECUTOR_TIMEOUT_SEC", "MYTRPC_SDK_SUBPROCESS_TIMEOUT_SEC"), 180, 1, 1800),
+		SendProviderBaseURL:                          firstEnv("GO_SEND_PROVIDER_BASE_URL", "GO_SDK_EXECUTOR_BASE_URL", "SDK_EXECUTOR_BASE_URL", "P1_SDK_EXECUTOR_BASE_URL"),
+		SendProviderAPIToken:                         firstEnv("GO_SEND_PROVIDER_API_TOKEN", "GO_SDK_EXECUTOR_API_TOKEN", "SDK_EXECUTOR_API_TOKEN", "P1_SDK_EXECUTOR_API_TOKEN"),
+		SendProviderTimeoutSec:                       envIntRange(firstEnvValue("GO_SEND_PROVIDER_TIMEOUT_SEC", "GO_SDK_EXECUTOR_TIMEOUT_SEC", "SDK_EXECUTOR_TIMEOUT_SEC", "MYTRPC_SDK_SUBPROCESS_TIMEOUT_SEC"), 180, 1, 1800),
 		PlatformBaseURL:                              envString("PLATFORM_BASE_URL", "https://www.henm.cn"),
 		PlatformAPIToken:                             envString("PLATFORM_API_TOKEN", ""),
 		PlatformDefaultUserID:                        envIntMin("PLATFORM_DEFAULT_USER_ID", 7294, 0),

@@ -12,13 +12,13 @@ import (
 	"wework-go/internal/senddispatcher"
 )
 
-// TestClientExecutePostsWrappedTaskAndDecodesResult protects the sidecar execute contract.
+// TestClientExecutePostsWrappedTaskAndDecodesResult protects the provider execute contract.
 func TestClientExecutePostsWrappedTaskAndDecodesResult(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost || r.URL.Path != "/execute" {
 			t.Fatalf("request = %s %s", r.Method, r.URL.Path)
 		}
-		if r.Header.Get("Authorization") != "Bearer sidecar-token" {
+		if r.Header.Get("Authorization") != "Bearer provider-token" {
 			t.Fatalf("Authorization = %q", r.Header.Get("Authorization"))
 		}
 		var request map[string]map[string]any
@@ -34,7 +34,7 @@ func TestClientExecutePostsWrappedTaskAndDecodesResult(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := New(server.URL+"/", Options{Token: " sidecar-token ", Timeout: time.Second})
+	client := New(server.URL+"/", Options{Token: " provider-token ", Timeout: time.Second})
 	result, err := client.Execute(context.Background(), senddispatcher.SDKTaskPayload{"task_id": "task-sdk-1", "device_id": "zimo"})
 	if err != nil {
 		t.Fatalf("Execute returned error: %v", err)
@@ -44,7 +44,7 @@ func TestClientExecutePostsWrappedTaskAndDecodesResult(t *testing.T) {
 	}
 }
 
-// TestClientExecuteBatchSupportsArrayResponse keeps batch sidecar output flexible.
+// TestClientExecuteBatchSupportsArrayResponse keeps batch provider output flexible.
 func TestClientExecuteBatchSupportsArrayResponse(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost || r.URL.Path != "/execute-batch" {
@@ -106,7 +106,7 @@ func TestClientListDeviceIDsDecodesFlexibleShapes(t *testing.T) {
 	}
 }
 
-// TestClientReportsNon2xxResponse keeps sidecar failures visible to dispatcher retry logic.
+// TestClientReportsNon2xxResponse keeps provider failures visible to dispatcher retry logic.
 func TestClientReportsNon2xxResponse(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "executor unavailable", http.StatusBadGateway)

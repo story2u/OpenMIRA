@@ -1,6 +1,6 @@
-// Package senddispatcher contains durable SDK dispatcher decision rules.
-// It intentionally does not execute SDK or RPA work; runtime loops will reuse
-// these rules before a claimed task reaches the executor boundary.
+// Package senddispatcher contains durable send task dispatcher decision rules.
+// It intentionally does not execute provider work; runtime loops reuse these
+// rules before a claimed task reaches the execution boundary.
 package senddispatcher
 
 import (
