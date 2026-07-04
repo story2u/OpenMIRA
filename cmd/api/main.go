@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -22,7 +23,11 @@ func main() {
 	if addr == "" {
 		addr = ":8080"
 	}
-	app := newApp()
+	store, err := newStoreFromEnv()
+	if err != nil {
+		log.Fatalf("store init failed: %v", err)
+	}
+	app := newAppWithStore(store)
 	server := &http.Server{
 		Addr:              addr,
 		Handler:           app.routes(),
@@ -45,11 +50,36 @@ func main() {
 }
 
 type app struct {
-	store *memoryStore
+	store dataStore
 }
 
 func newApp() *app {
-	return &app{store: newMemoryStore()}
+	return newAppWithStore(newMemoryStore())
+}
+
+func newAppWithStore(store dataStore) *app {
+	return &app{store: store}
+}
+
+func newStoreFromEnv() (dataStore, error) {
+	dataFile := strings.TrimSpace(os.Getenv("IM_DATA_FILE"))
+	if dataFile == "" {
+		return newMemoryStore(), nil
+	}
+	return newPersistentStore(dataFile)
+}
+
+type dataStore interface {
+	addMessage(direction string, input messageInput) (message, error)
+	messages(conversationID string) []message
+	upsertSOPFlow(flow sopFlow) (sopFlow, error)
+	sopFlows() []sopFlow
+	deleteSOPFlow(flowID string) (bool, error)
+	upsertSOPPolicy(policy sopPolicy) (sopPolicy, error)
+	sopPolicies() []sopPolicy
+	deleteSOPPolicy(policyID string) (bool, error)
+	createSOPTask(task sopTask) (sopTask, error)
+	sopTasks() []sopTask
 }
 
 func (app *app) routes() http.Handler {
@@ -87,7 +117,7 @@ func (app *app) incomingMessage(w http.ResponseWriter, r *http.Request) {
 	}
 	message, err := app.store.addMessage("incoming", input)
 	if err != nil {
-		writeError(w, http.StatusUnprocessableEntity, err.Error())
+		writeStoreError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
@@ -106,7 +136,7 @@ func (app *app) sendText(w http.ResponseWriter, r *http.Request) {
 	input.MsgType = "text"
 	message, err := app.store.addMessage("outgoing", input)
 	if err != nil {
-		writeError(w, http.StatusUnprocessableEntity, err.Error())
+		writeStoreError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
@@ -141,14 +171,18 @@ func (app *app) upsertSOPFlow(w http.ResponseWriter, r *http.Request) {
 	}
 	stored, err := app.store.upsertSOPFlow(flow)
 	if err != nil {
-		writeError(w, http.StatusUnprocessableEntity, err.Error())
+		writeStoreError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"success": true, "flow": stored})
 }
 
 func (app *app) deleteSOPFlow(w http.ResponseWriter, r *http.Request) {
-	deleted := app.store.deleteSOPFlow(r.PathValue("flow_id"))
+	deleted, err := app.store.deleteSOPFlow(r.PathValue("flow_id"))
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]any{"success": deleted})
 }
 
@@ -164,14 +198,18 @@ func (app *app) upsertSOPPolicy(w http.ResponseWriter, r *http.Request) {
 	}
 	stored, err := app.store.upsertSOPPolicy(policy)
 	if err != nil {
-		writeError(w, http.StatusUnprocessableEntity, err.Error())
+		writeStoreError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"success": true, "policy": stored})
 }
 
 func (app *app) deleteSOPPolicy(w http.ResponseWriter, r *http.Request) {
-	deleted := app.store.deleteSOPPolicy(r.PathValue("policy_id"))
+	deleted, err := app.store.deleteSOPPolicy(r.PathValue("policy_id"))
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]any{"success": deleted})
 }
 
@@ -187,7 +225,7 @@ func (app *app) createSOPDispatchTask(w http.ResponseWriter, r *http.Request) {
 	}
 	task, err := app.store.createSOPTask(input)
 	if err != nil {
-		writeError(w, http.StatusUnprocessableEntity, err.Error())
+		writeStoreError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"success": true, "task": task})
@@ -221,8 +259,19 @@ func newMemoryStore() *memoryStore {
 		policies:      make(map[string]sopPolicy),
 		tasks:         make(map[string]sopTask),
 	}
-	_, _ = store.upsertSOPFlow(sopFlow{FlowID: "default", FlowName: "Default SOP", Enabled: true})
+	store.flows["default"] = defaultSOPFlow()
 	return store
+}
+
+func defaultSOPFlow() sopFlow {
+	return sopFlow{
+		FlowID:         "default",
+		FlowName:       "Default SOP",
+		TargetAudience: "all",
+		ExecutionMode:  "message_sequence",
+		Enabled:        true,
+		UpdatedAt:      time.Now().UTC().Format(time.RFC3339Nano),
+	}
 }
 
 type messageInput struct {
@@ -291,6 +340,250 @@ func (store *memoryStore) messages(conversationID string) []message {
 	return items
 }
 
+type storeSnapshot struct {
+	NextID        uint64               `json:"next_id"`
+	Conversations map[string][]message `json:"conversations"`
+	Flows         map[string]sopFlow   `json:"flows"`
+	Policies      map[string]sopPolicy `json:"policies"`
+	Tasks         map[string]sopTask   `json:"tasks"`
+}
+
+func (store *memoryStore) snapshot() storeSnapshot {
+	store.mu.RLock()
+	defer store.mu.RUnlock()
+	return storeSnapshot{
+		NextID:        store.nextID.Load(),
+		Conversations: copyConversations(store.conversations),
+		Flows:         copySOPFlows(store.flows),
+		Policies:      copySOPPolicies(store.policies),
+		Tasks:         copySOPTasks(store.tasks),
+	}
+}
+
+func (store *memoryStore) restore(snapshot storeSnapshot) {
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	store.nextID.Store(snapshot.NextID)
+	store.conversations = copyConversations(snapshot.Conversations)
+	store.flows = copySOPFlows(snapshot.Flows)
+	store.policies = copySOPPolicies(snapshot.Policies)
+	store.tasks = copySOPTasks(snapshot.Tasks)
+	if store.conversations == nil {
+		store.conversations = make(map[string][]message)
+	}
+	if store.flows == nil {
+		store.flows = make(map[string]sopFlow)
+	}
+	if store.policies == nil {
+		store.policies = make(map[string]sopPolicy)
+	}
+	if store.tasks == nil {
+		store.tasks = make(map[string]sopTask)
+	}
+	if _, ok := store.flows["default"]; !ok {
+		store.flows["default"] = defaultSOPFlow()
+	}
+}
+
+func copyConversations(source map[string][]message) map[string][]message {
+	if source == nil {
+		return nil
+	}
+	copied := make(map[string][]message, len(source))
+	for key, value := range source {
+		copied[key] = append([]message(nil), value...)
+	}
+	return copied
+}
+
+func copySOPFlows(source map[string]sopFlow) map[string]sopFlow {
+	if source == nil {
+		return nil
+	}
+	copied := make(map[string]sopFlow, len(source))
+	for key, value := range source {
+		copied[key] = value
+	}
+	return copied
+}
+
+func copySOPPolicies(source map[string]sopPolicy) map[string]sopPolicy {
+	if source == nil {
+		return nil
+	}
+	copied := make(map[string]sopPolicy, len(source))
+	for key, value := range source {
+		value.MessageSequence = append([]string(nil), value.MessageSequence...)
+		copied[key] = value
+	}
+	return copied
+}
+
+func copySOPTasks(source map[string]sopTask) map[string]sopTask {
+	if source == nil {
+		return nil
+	}
+	copied := make(map[string]sopTask, len(source))
+	for key, value := range source {
+		copied[key] = value
+	}
+	return copied
+}
+
+type persistentStore struct {
+	mu    sync.Mutex
+	inner *memoryStore
+	path  string
+}
+
+func newPersistentStore(path string) (*persistentStore, error) {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return nil, errors.New("IM_DATA_FILE is empty")
+	}
+	store := &persistentStore{inner: newMemoryStore(), path: path}
+	if err := store.load(); err != nil {
+		return nil, err
+	}
+	return store, nil
+}
+
+func (store *persistentStore) load() error {
+	data, err := os.ReadFile(store.path)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("read data file: %w", err)
+	}
+	if strings.TrimSpace(string(data)) == "" {
+		return nil
+	}
+	var snapshot storeSnapshot
+	if err := json.Unmarshal(data, &snapshot); err != nil {
+		return fmt.Errorf("decode data file: %w", err)
+	}
+	store.inner.restore(snapshot)
+	return nil
+}
+
+func (store *persistentStore) save() error {
+	snapshot := store.inner.snapshot()
+	data, err := json.MarshalIndent(snapshot, "", "  ")
+	if err != nil {
+		return fmt.Errorf("encode data file: %w", err)
+	}
+	data = append(data, '\n')
+	dir := filepath.Dir(store.path)
+	if dir != "." && dir != "" {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			return fmt.Errorf("create data dir: %w", err)
+		}
+	}
+	pendingPath := store.path + ".pending"
+	if err := os.WriteFile(pendingPath, data, 0o600); err != nil {
+		return fmt.Errorf("write data file: %w", err)
+	}
+	if err := os.Rename(pendingPath, store.path); err != nil {
+		return fmt.Errorf("replace data file: %w", err)
+	}
+	return nil
+}
+
+func (store *persistentStore) addMessage(direction string, input messageInput) (message, error) {
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	message, err := store.inner.addMessage(direction, input)
+	if err != nil {
+		return message, err
+	}
+	if err := store.save(); err != nil {
+		return message, newStorageError("persist message", err)
+	}
+	return message, nil
+}
+
+func (store *persistentStore) messages(conversationID string) []message {
+	return store.inner.messages(conversationID)
+}
+
+func (store *persistentStore) upsertSOPFlow(flow sopFlow) (sopFlow, error) {
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	stored, err := store.inner.upsertSOPFlow(flow)
+	if err != nil {
+		return stored, err
+	}
+	if err := store.save(); err != nil {
+		return stored, newStorageError("persist sop flow", err)
+	}
+	return stored, nil
+}
+
+func (store *persistentStore) sopFlows() []sopFlow {
+	return store.inner.sopFlows()
+}
+
+func (store *persistentStore) deleteSOPFlow(flowID string) (bool, error) {
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	deleted, err := store.inner.deleteSOPFlow(flowID)
+	if err != nil || !deleted {
+		return deleted, err
+	}
+	if err := store.save(); err != nil {
+		return deleted, newStorageError("persist sop flow delete", err)
+	}
+	return deleted, nil
+}
+
+func (store *persistentStore) upsertSOPPolicy(policy sopPolicy) (sopPolicy, error) {
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	stored, err := store.inner.upsertSOPPolicy(policy)
+	if err != nil {
+		return stored, err
+	}
+	if err := store.save(); err != nil {
+		return stored, newStorageError("persist sop policy", err)
+	}
+	return stored, nil
+}
+
+func (store *persistentStore) sopPolicies() []sopPolicy {
+	return store.inner.sopPolicies()
+}
+
+func (store *persistentStore) deleteSOPPolicy(policyID string) (bool, error) {
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	deleted, err := store.inner.deleteSOPPolicy(policyID)
+	if err != nil || !deleted {
+		return deleted, err
+	}
+	if err := store.save(); err != nil {
+		return deleted, newStorageError("persist sop policy delete", err)
+	}
+	return deleted, nil
+}
+
+func (store *persistentStore) createSOPTask(task sopTask) (sopTask, error) {
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	stored, err := store.inner.createSOPTask(task)
+	if err != nil {
+		return stored, err
+	}
+	if err := store.save(); err != nil {
+		return stored, newStorageError("persist sop task", err)
+	}
+	return stored, nil
+}
+
+func (store *persistentStore) sopTasks() []sopTask {
+	return store.inner.sopTasks()
+}
+
 type sopFlow struct {
 	FlowID         string `json:"flow_id"`
 	FlowName       string `json:"flow_name"`
@@ -323,16 +616,16 @@ func (store *memoryStore) sopFlows() []sopFlow {
 	return flows
 }
 
-func (store *memoryStore) deleteSOPFlow(flowID string) bool {
+func (store *memoryStore) deleteSOPFlow(flowID string) (bool, error) {
 	flowID = strings.TrimSpace(flowID)
 	if flowID == "" || flowID == "default" {
-		return false
+		return false, nil
 	}
 	store.mu.Lock()
 	defer store.mu.Unlock()
 	_, ok := store.flows[flowID]
 	delete(store.flows, flowID)
-	return ok
+	return ok, nil
 }
 
 type sopPolicy struct {
@@ -381,16 +674,16 @@ func (store *memoryStore) sopPolicies() []sopPolicy {
 	return policies
 }
 
-func (store *memoryStore) deleteSOPPolicy(policyID string) bool {
+func (store *memoryStore) deleteSOPPolicy(policyID string) (bool, error) {
 	policyID = strings.TrimSpace(policyID)
 	if policyID == "" {
-		return false
+		return false, nil
 	}
 	store.mu.Lock()
 	defer store.mu.Unlock()
 	_, ok := store.policies[policyID]
 	delete(store.policies, policyID)
-	return ok
+	return ok, nil
 }
 
 type sopTask struct {
@@ -454,4 +747,30 @@ func writeJSON(w http.ResponseWriter, status int, payload any) {
 
 func writeError(w http.ResponseWriter, status int, detail string) {
 	writeJSON(w, status, map[string]string{"detail": detail})
+}
+
+type storageError struct {
+	op  string
+	err error
+}
+
+func newStorageError(op string, err error) error {
+	return &storageError{op: op, err: err}
+}
+
+func (err *storageError) Error() string {
+	return err.op + ": " + err.err.Error()
+}
+
+func (err *storageError) Unwrap() error {
+	return err.err
+}
+
+func writeStoreError(w http.ResponseWriter, err error) {
+	status := http.StatusUnprocessableEntity
+	var persisted *storageError
+	if errors.As(err, &persisted) {
+		status = http.StatusInternalServerError
+	}
+	writeError(w, status, err.Error())
 }

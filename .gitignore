@@ -34,6 +34,7 @@ go.work.sum
 Thumbs.db
 
 # Temporary files
+.local/
 tmp/
 *.tmp
 *.log
@@ -44,10 +45,6 @@ web/.next/
 web/out/
 web/.env.local
 web/.env.*.local
-
-# Test artifacts
-testdata/golden/*.actual.json
-testdata/replay/*.actual.json
 
 # Coverage
 coverage.txt

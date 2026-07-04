@@ -19,5 +19,7 @@ WORKDIR /app
 COPY --from=build /out/app /app/app
 
 ENV ADDR=:8080
+ENV IM_DATA_FILE=/data/im-slim.json
+VOLUME ["/data"]
 EXPOSE 8080
 ENTRYPOINT ["/app/app"]

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -45,6 +46,33 @@ func TestSlimAPISOPFlowAndPolicy(t *testing.T) {
 	body := response.Body.String()
 	if !strings.Contains(body, `"policy_id":"p1"`) || !strings.Contains(body, `"reply_text":"欢迎咨询"`) {
 		t.Fatalf("unexpected policies payload: %s", body)
+	}
+}
+
+func TestPersistentStoreReloadsMessagesAndSOP(t *testing.T) {
+	dataFile := filepath.Join(t.TempDir(), "im-slim.json")
+	store, err := newPersistentStore(dataFile)
+	if err != nil {
+		t.Fatalf("new persistent store: %v", err)
+	}
+	api := newAppWithStore(store).routes()
+	postJSON(t, api, "/api/v1/messages/incoming", `{"conversation_id":"conv-durable","sender_id":"customer-1","content":"hello"}`)
+	postJSON(t, api, "/api/v1/admin/sop/flows", `{"flow_id":"welcome","flow_name":"Welcome","enabled":true}`)
+	postJSON(t, api, "/api/v1/admin/sop/policies", `{"policy_id":"p1","flow_id":"welcome","name":"First reply","reply_text":"welcome","enabled":true}`)
+	postJSON(t, api, "/api/v1/admin/sop/dispatch-tasks", `{"task_id":"task-1","conversation_id":"conv-durable","flow_id":"welcome","policy_id":"p1"}`)
+
+	reloaded, err := newPersistentStore(dataFile)
+	if err != nil {
+		t.Fatalf("reload persistent store: %v", err)
+	}
+	if messages := reloaded.messages("conv-durable"); len(messages) != 1 || messages[0].Content != "hello" {
+		t.Fatalf("reloaded messages = %+v", messages)
+	}
+	if policies := reloaded.sopPolicies(); len(policies) != 1 || policies[0].PolicyID != "p1" {
+		t.Fatalf("reloaded policies = %+v", policies)
+	}
+	if tasks := reloaded.sopTasks(); len(tasks) != 1 || tasks[0].TaskID != "task-1" {
+		t.Fatalf("reloaded tasks = %+v", tasks)
 	}
 }
 

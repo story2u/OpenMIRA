@@ -23,6 +23,16 @@ go run ./cmd/api
 
 The API listens on `:8080` by default. Override it with `ADDR`.
 
+By default, local `go run` uses in-memory storage. Set `IM_DATA_FILE` to keep
+messages and SOP data across restarts:
+
+```bash
+IM_DATA_FILE=.local/im-slim.json go run ./cmd/api
+```
+
+The API Docker image stores data at `/data/im-slim.json` by default. Mount
+`/data` when running it as a container.
+
 ```bash
 cd web
 npm install
@@ -38,15 +48,8 @@ npm --prefix web test
 npm --prefix web run build
 ```
 
-Or run the slim gate:
-
-```bash
-bash scripts/slim_gate.sh
-```
-
 ## Current Tradeoff
 
-The reset branch favors a clear, tiny product core over preserving historical
-compatibility. The in-memory backend proves the retained API and frontend shape;
-the next step is adding durable storage and queueing only for this reduced
-message/SOP scope.
+The reset branch favors a clear, tiny product core with optional file
+persistence. The next step is replacing that local persistence with production
+storage and queueing only for this reduced message/SOP scope.

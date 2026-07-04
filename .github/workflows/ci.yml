@@ -32,5 +32,14 @@ jobs:
       - name: Install web dependencies
         run: npm --prefix web ci
 
-      - name: Run slim gate
-        run: sh scripts/slim_gate.sh
+      - name: Test API
+        run: go test ./...
+
+      - name: Vet API
+        run: go vet ./...
+
+      - name: Test web
+        run: npm --prefix web test
+
+      - name: Build web
+        run: npm --prefix web run build
