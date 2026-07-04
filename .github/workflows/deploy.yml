@@ -133,6 +133,11 @@ jobs:
           echo "Pulling images for: $COMPOSE_SERVICES"
           docker compose --env-file .env pull $COMPOSE_SERVICES
 
+          if docker ps -a --filter "label=com.docker.compose.project=im-go-cloud" --format '{{.ID}}' | grep -q .; then
+            echo "Stopping legacy im-go-cloud compose project..."
+            docker compose --env-file .env -p im-go-cloud down --remove-orphans
+          fi
+
           echo "Starting services..."
           docker compose --env-file .env up -d --remove-orphans $COMPOSE_SERVICES
 

@@ -110,7 +110,7 @@ func markdownRunbook(profileNames []string) string {
 	b.WriteString("## Profile Index\n\n")
 	for _, name := range profileNames {
 		profile := resolveProfileOrExit(name)
-		b.WriteString(fmt.Sprintf("- [%s](#%s): %s\n", profile.Name, anchorForProfile(profile.Name), escapeRunbookText(profile.Description)))
+		fmt.Fprintf(&b, "- [%s](#%s): %s\n", profile.Name, anchorForProfile(profile.Name), escapeRunbookText(profile.Description))
 	}
 	b.WriteString("\n")
 
@@ -129,8 +129,8 @@ func writeProfileRunbook(b *strings.Builder, profile readiness.Profile) {
 	b.WriteString("\n\n")
 	b.WriteString("Readiness command:\n\n")
 	b.WriteString("```bash\n")
-	b.WriteString(fmt.Sprintf("go run ./cmd/release-readiness -profile %s -format markdown\n", profile.Name))
-	b.WriteString(fmt.Sprintf("go run ./cmd/release-readiness -profile %s -strict\n", profile.Name))
+	fmt.Fprintf(b, "go run ./cmd/release-readiness -profile %s -format markdown\n", profile.Name)
+	fmt.Fprintf(b, "go run ./cmd/release-readiness -profile %s -strict\n", profile.Name)
 	b.WriteString("```\n\n")
 	b.WriteString("Suggested order:\n\n")
 	b.WriteString("1. Ensure every route below is present in Go candidate metadata.\n")
@@ -155,7 +155,7 @@ func writeRouteTable(b *strings.Builder, routes []readiness.RouteRequirement) {
 	b.WriteString("| Method | Path |\n")
 	b.WriteString("| --- | --- |\n")
 	for _, route := range routes {
-		b.WriteString(fmt.Sprintf("| `%s` | `%s` |\n", escapeRunbookText(route.Method), escapeRunbookText(route.Path)))
+		fmt.Fprintf(b, "| `%s` | `%s` |\n", escapeRunbookText(route.Method), escapeRunbookText(route.Path))
 	}
 	b.WriteString("\n")
 }
@@ -280,15 +280,15 @@ func markdownAggregateReport(report aggregateReport) string {
 	b.WriteString("# Release Readiness Aggregate Report\n\n")
 	b.WriteString("| Field | Value |\n")
 	b.WriteString("| --- | --- |\n")
-	b.WriteString(fmt.Sprintf("| Total profiles | %d |\n", report.TotalCount))
-	b.WriteString(fmt.Sprintf("| Ready profiles | %d |\n", report.ReadyCount))
-	b.WriteString(fmt.Sprintf("| Ready | `%t` |\n\n", report.Ready))
+	fmt.Fprintf(&b, "| Total profiles | %d |\n", report.TotalCount)
+	fmt.Fprintf(&b, "| Ready profiles | %d |\n", report.ReadyCount)
+	fmt.Fprintf(&b, "| Ready | `%t` |\n\n", report.Ready)
 
 	for _, profileReport := range report.Profiles {
 		b.WriteString("## Profile `")
 		b.WriteString(profileReport.Profile)
 		b.WriteString("`\n\n")
-		b.WriteString(fmt.Sprintf("Description: %s\n\n", profileReport.Description))
+		fmt.Fprintf(&b, "Description: %s\n\n", profileReport.Description)
 		b.WriteString(readiness.MarkdownReport(profileReport))
 	}
 	return b.String()
