@@ -137,6 +137,101 @@ func TestHandleEventAcknowledgesUnsupportedCallback(t *testing.T) {
 	}
 }
 
+func TestHandleEventQueuesIncomingMessageCallback(t *testing.T) {
+	queue := &fakeIncomingQueue{}
+	relations := &fakeRelations{supported: false}
+	service := Service{
+		Enterprises: fakeStore{enterprise: &archivecallback.Enterprise{
+			EnterpriseID:   "ent-1",
+			CorpID:         "corp-1",
+			CallbackToken:  "token",
+			CallbackAESKey: "aes-key",
+		}},
+		Decryptor: &fakeDecryptor{plain: `<xml>
+<ToUserName><![CDATA[corp-1]]></ToUserName>
+<FromUserName><![CDATA[external-1]]></FromUserName>
+<CreateTime>1783000000</CreateTime>
+<MsgType><![CDATA[text]]></MsgType>
+<Content><![CDATA[hello]]></Content>
+<MsgId>123456</MsgId>
+<AgentID>1000002</AgentID>
+</xml>`, receiveID: "corp-1"},
+		Relations: relations,
+		Incoming:  queue,
+		Now:       func() time.Time { return time.Date(2026, 7, 2, 10, 0, 0, 0, time.UTC) },
+	}
+
+	result, err := service.HandleEvent(context.Background(), EventRequest{
+		EnterpriseKey: "ent-1",
+		Signature:     "sig",
+		Timestamp:     "123",
+		Nonce:         "nonce",
+		XMLBody:       `<xml><Encrypt>encrypted</Encrypt></xml>`,
+	})
+	if err != nil {
+		t.Fatalf("HandleEvent returned error: %v", err)
+	}
+	if !result.Supported || !result.IncomingQueued || !strings.HasPrefix(result.IncomingTraceID, "wework-notify-message:") {
+		t.Fatalf("result = %#v", result)
+	}
+	if len(queue.payloads) != 1 {
+		t.Fatalf("payloads = %#v", queue.payloads)
+	}
+	event := queue.payloads[0]
+	if event["event_type"] != "connector.inbound.message" || event["kind"] != "connector.inbound_message" || event["tenant_id"] != "ent-1" {
+		t.Fatalf("event = %#v", event)
+	}
+	if event["trace_id"] != result.IncomingTraceID || event["event_id"] != result.IncomingTraceID {
+		t.Fatalf("event identity = %#v result=%#v", event, result)
+	}
+	data := event["data"].(map[string]any)
+	if data["connector_id"] != "wework.notify" || data["channel"] != "wework" || data["content"] != "hello" || data["msg_type"] != "text" {
+		t.Fatalf("message data = %#v", data)
+	}
+	if data["channel_user_id"] != "corp-1" || data["wework_user_id"] != "corp-1" || data["external_userid"] != "external-1" || data["sender_id"] != "external-1" {
+		t.Fatalf("identity data = %#v", data)
+	}
+	if data["conversation_key"] != "wework:corp-1:external-1" || data["message_id"] != "123456" || data["archive_msgid"] != "wework.notify:123456" {
+		t.Fatalf("conversation data = %#v", data)
+	}
+	if data["message_origin"] != "connector:wework.notify" || data["connector_event_id"] != result.CallbackEventKey || data["timestamp"] == "" {
+		t.Fatalf("runtime data = %#v", data)
+	}
+}
+
+func TestHandleEventRequiresIncomingQueueForMessageCallback(t *testing.T) {
+	service := Service{
+		Enterprises: fakeStore{enterprise: &archivecallback.Enterprise{
+			EnterpriseID:   "ent-1",
+			CorpID:         "corp-1",
+			CallbackToken:  "token",
+			CallbackAESKey: "aes-key",
+		}},
+		Decryptor: &fakeDecryptor{plain: `<xml>
+<ToUserName><![CDATA[corp-1]]></ToUserName>
+<FromUserName><![CDATA[external-1]]></FromUserName>
+<CreateTime>1783000000</CreateTime>
+<MsgType><![CDATA[text]]></MsgType>
+<Content><![CDATA[hello]]></Content>
+</xml>`, receiveID: "corp-1"},
+		Relations: &fakeRelations{supported: false},
+	}
+
+	_, err := service.HandleEvent(context.Background(), EventRequest{
+		EnterpriseKey: "ent-1",
+		Signature:     "sig",
+		Timestamp:     "123",
+		Nonce:         "nonce",
+		XMLBody:       `<xml><Encrypt>encrypted</Encrypt></xml>`,
+	})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if StatusCodeForError(err) != http.StatusServiceUnavailable || !strings.Contains(DetailForError(err), "wework incoming queue is not configured") {
+		t.Fatalf("error = %v status=%d detail=%q", err, StatusCodeForError(err), DetailForError(err))
+	}
+}
+
 func TestHandleEventSwallowsReadModelInvalidationErrors(t *testing.T) {
 	relations := &fakeRelations{payload: customerrelation.Payload{
 		"conversation_id": "ww:user-1:ext-1",
@@ -486,6 +581,19 @@ func (store *fakeOutboxStore) Enqueue(ctx context.Context, event outbox.EventEnv
 	}
 	store.events = append(store.events, event)
 	return outbox.Record{EventEnvelope: event}, nil
+}
+
+type fakeIncomingQueue struct {
+	payloads []map[string]any
+	err      error
+}
+
+func (queue *fakeIncomingQueue) Enqueue(ctx context.Context, payload map[string]any, newID func() string) (string, map[string]any, error) {
+	if queue.err != nil {
+		return "", nil, queue.err
+	}
+	queue.payloads = append(queue.payloads, payload)
+	return "1-0", payload, nil
 }
 
 type fakeFirstAdd struct {

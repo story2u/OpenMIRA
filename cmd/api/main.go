@@ -1969,11 +1969,22 @@ func buildWeWorkNotifyCallbackHandler(runtime *app.Runtime) (*weworknotifyhttp.H
 	if err != nil {
 		return nil, err
 	}
+	var incomingQueue weworknotify.IncomingQueue
+	if runtime.Redis != nil {
+		eventbusClient, err := runtime.Redis.Client(redisclient.KindEventbus)
+		if err != nil {
+			return nil, err
+		}
+		if eventbusClient != nil {
+			incomingQueue = incomingqueuestore.New(eventbusClient, incomingqueue.ResolveOptions(incomingqueue.ResolveInput{}))
+		}
+	}
 	service := weworknotify.Service{
 		Enterprises: enterprisestore.NewSQLRepository(runtime.DB),
 		Decryptor:   archivecallback.CryptoDecryptor{},
 		Relations:   relationService,
 		Outbox:      runtime.Outbox.StoreRepository,
+		Incoming:    incomingQueue,
 		FirstAdd: weworknotify.RelationFirstAddTrigger{
 			Accounts:    accounts,
 			FriendAdded: friendService,

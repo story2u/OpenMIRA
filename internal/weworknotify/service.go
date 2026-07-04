@@ -58,12 +58,18 @@ type ReadModelInvalidator interface {
 	InvalidateNamespaces(ctx context.Context, namespaces ...string) error
 }
 
+// IncomingQueue is the durable ingest queue used for ordinary WeCom messages.
+type IncomingQueue interface {
+	Enqueue(ctx context.Context, payload map[string]any, newID func() string) (string, map[string]any, error)
+}
+
 // Service decrypts WeCom notify callbacks and forwards supported events.
 type Service struct {
 	Enterprises          Store
 	Decryptor            Decryptor
 	Relations            RelationService
 	Outbox               OutboxStore
+	Incoming             IncomingQueue
 	FirstAdd             FirstAddTrigger
 	ProfileEdit          ProfileEditService
 	ReadModelInvalidator ReadModelInvalidator
@@ -111,6 +117,8 @@ type Result struct {
 	Payload           customerrelation.Payload
 	CallbackEventKey  string
 	OutboxCreated     bool
+	IncomingQueued    bool
+	IncomingTraceID   string
 	FirstAddTriggered bool
 	FirstAddError     string
 	ProfileUpdated    bool
@@ -186,19 +194,34 @@ func (service Service) HandleEvent(ctx context.Context, request EventRequest) (R
 		PlainXML:         plain,
 		CallbackEventKey: callbackEventKey,
 	}
-	if service.Relations == nil {
-		return result, nil
+	if service.Relations != nil {
+		payload, ok, err := service.Relations.HandleCallbackXML(ctx, result.EnterpriseID, result.CorpID, plain)
+		if err != nil {
+			return Result{}, err
+		}
+		if ok {
+			result.Supported = true
+			result.Payload = payload
+			return service.handleRelationPayload(ctx, result, payload, callbackEventKey, plain, encrypt, signature, timestamp, nonce)
+		}
 	}
-	payload, ok, err := service.Relations.HandleCallbackXML(ctx, result.EnterpriseID, result.CorpID, plain)
+	incoming, ok, err := service.queueIncomingMessage(ctx, enterprise, plain, callbackEventKey)
 	if err != nil {
 		return Result{}, err
 	}
-	result.Supported = ok
-	result.Payload = payload
-	if ok && payload != nil {
+	if ok {
+		result.Supported = true
+		result.IncomingQueued = true
+		result.IncomingTraceID = incoming.TraceID
+	}
+	return result, nil
+}
+
+func (service Service) handleRelationPayload(ctx context.Context, result Result, payload customerrelation.Payload, callbackEventKey string, plain string, encrypt string, signature string, timestamp string, nonce string) (Result, error) {
+	if payload != nil {
 		service.invalidateReadModels(ctx)
 	}
-	if ok && isProfileEditPayload(payload) && service.ProfileEdit != nil && service.Outbox != nil {
+	if isProfileEditPayload(payload) && service.ProfileEdit != nil && service.Outbox != nil {
 		profilePayload, profileOK, err := service.ProfileEdit.BuildProfileUpdatedPayload(ctx, payload)
 		if err != nil {
 			result.ProfileEditError = err.Error()
@@ -220,14 +243,14 @@ func (service Service) HandleEvent(ctx context.Context, request EventRequest) (R
 			}
 		}
 	}
-	if ok && isRelationFirstAddPayload(payload) && service.FirstAdd != nil {
+	if isRelationFirstAddPayload(payload) && service.FirstAdd != nil {
 		triggered, err := service.FirstAdd.TriggerFirstAdd(ctx, payload)
 		result.FirstAddTriggered = triggered
 		if err != nil {
 			result.FirstAddError = err.Error()
 		}
 	}
-	if ok && shouldPublishRelationPayload(payload) && service.Outbox != nil {
+	if shouldPublishRelationPayload(payload) && service.Outbox != nil {
 		if _, err := service.Outbox.Enqueue(ctx, BuildRelationOutboxEvent(OutboxInput{
 			EnterpriseID:      result.EnterpriseID,
 			CallbackEventKey:  callbackEventKey,
