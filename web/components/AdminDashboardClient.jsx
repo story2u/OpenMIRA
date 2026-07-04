@@ -120,11 +120,11 @@ import {
   buildDeviceDiscoveryRefreshMutation,
   buildManualDeviceDeleteMutation,
   buildManualDeviceUpsertMutation,
-  buildWeWorkLoginQRCodeMutation,
-  buildWeWorkLoginStatusRequest,
-  buildWeWorkLogoutMutation,
-  buildWeWorkUserInfoRequestMutation,
-  buildWeWorkVerifyMutation,
+  buildConnectorLoginQRCodeMutation,
+  buildConnectorLoginStatusRequest,
+  buildConnectorLogoutMutation,
+  buildConnectorUserInfoRequestMutation,
+  buildConnectorVerifyMutation,
   normalizeDeviceActionResult,
   normalizeDeviceDiscoveryProbeResult,
   normalizeDeviceDiscoveryRefreshResult,
@@ -5045,7 +5045,7 @@ function DevicesPanel({ snapshot, accountsSnapshot, workloadSnapshot, onRefresh 
 
   const handleLoginStatus = useCallback(() => {
     void runDeviceMutation(
-      buildWeWorkLoginStatusRequest({ ...controlForm, includeQRCode: false }),
+      buildConnectorLoginStatusRequest({ ...controlForm, includeQRCode: false }),
       "control:status",
       "登录状态已刷新",
       normalizeWeWorkLoginStatus,
@@ -5054,7 +5054,7 @@ function DevicesPanel({ snapshot, accountsSnapshot, workloadSnapshot, onRefresh 
 
   const handleQRCode = useCallback(() => {
     void runDeviceMutation(
-      buildWeWorkLoginQRCodeMutation(controlForm),
+      buildConnectorLoginQRCodeMutation(controlForm),
       "control:qrcode",
       "已提交二维码登录任务",
     );
@@ -5062,7 +5062,7 @@ function DevicesPanel({ snapshot, accountsSnapshot, workloadSnapshot, onRefresh 
 
   const handleLogout = useCallback(() => {
     void runDeviceMutation(
-      buildWeWorkLogoutMutation(controlForm),
+      buildConnectorLogoutMutation(controlForm),
       "control:logout",
       "已提交退出通道客户端任务",
     );
@@ -5070,7 +5070,7 @@ function DevicesPanel({ snapshot, accountsSnapshot, workloadSnapshot, onRefresh 
 
   const handleUserInfo = useCallback(() => {
     void runDeviceMutation(
-      buildWeWorkUserInfoRequestMutation(controlForm),
+      buildConnectorUserInfoRequestMutation(controlForm),
       "control:user-info",
       "已提交用户信息刷新任务",
     );
@@ -5079,7 +5079,7 @@ function DevicesPanel({ snapshot, accountsSnapshot, workloadSnapshot, onRefresh 
   const handleVerifyCode = useCallback((event) => {
     event.preventDefault();
     void runDeviceMutation(
-      buildWeWorkVerifyMutation(controlForm),
+      buildConnectorVerifyMutation(controlForm),
       "control:verify",
       "已提交验证码",
     );

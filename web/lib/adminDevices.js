@@ -3,14 +3,21 @@ export const DEVICES_MANUAL_PATH = "/devices/manual";
 export const DEVICES_DISCOVERY_REFRESH_PATH = "/devices/discovery/refresh";
 export const DEVICES_DISCOVERY_PROBE_PATH = "/devices/discovery/probe";
 export const ROOT_ROUTE_BASE_PATH = "";
-export const WEWORK_LOGIN_STATUS_PATH = "/wework/login/status";
-export const WEWORK_LOGIN_QRCODE_PATH = "/wework/login/qrcode";
-export const WEWORK_LOGIN_VERIFY_PATH = "/wework/login/verify-code";
-export const WEWORK_LOGOUT_PATH = "/wework/logout";
-export const WEWORK_USER_INFO_REQUEST_PATH = "/wework/user-info/request";
+export const CONNECTOR_LOGIN_STATUS_PATH = "/connectors/sessions/status";
+export const CONNECTOR_LOGIN_QRCODE_PATH = "/connectors/sessions/qrcode";
+export const CONNECTOR_LOGIN_VERIFY_PATH = "/connectors/sessions/verify-code";
+export const CONNECTOR_LOGOUT_PATH = "/connectors/sessions/logout";
+export const CONNECTOR_USER_INFO_REQUEST_PATH = "/connectors/user-info/request";
+export const WEWORK_LOGIN_STATUS_PATH = CONNECTOR_LOGIN_STATUS_PATH;
+export const WEWORK_LOGIN_QRCODE_PATH = CONNECTOR_LOGIN_QRCODE_PATH;
+export const WEWORK_LOGIN_VERIFY_PATH = CONNECTOR_LOGIN_VERIFY_PATH;
+export const WEWORK_LOGOUT_PATH = CONNECTOR_LOGOUT_PATH;
+export const WEWORK_USER_INFO_REQUEST_PATH = CONNECTOR_USER_INFO_REQUEST_PATH;
 export const DEVICE_RTC_CONTROL_ACTIONS = new Set(["acquire", "release", "steal"]);
 
 export const DEVICE_SDK_ACTIONS = new Set([
+  "open_app",
+  "stop_app",
   "open_wework",
   "stop_wework",
   "prepare_call_audio_output",
@@ -146,14 +153,13 @@ export function buildDeviceDiscoveryProbeMutation(options = {}) {
   };
 }
 
-export function buildWeWorkLoginStatusRequest(options = {}) {
+export function buildConnectorLoginStatusRequest(options = {}) {
   const deviceId = cleanText(options.deviceId || options.device_id);
   if (!deviceId) return { ok: false, error: "device_id_required" };
   return {
     ok: true,
     method: "GET",
-    path: WEWORK_LOGIN_STATUS_PATH,
-    basePath: ROOT_ROUTE_BASE_PATH,
+    path: CONNECTOR_LOGIN_STATUS_PATH,
     params: {
       device_id: deviceId,
       live: parseBool(firstDefined(options.live, false), false) ? "true" : "",
@@ -162,7 +168,7 @@ export function buildWeWorkLoginStatusRequest(options = {}) {
   };
 }
 
-export function buildWeWorkLoginQRCodeMutation(options = {}) {
+export function buildConnectorLoginQRCodeMutation(options = {}) {
   const body = deviceActionBody(options);
   if (!body.device_id) return { ok: false, error: "device_id_required" };
   const timeoutSeconds = normalizePositiveInt(firstDefined(options.timeoutSeconds, options.timeout_seconds));
@@ -170,13 +176,12 @@ export function buildWeWorkLoginQRCodeMutation(options = {}) {
   return {
     ok: true,
     method: "POST",
-    path: WEWORK_LOGIN_QRCODE_PATH,
-    basePath: ROOT_ROUTE_BASE_PATH,
+    path: CONNECTOR_LOGIN_QRCODE_PATH,
     body,
   };
 }
 
-export function buildWeWorkVerifyMutation(options = {}) {
+export function buildConnectorVerifyMutation(options = {}) {
   const body = deviceActionBody(options);
   if (!body.device_id) return { ok: false, error: "device_id_required" };
   const verifyCode = cleanText(options.verifyCode || options.verify_code);
@@ -187,35 +192,38 @@ export function buildWeWorkVerifyMutation(options = {}) {
   return {
     ok: true,
     method: "POST",
-    path: WEWORK_LOGIN_VERIFY_PATH,
-    basePath: ROOT_ROUTE_BASE_PATH,
+    path: CONNECTOR_LOGIN_VERIFY_PATH,
     body,
   };
 }
 
-export function buildWeWorkLogoutMutation(options = {}) {
+export function buildConnectorLogoutMutation(options = {}) {
   const body = deviceActionBody(options);
   if (!body.device_id) return { ok: false, error: "device_id_required" };
   return {
     ok: true,
     method: "POST",
-    path: WEWORK_LOGOUT_PATH,
-    basePath: ROOT_ROUTE_BASE_PATH,
+    path: CONNECTOR_LOGOUT_PATH,
     body,
   };
 }
 
-export function buildWeWorkUserInfoRequestMutation(options = {}) {
+export function buildConnectorUserInfoRequestMutation(options = {}) {
   const body = deviceActionBody(options);
   if (!body.device_id) return { ok: false, error: "device_id_required" };
   return {
     ok: true,
     method: "POST",
-    path: WEWORK_USER_INFO_REQUEST_PATH,
-    basePath: ROOT_ROUTE_BASE_PATH,
+    path: CONNECTOR_USER_INFO_REQUEST_PATH,
     body,
   };
 }
+
+export const buildWeWorkLoginStatusRequest = buildConnectorLoginStatusRequest;
+export const buildWeWorkLoginQRCodeMutation = buildConnectorLoginQRCodeMutation;
+export const buildWeWorkVerifyMutation = buildConnectorVerifyMutation;
+export const buildWeWorkLogoutMutation = buildConnectorLogoutMutation;
+export const buildWeWorkUserInfoRequestMutation = buildConnectorUserInfoRequestMutation;
 
 export function buildDeviceSDKControlMutation(options = {}) {
   const deviceId = cleanText(options.deviceId || options.device_id);
@@ -232,11 +240,19 @@ export function buildDeviceSDKControlMutation(options = {}) {
       path: `/devices/${encodedDeviceID}/sdk/prepare-call-audio-output?call_type=${encodeURIComponent(callType)}`,
     };
   }
-  const suffix = action === "open_wework" ? "open-wework" : "stop-wework";
+  const suffix = action === "open_wework" || action === "open_app" ? "open" : "stop";
+  const appID = cleanText(options.appId || options.app_id || (action.endsWith("_wework") ? "wework" : ""));
+  if (!appID) return { ok: false, error: "app_id_required" };
+  const packageName = cleanText(options.packageName || options.package_name || (appID === "wework" ? "com.tencent.wework" : appID));
   return {
     ok: true,
     method: "POST",
-    path: `/devices/${encodedDeviceID}/sdk/${suffix}`,
+    path: `/devices/${encodedDeviceID}/apps/${suffix}`,
+    body: {
+      app_id: appID,
+      package_name: packageName,
+      username: cleanText(options.username || "__device__"),
+    },
   };
 }
 

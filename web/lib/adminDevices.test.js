@@ -2,15 +2,19 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  ROOT_ROUTE_BASE_PATH,
-  WEWORK_LOGIN_QRCODE_PATH,
-  WEWORK_LOGIN_STATUS_PATH,
-  WEWORK_LOGIN_VERIFY_PATH,
-  WEWORK_LOGOUT_PATH,
-  WEWORK_USER_INFO_REQUEST_PATH,
+  CONNECTOR_LOGIN_QRCODE_PATH,
+  CONNECTOR_LOGIN_STATUS_PATH,
+  CONNECTOR_LOGIN_VERIFY_PATH,
+  CONNECTOR_LOGOUT_PATH,
+  CONNECTOR_USER_INFO_REQUEST_PATH,
   DEVICES_DISCOVERY_PROBE_PATH,
   DEVICES_DISCOVERY_REFRESH_PATH,
   DEVICES_MANUAL_PATH,
+  buildConnectorLoginQRCodeMutation,
+  buildConnectorLoginStatusRequest,
+  buildConnectorLogoutMutation,
+  buildConnectorUserInfoRequestMutation,
+  buildConnectorVerifyMutation,
   buildDeviceSDKControlMutation,
   buildDeviceSDKRTCSessionRequest,
   buildDeviceSDKWebRTCRequest,
@@ -24,11 +28,6 @@ import {
   buildDeviceDiscoveryRefreshMutation,
   buildManualDeviceDeleteMutation,
   buildManualDeviceUpsertMutation,
-  buildWeWorkLoginQRCodeMutation,
-  buildWeWorkLoginStatusRequest,
-  buildWeWorkLogoutMutation,
-  buildWeWorkUserInfoRequestMutation,
-  buildWeWorkVerifyMutation,
   normalizeDeviceActionResult,
   normalizeDeviceDiscoveryProbeResult,
   normalizeDeviceDiscoveryRefreshResult,
@@ -214,21 +213,21 @@ test("normalizeDeviceDiscoveryProbeResult keeps target, probes, suggestions and 
   assert.deepEqual(result.errors, ["runtime_target: apply_on_success is not available in the Go candidate"]);
 });
 
-test("wework login mutations use root legacy routes", () => {
-  const status = buildWeWorkLoginStatusRequest({ deviceId: " device-1 ", includeQRCode: false });
+test("connector login mutations use neutral API routes", () => {
+  const status = buildConnectorLoginStatusRequest({ deviceId: " device-1 ", includeQRCode: false });
   assert.equal(status.ok, true);
   assert.equal(status.method, "GET");
-  assert.equal(status.path, WEWORK_LOGIN_STATUS_PATH);
-  assert.equal(status.basePath, ROOT_ROUTE_BASE_PATH);
+  assert.equal(status.path, CONNECTOR_LOGIN_STATUS_PATH);
+  assert.equal(status.basePath, undefined);
   assert.deepEqual(status.params, {
     device_id: "device-1",
     live: "",
     include_qrcode: "false",
   });
 
-  const qrcode = buildWeWorkLoginQRCodeMutation({ deviceId: " device-1 ", agentId: " sdk:a ", timeoutSeconds: "30" });
-  assert.equal(qrcode.path, WEWORK_LOGIN_QRCODE_PATH);
-  assert.equal(qrcode.basePath, ROOT_ROUTE_BASE_PATH);
+  const qrcode = buildConnectorLoginQRCodeMutation({ deviceId: " device-1 ", agentId: " sdk:a ", timeoutSeconds: "30" });
+  assert.equal(qrcode.path, CONNECTOR_LOGIN_QRCODE_PATH);
+  assert.equal(qrcode.basePath, undefined);
   assert.deepEqual(qrcode.body, {
     device_id: "device-1",
     agent_id: "sdk:a",
@@ -236,8 +235,8 @@ test("wework login mutations use root legacy routes", () => {
     timeout_seconds: 30,
   });
 
-  const verify = buildWeWorkVerifyMutation({ deviceId: "device-1", verifyCode: " 123456 ", verifyType: " sms " });
-  assert.equal(verify.path, WEWORK_LOGIN_VERIFY_PATH);
+  const verify = buildConnectorVerifyMutation({ deviceId: "device-1", verifyCode: " 123456 ", verifyType: " sms " });
+  assert.equal(verify.path, CONNECTOR_LOGIN_VERIFY_PATH);
   assert.deepEqual(verify.body, {
     device_id: "device-1",
     source: "admin-dashboard",
@@ -245,12 +244,12 @@ test("wework login mutations use root legacy routes", () => {
     verify_type: "sms",
   });
 
-  const logout = buildWeWorkLogoutMutation({ deviceId: "device-1" });
-  assert.equal(logout.path, WEWORK_LOGOUT_PATH);
+  const logout = buildConnectorLogoutMutation({ deviceId: "device-1" });
+  assert.equal(logout.path, CONNECTOR_LOGOUT_PATH);
   assert.deepEqual(logout.body, { device_id: "device-1", source: "admin-dashboard" });
 
-  const userInfo = buildWeWorkUserInfoRequestMutation({ deviceId: "device-1" });
-  assert.equal(userInfo.path, WEWORK_USER_INFO_REQUEST_PATH);
+  const userInfo = buildConnectorUserInfoRequestMutation({ deviceId: "device-1" });
+  assert.equal(userInfo.path, CONNECTOR_USER_INFO_REQUEST_PATH);
   assert.deepEqual(userInfo.body, { device_id: "device-1", source: "admin-dashboard" });
 });
 
@@ -258,22 +257,41 @@ test("device sdk control mutations encode device paths", () => {
   const open = buildDeviceSDKControlMutation({ deviceId: "slot/18", action: "open_wework" });
   assert.equal(open.ok, true);
   assert.equal(open.method, "POST");
-  assert.equal(open.path, "/devices/slot%2F18/sdk/open-wework");
+  assert.equal(open.path, "/devices/slot%2F18/apps/open");
+  assert.deepEqual(open.body, {
+    app_id: "wework",
+    package_name: "com.tencent.wework",
+    username: "__device__",
+  });
 
   const stop = buildDeviceSDKControlMutation({ deviceId: "slot 18", action: "stop_wework" });
-  assert.equal(stop.path, "/devices/slot%2018/sdk/stop-wework");
+  assert.equal(stop.path, "/devices/slot%2018/apps/stop");
+  assert.deepEqual(stop.body, {
+    app_id: "wework",
+    package_name: "com.tencent.wework",
+    username: "__device__",
+  });
+
+  const openApp = buildDeviceSDKControlMutation({ deviceId: "slot-18", action: "open_app", appId: "browser", packageName: "com.android.browser" });
+  assert.equal(openApp.path, "/devices/slot-18/apps/open");
+  assert.deepEqual(openApp.body, {
+    app_id: "browser",
+    package_name: "com.android.browser",
+    username: "__device__",
+  });
 
   const prepare = buildDeviceSDKControlMutation({ deviceId: "slot-18", action: "prepare_call_audio_output", callType: "video" });
   assert.equal(prepare.path, "/devices/slot-18/sdk/prepare-call-audio-output?call_type=video");
 });
 
 test("device action helpers report invalid fields", () => {
-  assert.equal(buildWeWorkLoginStatusRequest({}).error, "device_id_required");
-  assert.equal(buildWeWorkLoginQRCodeMutation({}).error, "device_id_required");
-  assert.equal(buildWeWorkVerifyMutation({ deviceId: "device-1" }).error, "verify_code_required");
-  assert.equal(buildWeWorkLogoutMutation({}).error, "device_id_required");
-  assert.equal(buildWeWorkUserInfoRequestMutation({}).error, "device_id_required");
+  assert.equal(buildConnectorLoginStatusRequest({}).error, "device_id_required");
+  assert.equal(buildConnectorLoginQRCodeMutation({}).error, "device_id_required");
+  assert.equal(buildConnectorVerifyMutation({ deviceId: "device-1" }).error, "verify_code_required");
+  assert.equal(buildConnectorLogoutMutation({}).error, "device_id_required");
+  assert.equal(buildConnectorUserInfoRequestMutation({}).error, "device_id_required");
   assert.equal(buildDeviceSDKControlMutation({ action: "open_wework" }).error, "device_id_required");
+  assert.equal(buildDeviceSDKControlMutation({ deviceId: "device-1", action: "open_app" }).error, "app_id_required");
   assert.equal(buildDeviceSDKControlMutation({ deviceId: "device-1", action: "bad" }).error, "unknown_device_action");
   assert.equal(buildDeviceSDKControlMutation({ deviceId: "device-1", action: "prepare_call_audio_output", callType: "screen" }).error, "call_type_invalid");
 });

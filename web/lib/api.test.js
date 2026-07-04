@@ -8,8 +8,8 @@ test("buildApiPath appends non empty query params", () => {
     "/api/v1/accounts?limit=20&q=%E5%A4%8F%E5%8D%97",
   );
   assert.equal(
-    buildApiPath("/wework/login/status", { device_id: "device-1" }, ""),
-    "/wework/login/status?device_id=device-1",
+    buildApiPath("/health", { probe: "ready" }, ""),
+    "/health?probe=ready",
   );
 });
 
@@ -39,7 +39,7 @@ test("requestJSON sends JSON body, bearer token, and custom headers", async () =
   assert.equal(calls[0].init.body, `{"task_id":"task-1"}`);
 });
 
-test("requestJSON can call root legacy routes", async () => {
+test("requestJSON can call root routes", async () => {
   const calls = [];
   const fetchImpl = async (url, init) => {
     calls.push({ url, init });
@@ -49,14 +49,14 @@ test("requestJSON can call root legacy routes", async () => {
     };
   };
 
-  const payload = await requestJSON("/wework/login/status", {
+  const payload = await requestJSON("/health", {
     basePath: "",
-    params: { device_id: "device-1" },
+    params: { probe: "ready" },
     fetchImpl,
   });
 
   assert.deepEqual(payload, { status: "waiting" });
-  assert.equal(calls[0].url, "/wework/login/status?device_id=device-1");
+  assert.equal(calls[0].url, "/health?probe=ready");
 });
 
 test("requestJSON retries safe GET gateway failures before returning success", async () => {
