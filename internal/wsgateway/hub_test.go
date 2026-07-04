@@ -3,6 +3,7 @@ package wsgateway
 import (
 	"context"
 	"strings"
+	"sync"
 	"testing"
 
 	"im-go/internal/realtime"
@@ -29,11 +30,11 @@ func TestHubPublishesToMatchingChannelAndTopics(t *testing.T) {
 	if sent != 2 {
 		t.Fatalf("sent = %d, want 2", sent)
 	}
-	if len(allSender.messages) != 1 || len(messageSender.messages) != 1 || len(statusSender.messages) != 0 {
-		t.Fatalf("senders all=%d message=%d status=%d", len(allSender.messages), len(messageSender.messages), len(statusSender.messages))
+	if allSender.messageCount() != 1 || messageSender.messageCount() != 1 || statusSender.messageCount() != 0 {
+		t.Fatalf("senders all=%d message=%d status=%d", allSender.messageCount(), messageSender.messageCount(), statusSender.messageCount())
 	}
-	if !strings.Contains(string(allSender.messages[0]), `"consistency":"weak"`) {
-		t.Fatalf("envelope = %s", allSender.messages[0])
+	if !strings.Contains(string(allSender.messageAt(0)), `"consistency":"weak"`) {
+		t.Fatalf("envelope = %s", allSender.messageAt(0))
 	}
 }
 
@@ -53,8 +54,8 @@ func TestHubUnregisterAndStats(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ChannelStats returned error: %v", err)
 	}
-	if len(stats) != 0 || !sender.closed {
-		t.Fatalf("stats = %#v closed=%t", stats, sender.closed)
+	if len(stats) != 0 || !sender.isClosed() {
+		t.Fatalf("stats = %#v closed=%t", stats, sender.isClosed())
 	}
 }
 
@@ -68,10 +69,10 @@ func TestHubDeliversBrokerPayloadEnvelopeAndSkipsOwnOrigin(t *testing.T) {
 	if err != nil {
 		t.Fatalf("DeliverBrokerPayload returned error: %v", err)
 	}
-	if sent != 1 || len(sender.messages) != 1 {
-		t.Fatalf("sent=%d messages=%d", sent, len(sender.messages))
+	if sent != 1 || sender.messageCount() != 1 {
+		t.Fatalf("sent=%d messages=%d", sent, sender.messageCount())
 	}
-	message := string(sender.messages[0])
+	message := string(sender.messageAt(0))
 	for _, want := range []string{`"cursor":7`, `"consistency":"strong"`, `"scope_key":"conversations:conversation.message"`} {
 		if !strings.Contains(message, want) {
 			t.Fatalf("message missing %s: %s", want, message)
@@ -82,8 +83,8 @@ func TestHubDeliversBrokerPayloadEnvelopeAndSkipsOwnOrigin(t *testing.T) {
 	if err != nil {
 		t.Fatalf("DeliverBrokerPayload own origin returned error: %v", err)
 	}
-	if sent != 0 || len(sender.messages) != 1 {
-		t.Fatalf("own origin sent=%d messages=%d", sent, len(sender.messages))
+	if sent != 0 || sender.messageCount() != 1 {
+		t.Fatalf("own origin sent=%d messages=%d", sent, sender.messageCount())
 	}
 }
 
@@ -134,27 +135,50 @@ func TestHubDeliversBrokerBatchWithoutEnvelope(t *testing.T) {
 	if sent != 3 {
 		t.Fatalf("sent = %d, want 3", sent)
 	}
-	if len(allSender.messages) != 2 || len(taskSender.messages) != 1 {
-		t.Fatalf("all=%d task=%d", len(allSender.messages), len(taskSender.messages))
+	if allSender.messageCount() != 2 || taskSender.messageCount() != 1 {
+		t.Fatalf("all=%d task=%d", allSender.messageCount(), taskSender.messageCount())
 	}
-	if !strings.Contains(string(allSender.messages[0]), `"consistency":"weak"`) {
-		t.Fatalf("default envelope = %s", allSender.messages[0])
+	if !strings.Contains(string(allSender.messageAt(0)), `"consistency":"weak"`) {
+		t.Fatalf("default envelope = %s", allSender.messageAt(0))
 	}
 }
 
 type recordingSender struct {
+	mu       sync.Mutex
 	messages [][]byte
 	closed   bool
 }
 
 func (sender *recordingSender) WriteText(ctx context.Context, message []byte) error {
+	sender.mu.Lock()
+	defer sender.mu.Unlock()
 	sender.messages = append(sender.messages, append([]byte(nil), message...))
 	return ctx.Err()
 }
 
 func (sender *recordingSender) Close() error {
+	sender.mu.Lock()
+	defer sender.mu.Unlock()
 	sender.closed = true
 	return nil
+}
+
+func (sender *recordingSender) messageCount() int {
+	sender.mu.Lock()
+	defer sender.mu.Unlock()
+	return len(sender.messages)
+}
+
+func (sender *recordingSender) messageAt(index int) []byte {
+	sender.mu.Lock()
+	defer sender.mu.Unlock()
+	return append([]byte(nil), sender.messages[index]...)
+}
+
+func (sender *recordingSender) isClosed() bool {
+	sender.mu.Lock()
+	defer sender.mu.Unlock()
+	return sender.closed
 }
 
 type recordingEventLog struct {

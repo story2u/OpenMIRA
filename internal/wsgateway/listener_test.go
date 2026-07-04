@@ -14,7 +14,7 @@ func TestListenerConsumesBrokerFeed(t *testing.T) {
 	cleanup := (Listener{Hub: hub, Feed: feed}).Start(context.Background())
 
 	feed.messages <- []byte(`{"origin":"python-1","channel":"tasks","event":"task.status","topic":"task.status","payload":{"task_id":"task-1"}}`)
-	waitFor(t, func() bool { return len(sender.messages) == 1 })
+	waitFor(t, func() bool { return sender.messageCount() == 1 })
 
 	if err := cleanup(); err != nil {
 		t.Fatalf("cleanup returned error: %v", err)
