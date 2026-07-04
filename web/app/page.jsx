@@ -1,10 +1,5 @@
-import { AppShell } from "../components/AppShell.jsx";
-import { WorkbenchClient } from "../components/WorkbenchClient.jsx";
+import { SlimConsole } from "../components/SlimConsole.jsx";
 
 export default function HomePage() {
-  return (
-    <AppShell active="cs">
-      <WorkbenchClient />
-    </AppShell>
-  );
+  return <SlimConsole />;
 }

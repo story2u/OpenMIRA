@@ -9,7 +9,7 @@ RUN npm ci
 
 FROM node:${NODE_VERSION}-alpine AS build
 WORKDIR /app
-ARG GO_WEB_VERSION=0.1.0-phase1
+ARG GO_WEB_VERSION=0.1.0-slim
 ARG GO_WEB_COMMIT=unknown
 ARG GO_WEB_BUILD_TIME=unknown
 ENV NEXT_PUBLIC_GO_WEB_VERSION=${GO_WEB_VERSION}
@@ -21,7 +21,7 @@ RUN npm run build
 
 FROM node:${NODE_VERSION}-alpine AS runner
 WORKDIR /app
-ARG GO_WEB_VERSION=0.1.0-phase1
+ARG GO_WEB_VERSION=0.1.0-slim
 ARG GO_WEB_COMMIT=unknown
 ARG GO_WEB_BUILD_TIME=unknown
 ENV NODE_ENV=production
