@@ -39,6 +39,31 @@ npm install
 npm run dev
 ```
 
+## Message Receive
+
+Inbound messages are accepted through a platform-neutral endpoint:
+
+```bash
+curl -X POST http://localhost:8080/api/v1/messages/incoming \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "source_channel": "webchat",
+    "external_message_id": "provider-message-1",
+    "conversation_key": "room-1",
+    "sender_id": "customer-1",
+    "sender_name": "Ada",
+    "content": "hello",
+    "msg_type": "text",
+    "timestamp": "2026-01-02T03:04:05Z"
+  }'
+```
+
+`source_channel` identifies the adapter or client family. The API does not
+special-case any vendor. `external_message_id` is optional, but when it is
+present the pair `source_channel + external_message_id` is used as the
+idempotency key, so repeated delivery returns the original message with
+`duplicate: true`.
+
 ## Verify
 
 ```bash

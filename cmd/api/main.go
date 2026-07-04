@@ -11,6 +11,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -70,6 +71,7 @@ func newStoreFromEnv() (dataStore, error) {
 }
 
 type dataStore interface {
+	receiveIncomingMessage(input messageInput) (receiveResult, error)
 	addMessage(direction string, input messageInput) (message, error)
 	messages(conversationID string) []message
 	upsertSOPFlow(flow sopFlow) (sopFlow, error)
@@ -115,15 +117,17 @@ func (app *app) incomingMessage(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnprocessableEntity, "invalid json body")
 		return
 	}
-	message, err := app.store.addMessage("incoming", input)
+	result, err := app.store.receiveIncomingMessage(input)
 	if err != nil {
 		writeStoreError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"accepted":        true,
-		"conversation_id": message.ConversationID,
-		"message":         message,
+		"accepted":        result.Accepted,
+		"duplicate":       result.Duplicate,
+		"conversation_id": result.ConversationID,
+		"message":         result.Message,
+		"receipt":         result,
 	})
 }
 
@@ -247,6 +251,7 @@ type memoryStore struct {
 	mu            sync.RWMutex
 	nextID        atomic.Uint64
 	conversations map[string][]message
+	inboundIndex  map[string]messageRef
 	flows         map[string]sopFlow
 	policies      map[string]sopPolicy
 	tasks         map[string]sopTask
@@ -255,6 +260,7 @@ type memoryStore struct {
 func newMemoryStore() *memoryStore {
 	store := &memoryStore{
 		conversations: make(map[string][]message),
+		inboundIndex:  make(map[string]messageRef),
 		flows:         make(map[string]sopFlow),
 		policies:      make(map[string]sopPolicy),
 		tasks:         make(map[string]sopTask),
@@ -275,62 +281,218 @@ func defaultSOPFlow() sopFlow {
 }
 
 type messageInput struct {
-	ConversationID string `json:"conversation_id"`
-	SenderID       string `json:"sender_id"`
-	SenderName     string `json:"sender_name"`
-	AccountID      string `json:"account_id"`
-	Content        string `json:"content"`
-	MsgType        string `json:"msg_type"`
-	Timestamp      string `json:"timestamp"`
+	SourceChannel     string `json:"source_channel"`
+	ExternalMessageID string `json:"external_message_id"`
+	ConversationID    string `json:"conversation_id"`
+	ConversationKey   string `json:"conversation_key"`
+	SenderID          string `json:"sender_id"`
+	SenderName        string `json:"sender_name"`
+	AccountID         string `json:"account_id"`
+	Content           string `json:"content"`
+	MsgType           string `json:"msg_type"`
+	Timestamp         string `json:"timestamp"`
 }
 
 type message struct {
-	ID             string `json:"id"`
-	ConversationID string `json:"conversation_id"`
-	Direction      string `json:"direction"`
-	SenderID       string `json:"sender_id"`
-	SenderName     string `json:"sender_name"`
-	AccountID      string `json:"account_id"`
-	Content        string `json:"content"`
-	MsgType        string `json:"msg_type"`
-	Timestamp      string `json:"timestamp"`
+	ID                string `json:"id"`
+	ConversationID    string `json:"conversation_id"`
+	ConversationKey   string `json:"conversation_key"`
+	Direction         string `json:"direction"`
+	SourceChannel     string `json:"source_channel"`
+	ExternalMessageID string `json:"external_message_id"`
+	SenderID          string `json:"sender_id"`
+	SenderName        string `json:"sender_name"`
+	AccountID         string `json:"account_id"`
+	Content           string `json:"content"`
+	MsgType           string `json:"msg_type"`
+	Timestamp         string `json:"timestamp"`
+	ReceivedAt        string `json:"received_at"`
 }
 
-func (store *memoryStore) addMessage(direction string, input messageInput) (message, error) {
-	conversationID := strings.TrimSpace(input.ConversationID)
-	if conversationID == "" {
-		conversationID = "conversation-" + strings.TrimSpace(input.SenderID)
-	}
-	if conversationID == "conversation-" {
-		return message{}, errors.New("conversation_id or sender_id is required")
-	}
-	content := strings.TrimSpace(input.Content)
-	if content == "" {
-		return message{}, errors.New("content is required")
-	}
-	msgType := strings.TrimSpace(input.MsgType)
-	if msgType == "" {
-		msgType = "text"
-	}
-	timestamp := strings.TrimSpace(input.Timestamp)
-	if timestamp == "" {
-		timestamp = time.Now().UTC().Format(time.RFC3339Nano)
-	}
-	msg := message{
-		ID:             fmt.Sprintf("msg-%d", store.nextID.Add(1)),
-		ConversationID: conversationID,
-		Direction:      direction,
-		SenderID:       strings.TrimSpace(input.SenderID),
-		SenderName:     strings.TrimSpace(input.SenderName),
-		AccountID:      strings.TrimSpace(input.AccountID),
-		Content:        content,
-		MsgType:        msgType,
-		Timestamp:      timestamp,
+type receiveResult struct {
+	Accepted          bool    `json:"accepted"`
+	Duplicate         bool    `json:"duplicate"`
+	ConversationID    string  `json:"conversation_id"`
+	MessageID         string  `json:"message_id"`
+	SourceChannel     string  `json:"source_channel"`
+	ExternalMessageID string  `json:"external_message_id"`
+	ReceivedAt        string  `json:"received_at"`
+	Message           message `json:"message"`
+}
+
+type messageRef struct {
+	ConversationID string `json:"conversation_id"`
+	MessageID      string `json:"message_id"`
+}
+
+type normalizedMessage struct {
+	message message
+	dedupe  string
+}
+
+func (store *memoryStore) receiveIncomingMessage(input messageInput) (receiveResult, error) {
+	normalized, err := normalizeMessageInput("incoming", input)
+	if err != nil {
+		return receiveResult{}, err
 	}
 	store.mu.Lock()
 	defer store.mu.Unlock()
-	store.conversations[conversationID] = append(store.conversations[conversationID], msg)
+	if normalized.dedupe != "" {
+		if ref, ok := store.inboundIndex[normalized.dedupe]; ok {
+			if existing, found := store.findMessageLocked(ref); found {
+				return newReceiveResult(existing, true), nil
+			}
+		}
+	}
+	msg := normalized.message
+	msg.ID = fmt.Sprintf("msg-%d", store.nextID.Add(1))
+	store.conversations[msg.ConversationID] = append(store.conversations[msg.ConversationID], msg)
+	if normalized.dedupe != "" {
+		store.inboundIndex[normalized.dedupe] = messageRef{ConversationID: msg.ConversationID, MessageID: msg.ID}
+	}
+	return newReceiveResult(msg, false), nil
+}
+
+func (store *memoryStore) addMessage(direction string, input messageInput) (message, error) {
+	normalized, err := normalizeMessageInput(direction, input)
+	if err != nil {
+		return message{}, err
+	}
+	msg := normalized.message
+	msg.ID = fmt.Sprintf("msg-%d", store.nextID.Add(1))
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	store.conversations[msg.ConversationID] = append(store.conversations[msg.ConversationID], msg)
 	return msg, nil
+}
+
+func (store *memoryStore) findMessageLocked(ref messageRef) (message, bool) {
+	for _, msg := range store.conversations[ref.ConversationID] {
+		if msg.ID == ref.MessageID {
+			return msg, true
+		}
+	}
+	return message{}, false
+}
+
+func newReceiveResult(msg message, duplicate bool) receiveResult {
+	return receiveResult{
+		Accepted:          true,
+		Duplicate:         duplicate,
+		ConversationID:    msg.ConversationID,
+		MessageID:         msg.ID,
+		SourceChannel:     msg.SourceChannel,
+		ExternalMessageID: msg.ExternalMessageID,
+		ReceivedAt:        msg.ReceivedAt,
+		Message:           msg,
+	}
+}
+
+func normalizeMessageInput(direction string, input messageInput) (normalizedMessage, error) {
+	direction = strings.TrimSpace(direction)
+	if direction == "" {
+		return normalizedMessage{}, errors.New("direction is required")
+	}
+	defaultChannel := "internal"
+	if direction == "incoming" {
+		defaultChannel = "manual"
+	}
+	sourceChannel, err := normalizeChannel(input.SourceChannel, defaultChannel)
+	if err != nil {
+		return normalizedMessage{}, err
+	}
+	conversationKey := strings.TrimSpace(input.ConversationKey)
+	senderID := strings.TrimSpace(input.SenderID)
+	conversationID := strings.TrimSpace(input.ConversationID)
+	if conversationID == "" && conversationKey != "" {
+		conversationID = "channel:" + sourceChannel + ":" + conversationKey
+	}
+	if conversationID == "" && senderID != "" {
+		conversationID = "channel:" + sourceChannel + ":sender:" + senderID
+	}
+	if conversationID == "" {
+		return normalizedMessage{}, errors.New("conversation_id, conversation_key, or sender_id is required")
+	}
+	content := strings.TrimSpace(input.Content)
+	if content == "" {
+		return normalizedMessage{}, errors.New("content is required")
+	}
+	if len(content) > 20000 {
+		return normalizedMessage{}, errors.New("content is too long")
+	}
+	msgType := strings.ToLower(strings.TrimSpace(input.MsgType))
+	if msgType == "" {
+		msgType = "text"
+	}
+	if !supportedMessageType(msgType) {
+		return normalizedMessage{}, errors.New("msg_type is not supported")
+	}
+	timestamp, err := normalizeTimestamp(input.Timestamp)
+	if err != nil {
+		return normalizedMessage{}, err
+	}
+	externalID := strings.TrimSpace(input.ExternalMessageID)
+	if len(externalID) > 128 {
+		return normalizedMessage{}, errors.New("external_message_id is too long")
+	}
+	receivedAt := time.Now().UTC().Format(time.RFC3339Nano)
+	msg := message{
+		ConversationID:    conversationID,
+		ConversationKey:   conversationKey,
+		Direction:         direction,
+		SourceChannel:     sourceChannel,
+		ExternalMessageID: externalID,
+		SenderID:          senderID,
+		SenderName:        strings.TrimSpace(input.SenderName),
+		AccountID:         strings.TrimSpace(input.AccountID),
+		Content:           content,
+		MsgType:           msgType,
+		Timestamp:         timestamp,
+		ReceivedAt:        receivedAt,
+	}
+	return normalizedMessage{message: msg, dedupe: inboundDedupeKey(sourceChannel, externalID)}, nil
+}
+
+func normalizeChannel(value string, fallback string) (string, error) {
+	channel := strings.ToLower(defaultText(value, fallback))
+	if len(channel) > 64 {
+		return "", errors.New("source_channel is too long")
+	}
+	for _, item := range channel {
+		if item >= 'a' && item <= 'z' || item >= '0' && item <= '9' || item == '-' || item == '_' || item == '.' || item == ':' {
+			continue
+		}
+		return "", errors.New("source_channel contains unsupported characters")
+	}
+	return channel, nil
+}
+
+func normalizeTimestamp(value string) (string, error) {
+	timestamp := strings.TrimSpace(value)
+	if timestamp == "" {
+		return time.Now().UTC().Format(time.RFC3339Nano), nil
+	}
+	parsed, err := time.Parse(time.RFC3339Nano, timestamp)
+	if err != nil {
+		return "", errors.New("timestamp must be RFC3339")
+	}
+	return parsed.UTC().Format(time.RFC3339Nano), nil
+}
+
+func supportedMessageType(value string) bool {
+	switch value {
+	case "text", "image", "file", "audio", "video", "event", "system":
+		return true
+	default:
+		return false
+	}
+}
+
+func inboundDedupeKey(sourceChannel string, externalMessageID string) string {
+	if strings.TrimSpace(externalMessageID) == "" {
+		return ""
+	}
+	return sourceChannel + "\x00" + externalMessageID
 }
 
 func (store *memoryStore) messages(conversationID string) []message {
@@ -341,11 +503,12 @@ func (store *memoryStore) messages(conversationID string) []message {
 }
 
 type storeSnapshot struct {
-	NextID        uint64               `json:"next_id"`
-	Conversations map[string][]message `json:"conversations"`
-	Flows         map[string]sopFlow   `json:"flows"`
-	Policies      map[string]sopPolicy `json:"policies"`
-	Tasks         map[string]sopTask   `json:"tasks"`
+	NextID        uint64                `json:"next_id"`
+	Conversations map[string][]message  `json:"conversations"`
+	InboundIndex  map[string]messageRef `json:"inbound_index"`
+	Flows         map[string]sopFlow    `json:"flows"`
+	Policies      map[string]sopPolicy  `json:"policies"`
+	Tasks         map[string]sopTask    `json:"tasks"`
 }
 
 func (store *memoryStore) snapshot() storeSnapshot {
@@ -354,6 +517,7 @@ func (store *memoryStore) snapshot() storeSnapshot {
 	return storeSnapshot{
 		NextID:        store.nextID.Load(),
 		Conversations: copyConversations(store.conversations),
+		InboundIndex:  copyInboundIndex(store.inboundIndex),
 		Flows:         copySOPFlows(store.flows),
 		Policies:      copySOPPolicies(store.policies),
 		Tasks:         copySOPTasks(store.tasks),
@@ -365,11 +529,15 @@ func (store *memoryStore) restore(snapshot storeSnapshot) {
 	defer store.mu.Unlock()
 	store.nextID.Store(snapshot.NextID)
 	store.conversations = copyConversations(snapshot.Conversations)
+	store.inboundIndex = copyInboundIndex(snapshot.InboundIndex)
 	store.flows = copySOPFlows(snapshot.Flows)
 	store.policies = copySOPPolicies(snapshot.Policies)
 	store.tasks = copySOPTasks(snapshot.Tasks)
 	if store.conversations == nil {
 		store.conversations = make(map[string][]message)
+	}
+	if store.inboundIndex == nil {
+		store.inboundIndex = make(map[string]messageRef)
 	}
 	if store.flows == nil {
 		store.flows = make(map[string]sopFlow)
@@ -383,6 +551,8 @@ func (store *memoryStore) restore(snapshot storeSnapshot) {
 	if _, ok := store.flows["default"]; !ok {
 		store.flows["default"] = defaultSOPFlow()
 	}
+	store.rebuildInboundIndexLocked()
+	store.ensureNextIDLocked()
 }
 
 func copyConversations(source map[string][]message) map[string][]message {
@@ -394,6 +564,56 @@ func copyConversations(source map[string][]message) map[string][]message {
 		copied[key] = append([]message(nil), value...)
 	}
 	return copied
+}
+
+func copyInboundIndex(source map[string]messageRef) map[string]messageRef {
+	if source == nil {
+		return nil
+	}
+	copied := make(map[string]messageRef, len(source))
+	for key, value := range source {
+		copied[key] = value
+	}
+	return copied
+}
+
+func (store *memoryStore) rebuildInboundIndexLocked() {
+	for conversationID, messages := range store.conversations {
+		for _, msg := range messages {
+			key := inboundDedupeKey(msg.SourceChannel, msg.ExternalMessageID)
+			if key == "" {
+				continue
+			}
+			if _, ok := store.inboundIndex[key]; !ok {
+				store.inboundIndex[key] = messageRef{ConversationID: conversationID, MessageID: msg.ID}
+			}
+		}
+	}
+}
+
+func (store *memoryStore) ensureNextIDLocked() {
+	nextID := store.nextID.Load()
+	for _, messages := range store.conversations {
+		for _, msg := range messages {
+			value, ok := parseMessageSequence(msg.ID)
+			if ok && value > nextID {
+				nextID = value
+			}
+		}
+	}
+	store.nextID.Store(nextID)
+}
+
+func parseMessageSequence(id string) (uint64, bool) {
+	value, ok := strings.CutPrefix(id, "msg-")
+	if !ok {
+		return 0, false
+	}
+	parsed, err := strconv.ParseUint(value, 10, 64)
+	if err != nil {
+		return 0, false
+	}
+	return parsed, true
 }
 
 func copySOPFlows(source map[string]sopFlow) map[string]sopFlow {
@@ -488,6 +708,22 @@ func (store *persistentStore) save() error {
 		return fmt.Errorf("replace data file: %w", err)
 	}
 	return nil
+}
+
+func (store *persistentStore) receiveIncomingMessage(input messageInput) (receiveResult, error) {
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	result, err := store.inner.receiveIncomingMessage(input)
+	if err != nil {
+		return result, err
+	}
+	if result.Duplicate {
+		return result, nil
+	}
+	if err := store.save(); err != nil {
+		return result, newStorageError("persist incoming message", err)
+	}
+	return result, nil
 }
 
 func (store *persistentStore) addMessage(direction string, input messageInput) (message, error) {

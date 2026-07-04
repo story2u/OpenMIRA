@@ -28,9 +28,12 @@ export function normalizeMessages(payload = {}) {
     id: text(message.id),
     conversationId: text(message.conversation_id),
     direction: text(message.direction),
+    sourceChannel: text(message.source_channel),
+    externalMessageId: text(message.external_message_id),
     senderName: text(message.sender_name || message.sender_id || "unknown"),
     content: text(message.content),
     timestamp: text(message.timestamp),
+    receivedAt: text(message.received_at),
   }));
 }
 

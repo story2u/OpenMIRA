@@ -9,15 +9,27 @@ test("apiURL joins base and path predictably", () => {
 
 test("normalizeMessages keeps the slim message shape", () => {
   const messages = normalizeMessages({
-    messages: [{ id: " msg-1 ", conversation_id: "conv-1", direction: "incoming", sender_name: "客户", content: " hello " }],
+    messages: [{
+      id: " msg-1 ",
+      conversation_id: "conv-1",
+      direction: "incoming",
+      source_channel: " webchat ",
+      external_message_id: " ext-1 ",
+      sender_name: "客户",
+      content: " hello ",
+      received_at: "2026-01-01T00:00:00Z",
+    }],
   });
   assert.deepEqual(messages, [{
     id: "msg-1",
     conversationId: "conv-1",
     direction: "incoming",
+    sourceChannel: "webchat",
+    externalMessageId: "ext-1",
     senderName: "客户",
     content: "hello",
     timestamp: "",
+    receivedAt: "2026-01-01T00:00:00Z",
   }]);
 });
 

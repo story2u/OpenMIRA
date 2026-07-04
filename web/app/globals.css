@@ -152,6 +152,13 @@ label {
   white-space: pre-wrap;
 }
 
+.message small {
+  display: block;
+  margin-top: 6px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
 .list {
   display: grid;
   gap: 8px;

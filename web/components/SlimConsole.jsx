@@ -5,6 +5,8 @@ import { normalizeMessages, normalizeSOPCollection, requestJSON } from "../lib/s
 
 export function SlimConsole() {
   const [conversationId, setConversationId] = useState("demo");
+  const [sourceChannel, setSourceChannel] = useState("web");
+  const [externalMessageId, setExternalMessageId] = useState("demo-msg-1");
   const [senderName, setSenderName] = useState("customer");
   const [messageText, setMessageText] = useState("你好");
   const [replyText, setReplyText] = useState("收到，我们马上处理。");
@@ -37,8 +39,8 @@ export function SlimConsole() {
   async function run(label, action) {
     setNotice("");
     try {
-      await action();
-      setNotice(label);
+      const result = await action();
+      setNotice(result || label);
     } catch (err) {
       setNotice(err.message || String(err));
     }
@@ -64,6 +66,16 @@ export function SlimConsole() {
                 <input value={conversationId} onChange={(event) => setConversationId(event.target.value)} />
               </label>
               <label>
+                来源通道
+                <input value={sourceChannel} onChange={(event) => setSourceChannel(event.target.value)} />
+              </label>
+            </div>
+            <div className="row">
+              <label>
+                外部消息 ID
+                <input value={externalMessageId} onChange={(event) => setExternalMessageId(event.target.value)} />
+              </label>
+              <label>
                 发送方
                 <input value={senderName} onChange={(event) => setSenderName(event.target.value)} />
               </label>
@@ -80,11 +92,18 @@ export function SlimConsole() {
               <button
                 type="button"
                 onClick={() => run("入站消息已写入", async () => {
-                  await requestJSON("messages/incoming", {
+                  const payload = await requestJSON("messages/incoming", {
                     method: "POST",
-                    body: { conversation_id: conversationId, sender_name: senderName, content: messageText },
+                    body: {
+                      conversation_id: conversationId,
+                      source_channel: sourceChannel,
+                      external_message_id: externalMessageId,
+                      sender_name: senderName,
+                      content: messageText,
+                    },
                   });
                   await refreshMessages();
+                  return payload.duplicate ? "重复入站已确认" : "入站消息已写入";
                 })}
               >
                 写入入站
@@ -109,9 +128,10 @@ export function SlimConsole() {
               {messages.length === 0 ? <p className="empty">暂无消息</p> : messages.map((message) => (
                 <article className="message" key={message.id}>
                   <header>
-                    <span>{message.direction} / {message.senderName}</span>
-                    <span>{message.timestamp}</span>
+                    <span>{message.direction} / {message.sourceChannel || "internal"} / {message.senderName}</span>
+                    <span>{message.timestamp || message.receivedAt}</span>
                   </header>
+                  {message.externalMessageId ? <small>{message.externalMessageId}</small> : null}
                   <p>{message.content}</p>
                 </article>
               ))}
