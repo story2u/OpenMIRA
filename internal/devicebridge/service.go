@@ -1,4 +1,4 @@
-// Package devicebridge stores lightweight MYT call-audio bridge heartbeats.
+// Package devicebridge stores lightweight RPA call-audio bridge heartbeats.
 package devicebridge
 
 import (

@@ -1,4 +1,4 @@
-// Package devicebridgehttp adapts MYT call-audio bridge status endpoints.
+// Package devicebridgehttp adapts RPA call-audio bridge status endpoints.
 package devicebridgehttp
 
 import (

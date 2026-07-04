@@ -134,7 +134,7 @@ func parseRuntimeLogStatus(text string) map[string]string {
 		if strings.Contains(line, "candidate_probe_no_active_track") {
 			return map[string]string{
 				"status": "waiting_call_track",
-				"detail": "桥接进程运行中，暂未发现真实供帧的企微通话下行 Track。",
+				"detail": "桥接进程运行中，暂未发现真实供帧的 IM 通话下行 Track。",
 			}
 		}
 		if strings.Contains(line, "bridge_idle_rediscover") {

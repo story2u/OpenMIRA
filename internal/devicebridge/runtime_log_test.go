@@ -11,8 +11,8 @@ import (
 
 func TestServiceReadRefreshesRunningStatusFromLogTail(t *testing.T) {
 	root := t.TempDir()
-	statusFile := filepath.Join(root, "myt-audio-bridge", "bridge-status.json")
-	logFile := filepath.Join(root, "myt-audio-bridge-linux", "192.168.1.30_5018", "bridge.log")
+	statusFile := filepath.Join(root, "rpa-audio-bridge", "bridge-status.json")
+	logFile := filepath.Join(root, "rpa-audio-bridge-linux", "192.168.1.30_5018", "bridge.log")
 	if err := os.MkdirAll(filepath.Dir(logFile), 0o755); err != nil {
 		t.Fatalf("create log dir: %v", err)
 	}
@@ -33,7 +33,7 @@ func TestServiceReadRefreshesRunningStatusFromLogTail(t *testing.T) {
 		Now:        func() time.Time { return now },
 	}
 
-	writeLogAt(t, logFile, "2026-06-12 15:00:00 - myt - INFO - remote_submix_missing_skip_track_probe threads=0\n", now.Add(-10*time.Second))
+	writeLogAt(t, logFile, "2026-06-12 15:00:00 - rpa - INFO - remote_submix_missing_skip_track_probe threads=0\n", now.Add(-10*time.Second))
 	waiting := service.Read("zimo")
 
 	if waiting["status"] != "waiting_remote_submix" || !strings.Contains(waiting["detail"].(string), "remote_submix") || waiting["running"] != true {
@@ -43,7 +43,7 @@ func TestServiceReadRefreshesRunningStatusFromLogTail(t *testing.T) {
 		t.Fatalf("waiting timestamps = %#v", waiting)
 	}
 
-	writeLogAt(t, logFile, "2026-06-12 15:00:01 - myt - INFO - bridge_tick count=3 frames=960 peak=0.12 ret=4096 bytes=4096\n", now.Add(-5*time.Second))
+	writeLogAt(t, logFile, "2026-06-12 15:00:01 - rpa - INFO - bridge_tick count=3 frames=960 peak=0.12 ret=4096 bytes=4096\n", now.Add(-5*time.Second))
 	bridging := service.Read("zimo")
 
 	if bridging["status"] != "bridging" || !strings.Contains(bridging["detail"].(string), "bytes=4096") || bridging["running"] != true {
@@ -53,10 +53,10 @@ func TestServiceReadRefreshesRunningStatusFromLogTail(t *testing.T) {
 
 func TestServiceReadMapsHostDataRuntimeLogPath(t *testing.T) {
 	root := t.TempDir()
-	statusFile := filepath.Join(root, "app-data", "myt-audio-bridge", "bridge-status.json")
+	statusFile := filepath.Join(root, "app-data", "rpa-audio-bridge", "bridge-status.json")
 	hostDataRoot := filepath.Join(root, "host-data")
-	mirrorLog := filepath.Join(hostDataRoot, "myt-audio-bridge-linux", "192.168.1.30_5017", "bridge.log")
-	reportedLog := "/data/jenkins_home/workspace/wework-test-main/repo/backend/data/myt-audio-bridge-linux/192.168.1.30_5017/bridge.log"
+	mirrorLog := filepath.Join(hostDataRoot, "rpa-audio-bridge-linux", "192.168.1.30_5017", "bridge.log")
+	reportedLog := "/data/im/runtime/backend/data/rpa-audio-bridge-linux/192.168.1.30_5017/bridge.log"
 	writeStatusDocument(t, statusFile, map[string]any{
 		"configured": true,
 		"running":    true,
@@ -68,7 +68,7 @@ func TestServiceReadMapsHostDataRuntimeLogPath(t *testing.T) {
 		"updated_at": "2026-07-01T08:00:00Z",
 	})
 	now := time.Date(2026, 7, 1, 8, 30, 0, 0, time.UTC)
-	writeLogAt(t, mirrorLog, "2026-06-12 18:28:59 - myt - INFO - remote_submix_missing_skip_track_probe threads=0\n", now.Add(-10*time.Second))
+	writeLogAt(t, mirrorLog, "2026-06-12 18:28:59 - rpa - INFO - remote_submix_missing_skip_track_probe threads=0\n", now.Add(-10*time.Second))
 	service := Service{
 		StatusFile:   statusFile,
 		HostDataRoot: hostDataRoot,
@@ -85,8 +85,8 @@ func TestServiceReadMapsHostDataRuntimeLogPath(t *testing.T) {
 
 func TestServiceReadVendorMonopipeNoPipeDoesNotReportBridging(t *testing.T) {
 	root := t.TempDir()
-	statusFile := filepath.Join(root, "myt-audio-bridge", "bridge-status.json")
-	logFile := filepath.Join(root, "myt-audio-bridge-linux", "192.168.1.30_5018", "bridge.log")
+	statusFile := filepath.Join(root, "rpa-audio-bridge", "bridge-status.json")
+	logFile := filepath.Join(root, "rpa-audio-bridge-linux", "192.168.1.30_5018", "bridge.log")
 	writeStatusDocument(t, statusFile, map[string]any{
 		"configured": true,
 		"running":    true,
@@ -99,9 +99,9 @@ func TestServiceReadVendorMonopipeNoPipeDoesNotReportBridging(t *testing.T) {
 	})
 	now := time.Date(2026, 7, 1, 8, 30, 0, 0, time.UTC)
 	writeLogAt(t, logFile, strings.Join([]string{
-		`2026-06-16 10:01:47 - myt - INFO - bridge_start {"hostForward": true, "writerMode": "host_forward_vendor_monopipe"}`,
-		"2026-06-16 10:01:52 - myt - INFO - bridge_tick count=300 frames=354 peak=19 ret=1062 bytes=4248 actual_track=0xb40000744cc714e0",
-		"2026-06-16 10:01:52 - myt - INFO - vendor_monopipe_summary pipe= reads=0 read_peak=0 writes=0 bytes=0 dropped=0 no_pipe=333 posted=338/1123200 last_ret=0",
+		`2026-06-16 10:01:47 - rpa - INFO - bridge_start {"hostForward": true, "writerMode": "host_forward_vendor_monopipe"}`,
+		"2026-06-16 10:01:52 - rpa - INFO - bridge_tick count=300 frames=354 peak=19 ret=1062 bytes=4248 actual_track=0xb40000744cc714e0",
+		"2026-06-16 10:01:52 - rpa - INFO - vendor_monopipe_summary pipe= reads=0 read_peak=0 writes=0 bytes=0 dropped=0 no_pipe=333 posted=338/1123200 last_ret=0",
 	}, "\n"), now.Add(-10*time.Second))
 	service := Service{
 		StatusFile: statusFile,
@@ -118,8 +118,8 @@ func TestServiceReadVendorMonopipeNoPipeDoesNotReportBridging(t *testing.T) {
 
 func TestServiceReadKeepsStatusWhenRuntimeLogIsOlder(t *testing.T) {
 	root := t.TempDir()
-	statusFile := filepath.Join(root, "myt-audio-bridge", "bridge-status.json")
-	logFile := filepath.Join(root, "myt-audio-bridge-linux", "192.168.1.30_5018", "bridge.log")
+	statusFile := filepath.Join(root, "rpa-audio-bridge", "bridge-status.json")
+	logFile := filepath.Join(root, "rpa-audio-bridge-linux", "192.168.1.30_5018", "bridge.log")
 	writeStatusDocument(t, statusFile, map[string]any{
 		"configured": true,
 		"running":    true,
@@ -130,7 +130,7 @@ func TestServiceReadKeepsStatusWhenRuntimeLogIsOlder(t *testing.T) {
 		"log_file":   logFile,
 		"updated_at": "2026-07-01T08:10:00Z",
 	})
-	writeLogAt(t, logFile, "2026 - myt - INFO - remote_submix_missing_skip_track_probe threads=0\n", time.Date(2026, 7, 1, 8, 9, 0, 0, time.UTC))
+	writeLogAt(t, logFile, "2026 - rpa - INFO - remote_submix_missing_skip_track_probe threads=0\n", time.Date(2026, 7, 1, 8, 9, 0, 0, time.UTC))
 	service := Service{
 		StatusFile: statusFile,
 		StaleSec:   3600,
@@ -146,9 +146,9 @@ func TestServiceReadKeepsStatusWhenRuntimeLogIsOlder(t *testing.T) {
 
 func TestParseRuntimeLogStatusReportsFridaDisconnected(t *testing.T) {
 	status := parseRuntimeLogStatus(strings.Join([]string{
-		"2026 - myt - WARNING - frida_remote_output_probe_failed: connection closed",
-		"2026 - myt - WARNING - hidden_voice_probe_failed: connection closed",
-		"2026 - myt - WARNING - discover_wait reason=no active voice track",
+		"2026 - rpa - WARNING - frida_remote_output_probe_failed: connection closed",
+		"2026 - rpa - WARNING - hidden_voice_probe_failed: connection closed",
+		"2026 - rpa - WARNING - discover_wait reason=no active voice track",
 	}, "\n"))
 
 	if status["status"] != "frida_disconnected" || !strings.Contains(status["detail"], "frida-server") {

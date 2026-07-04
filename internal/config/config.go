@@ -346,13 +346,13 @@ func Load() Config {
 	archiveSyncAllEnterprises := envBool("ARCHIVE_SYNC_ALL_ENTERPRISES") || envBool("GO_ARCHIVE_SYNC_SCOPE_ALL")
 	archiveSyncLockTTLSeconds := envIntMin("ARCHIVE_SYNC_LOCK_TTL_SEC", 30, 10)
 	archiveMediaLockTTLSeconds := parseIntMin(firstEnvValue("ARCHIVE_MEDIA_LOCK_TTL_SEC", "ARCHIVE_SYNC_LOCK_TTL_SEC"), 30, 10)
-	callAudioBridgeStatusFile := envString("MYT_CALL_AUDIO_BRIDGE_STATUS_FILE", "")
+	callAudioBridgeStatusFile := firstEnv("RPA_CALL_AUDIO_BRIDGE_STATUS_FILE", "MYT_CALL_AUDIO_BRIDGE_STATUS_FILE")
 	dataDir := firstEnv("CLOUD_DATA_DIR", "APP_DATA_DIR")
 	if dataDir == "" {
 		dataDir = filepath.Join(pythonRoot, "backend", "data")
 	}
 	if callAudioBridgeStatusFile == "" {
-		callAudioBridgeStatusFile = filepath.Join(dataDir, "myt-audio-bridge", "bridge-status.json")
+		callAudioBridgeStatusFile = filepath.Join(dataDir, "rpa-audio-bridge", "bridge-status.json")
 	}
 	p1ManagerCacheFile := envString("P1_MANAGER_CACHE_FILE", "")
 	if p1ManagerCacheFile == "" {
@@ -392,9 +392,9 @@ func Load() Config {
 		PlatformDefaultPaymentID:                     envIntMin("PLATFORM_DEFAULT_PAYMENT_ID", 12, 0),
 		PlatformTimeoutSec:                           envIntMin("PLATFORM_TIMEOUT_SEC", 15, 1),
 		CallAudioBridgeStatusFile:                    callAudioBridgeStatusFile,
-		CallAudioBridgeTargetsFile:                   envString("MYT_CALL_AUDIO_BRIDGE_TARGETS_FILE", ""),
-		CallAudioBridgeHostDataRoot:                  envString("MYT_CALL_AUDIO_BRIDGE_HOST_DATA_ROOT", ""),
-		CallAudioBridgeStaleSec:                      envFloatMin("MYT_CALL_AUDIO_BRIDGE_STATUS_STALE_SEC", 3600, 30),
+		CallAudioBridgeTargetsFile:                   firstEnv("RPA_CALL_AUDIO_BRIDGE_TARGETS_FILE", "MYT_CALL_AUDIO_BRIDGE_TARGETS_FILE"),
+		CallAudioBridgeHostDataRoot:                  firstEnv("RPA_CALL_AUDIO_BRIDGE_HOST_DATA_ROOT", "MYT_CALL_AUDIO_BRIDGE_HOST_DATA_ROOT"),
+		CallAudioBridgeStaleSec:                      parseFloatMin(firstEnvValue("RPA_CALL_AUDIO_BRIDGE_STATUS_STALE_SEC", "MYT_CALL_AUDIO_BRIDGE_STATUS_STALE_SEC"), 3600, 30),
 		P1ManagerCacheFile:                           p1ManagerCacheFile,
 		RTCMediaCameraAddrTemplate:                   envString("RTC_MEDIA_CAMERA_ADDR_TEMPLATE", ""),
 		RTCMediaWHIPPublishURLTemplate:               envString("RTC_MEDIA_WHIP_PUBLISH_URL_TEMPLATE", ""),
@@ -760,6 +760,11 @@ func parseIntMin(value string, fallback int, minimum int) int {
 
 func envFloatMin(key string, fallback float64, minimum float64) float64 {
 	value := strings.TrimSpace(os.Getenv(key))
+	return parseFloatMin(value, fallback, minimum)
+}
+
+func parseFloatMin(value string, fallback float64, minimum float64) float64 {
+	value = strings.TrimSpace(value)
 	if value == "" {
 		return fallback
 	}

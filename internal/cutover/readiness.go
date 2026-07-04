@@ -878,9 +878,6 @@ func DefaultProfiles() []Profile {
 				"CLOUD_CACHE_REDIS_URL",
 				"P1_INTERNAL_IP",
 				"P1_MANAGER_CACHE_FILE",
-				"MYT_CALL_AUDIO_BRIDGE_STATUS_FILE",
-				"MYT_CALL_AUDIO_BRIDGE_TARGETS_FILE",
-				"MYT_CALL_AUDIO_BRIDGE_HOST_DATA_ROOT",
 				"RTC_MEDIA_CAMERA_ADDR_TEMPLATE",
 				"RTC_MEDIA_WHIP_PUBLISH_URL_TEMPLATE",
 				"RTC_MEDIA_DIRECT_WHIP_PUBLISH_URL_TEMPLATE",
@@ -891,6 +888,29 @@ func DefaultProfiles() []Profile {
 				"CLOUD_BACKEND_BASE_URL",
 				"P1_RTC_CONTROL_EXECUTOR_BASE_URL",
 				"P1_RTC_CONTROL_EXECUTOR_TOKEN",
+			},
+			RequiredEnvAny: []EnvChoiceRequirement{
+				{
+					Name: "RPA call-audio bridge storage",
+					Alternatives: []EnvAlternative{
+						{
+							Name: "RPA_CALL_AUDIO_BRIDGE_*",
+							Keys: []string{
+								"RPA_CALL_AUDIO_BRIDGE_STATUS_FILE",
+								"RPA_CALL_AUDIO_BRIDGE_TARGETS_FILE",
+								"RPA_CALL_AUDIO_BRIDGE_HOST_DATA_ROOT",
+							},
+						},
+						{
+							Name: "legacy call-audio bridge env",
+							Keys: []string{
+								"MYT_CALL_AUDIO_BRIDGE_STATUS_FILE",
+								"MYT_CALL_AUDIO_BRIDGE_TARGETS_FILE",
+								"MYT_CALL_AUDIO_BRIDGE_HOST_DATA_ROOT",
+							},
+						},
+					},
+				},
 			},
 			Services: []string{"go-api", "go-send-dispatcher", "go-redis", "go-cache-redis"},
 			GoldenSuites: []string{
