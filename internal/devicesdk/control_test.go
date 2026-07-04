@@ -98,7 +98,7 @@ func TestServiceControlInputSendsNormalizedCommand(t *testing.T) {
 	}]`)
 	store := NewMemoryRTCStateStore()
 	store.SetControlState("slot-18", map[string]any{"controller_identity": "viewer-1", "expires_at": float64(time.Now().Add(time.Minute).Unix())})
-	executor := &fakeControlInputExecutor{result: ControlInputResult{Sent: true, Route: "mytrpc", Detail: "", AcquireMillis: 7, SendMillis: 3}}
+	executor := &fakeControlInputExecutor{result: ControlInputResult{Sent: true, Route: "vendor-provider", Detail: "", AcquireMillis: 7, SendMillis: 3}}
 	service := Service{Config: Config{ManagerCacheFile: cacheFile}, RTCState: store, ControlExecutor: executor}
 
 	payload, err := service.ControlInput(context.Background(), "p1-18-slot", ControlInputRequest{
@@ -123,7 +123,7 @@ func TestServiceControlInputSendsNormalizedCommand(t *testing.T) {
 	if executor.command.Kind != "key" || executor.command.Action != "down" || executor.command.NormalizedKey != "arrowleft" || executor.command.KeyCode != 21 {
 		t.Fatalf("command key = %+v", executor.command)
 	}
-	if payload["success"] != true || payload["sent"] != true || payload["device_id"] != "slot-18" || payload["route"] != "mytrpc" || payload["screen_width"] != 720 || payload["screen_height"] != 1280 || payload["acquire_ms"] != 7 || payload["send_ms"] != 3 {
+	if payload["success"] != true || payload["sent"] != true || payload["device_id"] != "slot-18" || payload["route"] != "vendor-provider" || payload["screen_width"] != 720 || payload["screen_height"] != 1280 || payload["acquire_ms"] != 7 || payload["send_ms"] != 3 {
 		t.Fatalf("payload = %#v", payload)
 	}
 }
@@ -132,7 +132,7 @@ func TestServiceControlInputUsesConfigScreenSizeAndMapsFailedSend(t *testing.T) 
 	cacheFile := writeManagerCache(t, `[{"device_id":"slot-18","host":"192.168.1.30","slot":18,"p1_width":720,"p1_height":1280}]`)
 	store := NewMemoryRTCStateStore()
 	store.SetControlState("slot-18", map[string]any{"controller_identity": "viewer-1", "expires_at": float64(time.Now().Add(time.Minute).Unix())})
-	executor := &fakeControlInputExecutor{result: ControlInputResult{Sent: false, Detail: "MytRpc control input failed"}}
+	executor := &fakeControlInputExecutor{result: ControlInputResult{Sent: false, Detail: "RPA control input failed"}}
 	service := Service{
 		Config:          Config{ManagerCacheFile: cacheFile, RTCControlScreenWidth: 1080, RTCControlScreenHeight: 1920},
 		RTCState:        store,

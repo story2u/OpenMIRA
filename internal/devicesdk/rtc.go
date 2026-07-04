@@ -420,7 +420,7 @@ func (service Service) ControlInput(ctx context.Context, deviceID string, reques
 	}
 	route := strings.TrimSpace(result.Route)
 	if route == "" {
-		route = "mytrpc"
+		route = DefaultControlInputRoute
 	}
 	return map[string]any{
 		"success":          true,

@@ -1621,7 +1621,7 @@ func TestBuildHandlerDeviceRTCControlInputUsesBridgeExecutor(t *testing.T) {
 		data, _ := io.ReadAll(r.Body)
 		bridgeBody = string(data)
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"success":true,"route":"mytrpc","sent":true,"detail":"","acquire_ms":6,"send_ms":2}`))
+		_, _ = w.Write([]byte(`{"success":true,"route":"rpa-provider","sent":true,"detail":"","acquire_ms":6,"send_ms":2}`))
 	}))
 	defer bridge.Close()
 	handler, cleanup, err := buildHandler(context.Background(), config.Config{
@@ -1661,7 +1661,7 @@ func TestBuildHandlerDeviceRTCControlInputUsesBridgeExecutor(t *testing.T) {
 	request.Header.Set("Authorization", "Bearer "+cs.Token)
 	handler.ServeHTTP(response, request)
 	body := response.Body.String()
-	if response.Code != http.StatusOK || !strings.Contains(body, `"route":"mytrpc"`) || !strings.Contains(body, `"sent":true`) || !strings.Contains(body, `"screen_width":720`) || !strings.Contains(body, `"screen_height":1280`) || !strings.Contains(body, `"acquire_ms":6`) {
+	if response.Code != http.StatusOK || !strings.Contains(body, `"route":"rpa-provider"`) || !strings.Contains(body, `"sent":true`) || !strings.Contains(body, `"screen_width":720`) || !strings.Contains(body, `"screen_height":1280`) || !strings.Contains(body, `"acquire_ms":6`) {
 		t.Fatalf("input response = %d %s", response.Code, body)
 	}
 	if bridgePath != "/api/v1/devices/slot-18/control/input" || bridgeToken != "agent-token" || !strings.Contains(bridgeBody, `"participant_identity":"viewer-tab"`) || !strings.Contains(bridgeBody, `"x":0.5`) {

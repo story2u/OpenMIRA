@@ -24,12 +24,14 @@ var ErrSDKParticipantIdentityRequired = errors.New("participant_identity is requ
 var ErrSDKControlAlreadyOwned = errors.New("device control is already owned")
 var ErrSDKControlReleaseForbidden = errors.New("only current controller can release")
 var ErrSDKControlInputForbidden = errors.New("only current controller can send input")
-var ErrSDKControlInputUnavailable = errors.New("MytRpc control input is not available in the Go candidate")
-var ErrSDKControlInputFailed = errors.New("MytRpc control input failed")
+var ErrSDKControlInputUnavailable = errors.New("RPA control input provider is not available")
+var ErrSDKControlInputFailed = errors.New("RPA control input failed")
 var ErrSDKMediaStartForbidden = errors.New("only current controller can start media")
 var ErrSDKMediaStopForbidden = errors.New("only current controller can stop media")
 var ErrSDKMediaActivationUnavailable = errors.New("P1 media activation is not available in the Go candidate")
 var ErrSDKMediaControlUnavailable = errors.New("P1 media control is not available in the Go candidate")
+
+const DefaultControlInputRoute = "rpa-provider"
 
 // Config carries environment-backed WebRTC URL settings.
 type Config struct {

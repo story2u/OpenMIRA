@@ -15,8 +15,8 @@ import (
 	"im-go/internal/devicesdk"
 )
 
-// Client forwards validated low-latency RTC input to a bridge that owns the
-// actual MytRpc/P1 connection.
+// Client forwards validated low-latency RTC input to a provider bridge that
+// owns the device control connection.
 type Client struct {
 	BaseURL string
 	Token   string
@@ -24,7 +24,7 @@ type Client struct {
 	Client  *http.Client
 }
 
-// SendControlInput posts one Python-compatible control/input request.
+// SendControlInput posts one provider-compatible control/input request.
 func (client Client) SendControlInput(ctx context.Context, command devicesdk.ControlInputCommand) (devicesdk.ControlInputResult, error) {
 	baseURL := strings.TrimRight(strings.TrimSpace(client.BaseURL), "/")
 	if baseURL == "" {
@@ -75,7 +75,7 @@ func (client Client) SendControlInput(ctx context.Context, command devicesdk.Con
 	return devicesdk.ControlInputResult{
 		Sent:          boolValue(payload["sent"], true),
 		Detail:        stringValue(payload["detail"]),
-		Route:         firstNonEmpty(stringValue(payload["route"]), "mytrpc"),
+		Route:         firstNonEmpty(stringValue(payload["route"]), devicesdk.DefaultControlInputRoute),
 		AcquireMillis: intValue(payload["acquire_ms"]),
 		SendMillis:    intValue(payload["send_ms"]),
 	}, nil

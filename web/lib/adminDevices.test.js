@@ -432,7 +432,7 @@ test("device rtc normalizers keep WebRTC, LiveKit, lease and media fields", () =
   const input = normalizeDeviceRTCControlInputResult({
     success: true,
     device_id: "slot-18",
-    route: "mytrpc",
+    route: "rpa-provider",
     sent: true,
     acquire_ms: 6,
     send_ms: 2,
@@ -441,7 +441,7 @@ test("device rtc normalizers keep WebRTC, LiveKit, lease and media fields", () =
     screen_height: 1280,
   });
   assert.equal(input.sent, true);
-  assert.equal(input.route, "mytrpc");
+  assert.equal(input.route, "rpa-provider");
   assert.equal(input.screenHeight, 1280);
   assert.equal(input.totalMS, 10);
 

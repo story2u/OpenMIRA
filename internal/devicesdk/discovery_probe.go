@@ -11,7 +11,7 @@ import (
 
 var ErrSDKDiscoveryProbeTargetRequired = errors.New("device_ip is required when no manager device IP candidate is configured")
 
-// DiscoveryProbeRequest mirrors the legacy MYTOS discovery probe body.
+// DiscoveryProbeRequest describes a provider discovery probe body.
 type DiscoveryProbeRequest struct {
 	DeviceIP       string
 	ManagerHost    string
@@ -459,7 +459,7 @@ func buildProbeEnvSuggestions(deviceIP string, managerHost string, managerPort i
 		add("P1_BRIDGE_WEBRTC_HOSTS", upsertProbeEnvMap(os.Getenv("P1_BRIDGE_WEBRTC_HOSTS"), deviceIP, webrtcHost))
 	}
 	if dockerBase != "" {
-		add("MYTOS_DOCKER_BASES", upsertProbeEnvMap(firstNonEmpty(os.Getenv("MYTOS_DOCKER_BASES"), os.Getenv("MYTOS_DOCKER_API_BASES")), deviceIP, dockerBase))
+		add("RPA_DOCKER_BASES", upsertProbeEnvMap(firstNonEmpty(os.Getenv("RPA_DOCKER_BASES"), os.Getenv("MYTOS_DOCKER_BASES"), os.Getenv("MYTOS_DOCKER_API_BASES")), deviceIP, dockerBase))
 	}
 	if managerHost != "" {
 		add("P1_KEEPALIVE_TARGETS", appendProbeEnvValue(os.Getenv("P1_KEEPALIVE_TARGETS"), managerHost+":"+strconv.Itoa(managerPort)))

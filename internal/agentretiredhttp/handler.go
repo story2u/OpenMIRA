@@ -11,8 +11,8 @@ import (
 )
 
 const (
-	heartbeatDisabledDetail  = "legacy App/HTTP-Agent heartbeat is disabled; device status is sourced from MytRpc SDK/P1 manager"
-	loginEventDisabledDetail = "legacy App/HTTP-Agent login callback is disabled; use MytRpc SDK login status"
+	heartbeatDisabledDetail  = "legacy App/HTTP-Agent heartbeat is disabled; device status is sourced from the device SDK/provider"
+	loginEventDisabledDetail = "legacy App/HTTP-Agent login callback is disabled; use device SDK/provider login status"
 )
 
 // Handler owns retired legacy agent route serialization.

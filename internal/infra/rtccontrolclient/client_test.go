@@ -13,7 +13,7 @@ import (
 	"im-go/internal/devicesdk"
 )
 
-func TestClientSendControlInputPostsLegacyPayload(t *testing.T) {
+func TestClientSendControlInputPostsProviderPayload(t *testing.T) {
 	var path string
 	var token string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -24,7 +24,7 @@ func TestClientSendControlInputPostsLegacyPayload(t *testing.T) {
 			t.Fatalf("body = %s", string(body))
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"success":true,"route":"mytrpc","sent":true,"detail":"","acquire_ms":8,"send_ms":4}`))
+		_, _ = w.Write([]byte(`{"success":true,"route":"vendor-provider","sent":true,"detail":"","acquire_ms":8,"send_ms":4}`))
 	}))
 	defer server.Close()
 
@@ -49,8 +49,24 @@ func TestClientSendControlInputPostsLegacyPayload(t *testing.T) {
 	if path != "/api/v1/devices/slot-18/control/input" || token != "agent-token" {
 		t.Fatalf("request path/token = %q/%q", path, token)
 	}
-	if !result.Sent || result.Route != "mytrpc" || result.AcquireMillis != 8 || result.SendMillis != 4 {
+	if !result.Sent || result.Route != "vendor-provider" || result.AcquireMillis != 8 || result.SendMillis != 4 {
 		t.Fatalf("result = %+v", result)
+	}
+}
+
+func TestClientSendControlInputDefaultsProviderRoute(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"success":true,"sent":true}`))
+	}))
+	defer server.Close()
+
+	result, err := (Client{BaseURL: server.URL}).SendControlInput(context.Background(), devicesdk.ControlInputCommand{DeviceID: "slot-18"})
+	if err != nil {
+		t.Fatalf("SendControlInput returned error: %v", err)
+	}
+	if result.Route != devicesdk.DefaultControlInputRoute {
+		t.Fatalf("Route = %q, want %q", result.Route, devicesdk.DefaultControlInputRoute)
 	}
 }
 

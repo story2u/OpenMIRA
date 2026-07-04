@@ -402,7 +402,7 @@ func TestControlInputHandlerAcceptsAgentTokenAndMapsUnavailable(t *testing.T) {
 	if response.Code != http.StatusServiceUnavailable || service.controlInputDeviceID != "device-1" || service.controlInputRequest.ParticipantIdentity != "viewer-1" || service.controlInputRequest.Action != "down" || service.controlInputRequest.TimestampMillis != 123 {
 		t.Fatalf("response=%d %s service=%+v", response.Code, response.Body.String(), service)
 	}
-	if !strings.Contains(response.Body.String(), "MytRpc control input is not available") {
+	if !strings.Contains(response.Body.String(), "RPA control input provider is not available") {
 		t.Fatalf("response body = %s", response.Body.String())
 	}
 }
@@ -434,7 +434,7 @@ func TestControlInputHandlerMapsForbiddenAndMissingIdentity(t *testing.T) {
 			err:        devicesdk.ErrSDKControlInputFailed,
 			body:       `{"participant_identity":"viewer-1"}`,
 			wantStatus: http.StatusBadGateway,
-			wantBody:   "MytRpc control input failed",
+			wantBody:   "RPA control input failed",
 		},
 	}
 	token := issueToken(t, "cs")
