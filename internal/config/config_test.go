@@ -1895,9 +1895,16 @@ func TestLoadReadsSessionJWTIssuerAlias(t *testing.T) {
 func TestLoadSendConnectorConfig(t *testing.T) {
 	clearSendConnectorEnv(t)
 	cfg := Load()
-	if cfg.SendProviderBaseURL != "" || cfg.SendProviderAPIToken != "" || cfg.SendProviderTimeoutSec != 180 {
-		t.Fatalf("default send provider config = %#v", cfg)
+	if cfg.SendConnectorMode != "" || cfg.SendProviderBaseURL != "" || cfg.SendProviderAPIToken != "" || cfg.SendProviderTimeoutSec != 180 {
+		t.Fatalf("default send connector config = %#v", cfg)
 	}
+
+	t.Setenv("GO_SEND_CONNECTOR_MODE", " fake ")
+	cfg = Load()
+	if cfg.SendConnectorMode != "fake" {
+		t.Fatalf("SendConnectorMode = %q, want fake", cfg.SendConnectorMode)
+	}
+	t.Setenv("GO_SEND_CONNECTOR_MODE", "")
 
 	t.Setenv("GO_SEND_CONNECTOR_BASE_URL", " https://send-connector.local ")
 	t.Setenv("GO_SEND_CONNECTOR_API_TOKEN", " connector-token ")
@@ -1975,6 +1982,7 @@ func clearPlatformEnv(t *testing.T) {
 func clearSendConnectorEnv(t *testing.T) {
 	t.Helper()
 	for _, key := range []string{
+		"GO_SEND_CONNECTOR_MODE",
 		"GO_SEND_CONNECTOR_BASE_URL",
 		"GO_SEND_PROVIDER_BASE_URL",
 		"GO_SDK_EXECUTOR_BASE_URL",

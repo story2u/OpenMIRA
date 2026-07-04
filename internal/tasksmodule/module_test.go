@@ -264,6 +264,63 @@ func TestNewWiresSDKExecutorAndDeviceLister(t *testing.T) {
 	}
 }
 
+// TestNewWiresFakeSendConnectorMode keeps standalone send validation independent of external platforms.
+func TestNewWiresFakeSendConnectorMode(t *testing.T) {
+	now := time.Date(2026, 7, 4, 9, 0, 0, 0, time.UTC)
+	t.Setenv("SEND_DEVICE_ALLOWLIST", "device-1")
+	module, err := New(Options{
+		Config: config.Config{SendConnectorMode: "fake"},
+		Now:    func() time.Time { return now },
+	})
+	if err != nil {
+		t.Fatalf("New returned error: %v", err)
+	}
+	if module.SendDispatcher.ExecuteBatch == nil {
+		t.Fatal("fake connector executor was not wired")
+	}
+	devices, err := module.SendDispatcher.ListDevices(context.Background())
+	if err != nil || len(devices) != 1 || devices[0] != "device-1" {
+		t.Fatalf("devices=%#v err=%v", devices, err)
+	}
+	traceID := "trace-fake-send-1"
+	record := tasks.Record{
+		TaskID:    "task-fake-send-1",
+		Source:    "cloud-web",
+		Target:    tasks.Target{AgentID: "agent-1"},
+		TaskType:  "send_text",
+		Payload:   map[string]any{"receiver": "external-user-1", "text": "hello"},
+		Status:    tasks.StatusRunning,
+		TraceID:   &traceID,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+	if err := module.Service.Store.Upsert(context.Background(), record); err != nil {
+		t.Fatalf("Upsert returned error: %v", err)
+	}
+
+	finalized, err := module.SendDispatcher.ExecuteBatch(context.Background(), "device-1", []tasks.Record{record})
+	if err != nil {
+		t.Fatalf("ExecuteBatch returned error: %v", err)
+	}
+	if len(finalized) != 1 || finalized[0].Status != tasks.StatusSuccess || finalized[0].DispatchedAt == nil || finalized[0].ScriptStartedAt == nil {
+		t.Fatalf("finalized = %#v", finalized)
+	}
+	stored, err := module.Service.Get(context.Background(), "task-fake-send-1")
+	if err != nil {
+		t.Fatalf("Get returned error: %v", err)
+	}
+	if stored.Status != tasks.StatusSuccess {
+		t.Fatalf("stored = %#v", stored)
+	}
+}
+
+func TestNewRejectsUnsupportedSendConnectorMode(t *testing.T) {
+	_, err := New(Options{Config: config.Config{SendConnectorMode: "bogus"}})
+	if err == nil {
+		t.Fatal("New returned nil error")
+	}
+}
+
 type recordingDeviceLockStore struct{}
 
 func (store *recordingDeviceLockStore) SetDeviceLock(context.Context, string, string, time.Duration) (bool, error) {

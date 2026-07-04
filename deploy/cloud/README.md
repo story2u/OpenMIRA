@@ -54,7 +54,7 @@ Use `-strict` in a release gate so disabled flags or missing settings fail befor
 
 Provider-specific settings are optional unless the matching connector or provider is enabled.
 
-`go-send-dispatcher` is part of the standalone worker set, but it does not assume a bundled message platform. Leave `GO_SEND_CONNECTOR_BASE_URL` empty for core/runtime validation. Set it only when an HTTP-compatible outbound connector is enabled for real delivery. `GO_SEND_PROVIDER_BASE_URL` remains a compatibility alias.
+`go-send-dispatcher` is part of the standalone worker set, but it does not assume a bundled message platform. Set `GO_SEND_CONNECTOR_MODE=fake` plus `SEND_DEVICE_ALLOWLIST` for local/CI send smoke validation without an external connector. Leave `GO_SEND_CONNECTOR_BASE_URL` empty in that mode. Set the base URL only when an HTTP-compatible outbound connector is enabled for real delivery. `GO_SEND_PROVIDER_BASE_URL` remains a compatibility alias.
 
 ## Runtime Roles
 
@@ -83,7 +83,7 @@ Message platforms are connectors. Automation backends are providers. The compose
 Practical rules:
 
 - Keep core API/Web/Redis/DB deployable without a specific message platform.
-- Keep `go-send-dispatcher` deployable with fake or HTTP providers for validation.
+- Keep `go-send-dispatcher` deployable with fake or HTTP outbound connectors for validation.
 - Do not add provider sidecars to the default compose graph; use explicit overrides or external services for provider-specific deployments.
 - Put provider secrets behind dedicated env names and avoid leaking them into core service assumptions.
 - Prefer one provider service per capability boundary instead of embedding device or vendor logic in `go-api`.

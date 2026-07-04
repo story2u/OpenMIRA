@@ -242,7 +242,7 @@ func NewRuntime(ctx context.Context, cfg config.Config, options Options) (*Runti
 				taskStatusPublisher = taskstatuspublisher.New(realtimeHub)
 			}
 		}
-		if strings.TrimSpace(cfg.SendProviderBaseURL) != "" {
+		if strings.ToLower(strings.TrimSpace(cfg.SendConnectorMode)) != "fake" && strings.TrimSpace(cfg.SendProviderBaseURL) != "" {
 			provider := sdkexecutorclient.New(cfg.SendProviderBaseURL, sdkexecutorclient.Options{
 				Token:   cfg.SendProviderAPIToken,
 				Timeout: time.Duration(cfg.SendProviderTimeoutSec) * time.Second,

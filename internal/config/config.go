@@ -34,6 +34,7 @@ type Config struct {
 	SessionJWTSecret                             string
 	SessionJWTIssuer                             string
 	AgentAPIToken                                string
+	SendConnectorMode                            string
 	SendProviderBaseURL                          string
 	SendProviderAPIToken                         string
 	SendProviderTimeoutSec                       int
@@ -391,6 +392,7 @@ func Load() Config {
 		SessionJWTSecret:                             envString("SESSION_JWT_SECRET", ""),
 		SessionJWTIssuer:                             firstEnvDefault("im-cloud", "SESSION_JWT_ISS", "SESSION_JWT_ISSUER"),
 		AgentAPIToken:                                envString("AGENT_API_TOKEN", ""),
+		SendConnectorMode:                            firstEnv("GO_SEND_CONNECTOR_MODE"),
 		SendProviderBaseURL:                          firstEnv("GO_SEND_CONNECTOR_BASE_URL", "GO_SEND_PROVIDER_BASE_URL", "GO_SDK_EXECUTOR_BASE_URL", "SDK_EXECUTOR_BASE_URL", "P1_SDK_EXECUTOR_BASE_URL"),
 		SendProviderAPIToken:                         firstEnv("GO_SEND_CONNECTOR_API_TOKEN", "GO_SEND_PROVIDER_API_TOKEN", "GO_SDK_EXECUTOR_API_TOKEN", "SDK_EXECUTOR_API_TOKEN", "P1_SDK_EXECUTOR_API_TOKEN"),
 		SendProviderTimeoutSec:                       envIntRange(firstEnvValue("GO_SEND_CONNECTOR_TIMEOUT_SEC", "GO_SEND_PROVIDER_TIMEOUT_SEC", "GO_SDK_EXECUTOR_TIMEOUT_SEC", "SDK_EXECUTOR_TIMEOUT_SEC", "MYTRPC_SDK_SUBPROCESS_TIMEOUT_SEC"), 180, 1, 1800),

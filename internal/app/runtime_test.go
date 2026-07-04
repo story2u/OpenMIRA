@@ -1,6 +1,6 @@
 // Package app tests optional runtime assembly without opening network sockets.
 // It verifies that DB, Redis, and session components can be composed before
-// route registration is enabled in a later migration step.
+// route registration is enabled in a later implementation step.
 package app
 
 import (
@@ -176,7 +176,7 @@ func TestNewRuntimeBuildsTasksWithRedisDeviceHealthStore(t *testing.T) {
 	}
 }
 
-// TestNewRuntimeBuildsTasksWithMemoryDeviceHealthStore mirrors Python local fallback.
+// TestNewRuntimeBuildsTasksWithMemoryDeviceHealthStore wires the local device-health fallback.
 func TestNewRuntimeBuildsTasksWithMemoryDeviceHealthStore(t *testing.T) {
 	runtime, err := NewRuntime(context.Background(), config.Config{}, Options{BuildTasks: true})
 	if err != nil {
@@ -188,8 +188,8 @@ func TestNewRuntimeBuildsTasksWithMemoryDeviceHealthStore(t *testing.T) {
 	}
 }
 
-// TestNewRuntimeBuildsTasksWithSendProvider wires the optional real provider boundary without pinging it.
-func TestNewRuntimeBuildsTasksWithSendProvider(t *testing.T) {
+// TestNewRuntimeBuildsTasksWithSendConnectorProvider wires the optional HTTP provider boundary without pinging it.
+func TestNewRuntimeBuildsTasksWithSendConnectorProvider(t *testing.T) {
 	runtime, err := NewRuntime(context.Background(), config.Config{
 		SendProviderBaseURL:    "https://send-provider.local",
 		SendProviderAPIToken:   "provider-token",
@@ -200,10 +200,30 @@ func TestNewRuntimeBuildsTasksWithSendProvider(t *testing.T) {
 	}
 	defer runtime.Close()
 	if runtime.Tasks == nil || runtime.Tasks.SendDispatcher.ExecuteBatch == nil {
-		t.Fatalf("send provider not wired: %+v", runtime.Tasks)
+		t.Fatalf("send connector provider not wired: %+v", runtime.Tasks)
 	}
 	if runtime.Tasks.SendDispatcher.ListDevices == nil {
-		t.Fatalf("send provider device lister not wired: %+v", runtime.Tasks)
+		t.Fatalf("send connector provider device lister not wired: %+v", runtime.Tasks)
+	}
+}
+
+// TestNewRuntimeBuildsTasksWithFakeSendConnector wires standalone send smoke execution.
+func TestNewRuntimeBuildsTasksWithFakeSendConnector(t *testing.T) {
+	t.Setenv("SEND_DEVICE_ALLOWLIST", "device-1")
+	runtime, err := NewRuntime(context.Background(), config.Config{
+		SendConnectorMode:   "fake",
+		SendProviderBaseURL: "https://send-provider-should-not-be-used.local",
+	}, Options{BuildTasks: true})
+	if err != nil {
+		t.Fatalf("NewRuntime returned error: %v", err)
+	}
+	defer runtime.Close()
+	if runtime.Tasks == nil || runtime.Tasks.SendDispatcher.ExecuteBatch == nil {
+		t.Fatalf("fake send connector not wired: %+v", runtime.Tasks)
+	}
+	devices, err := runtime.Tasks.SendDispatcher.ListDevices(context.Background())
+	if err != nil || len(devices) != 1 || devices[0] != "device-1" {
+		t.Fatalf("devices=%#v err=%v", devices, err)
 	}
 }
 

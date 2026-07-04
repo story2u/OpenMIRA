@@ -1,16 +1,19 @@
 // Package tasksmodule assembles the phase-six task candidate components.
 // Route registration stays outside this package so persistence can be verified
-// before Python task traffic is cut over.
+// before task traffic is served by this module.
 package tasksmodule
 
 import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
+	"strings"
 	"time"
 
 	"im-go/internal/auth"
 	"im-go/internal/config"
+	"im-go/internal/connector"
 	"im-go/internal/infra/aiterminalsync"
 	"im-go/internal/infra/messagedelivery"
 	"im-go/internal/infra/messagestore"
@@ -138,8 +141,40 @@ func New(options Options) (Module, error) {
 		SnapshotCache: senddispatcher.NewStatusSnapshotCache(),
 		Now:           options.Now,
 	}
-	if options.SDKExecutor != nil {
-		dispatcher.ExecuteBatch = senddispatcher.NewSDKExecutorBatchFunc(options.SDKExecutor, dispatcher.ExecutorAdapterOptions())
+	switch strings.ToLower(strings.TrimSpace(options.Config.SendConnectorMode)) {
+	case "fake":
+		const connectorID = "fake-send-connector"
+		dispatcher.ExecuteBatch = senddispatcher.NewOutboundConnectorBatchFunc(&connector.FakeOutboundConnector{
+			ConnectorID: connectorID,
+			Channel:     connector.ChannelInternalWebhook,
+			TenantID:    "default",
+			Now:         options.Now,
+		}, senddispatcher.OutboundConnectorAdapterOptions{
+			Now:          options.Now,
+			StatusWriter: service,
+			Terminal:     dispatcher.TerminalSync,
+			TaskOptions: connector.OutboundTaskOptions{
+				ConnectorID: connectorID,
+				Channel:     connector.ChannelInternalWebhook,
+				TenantID:    "default",
+			},
+			ReceiptOptions: connector.DeliveryReceiptOptions{
+				ConnectorID: connectorID,
+				Channel:     connector.ChannelInternalWebhook,
+				TenantID:    "default",
+			},
+		})
+		if dispatcher.ListDevices == nil {
+			dispatcher.ListDevices = func(context.Context) ([]string, error) {
+				return senddispatcher.DeviceAllowlist(dispatcher.Env), nil
+			}
+		}
+	case "", "http", "provider", "sdk":
+		if options.SDKExecutor != nil {
+			dispatcher.ExecuteBatch = senddispatcher.NewSDKExecutorBatchFunc(options.SDKExecutor, dispatcher.ExecutorAdapterOptions())
+		}
+	default:
+		return Module{}, fmt.Errorf("unsupported send connector mode %q", options.Config.SendConnectorMode)
 	}
 	dispatcher.ListRunningTasks = func(ctx context.Context) ([]tasks.Record, error) {
 		status := tasks.StatusRunning

@@ -3,6 +3,7 @@ package connector
 import (
 	"context"
 	"errors"
+	"sync"
 	"time"
 )
 
@@ -15,6 +16,7 @@ type FakeOutboundConnector struct {
 	ErrorCode    string
 	ErrorMessage string
 	Now          func() time.Time
+	mu           sync.Mutex
 	Sent         []OutboundMessage
 }
 
@@ -26,7 +28,9 @@ func (connector *FakeOutboundConnector) Send(ctx context.Context, message Outbou
 	if err := ctx.Err(); err != nil {
 		return DeliveryReceipt{}, err
 	}
+	connector.mu.Lock()
 	connector.Sent = append(connector.Sent, message)
+	connector.mu.Unlock()
 	status := firstNonBlank(connector.Status, ReceiptDelivered)
 	metadata := cloneMap(message.Metadata)
 	if _, ok := metadata["task_id"]; !ok {
