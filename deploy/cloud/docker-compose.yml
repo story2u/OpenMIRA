@@ -40,7 +40,7 @@ x-go-env: &go-env
   LIVEKIT_API_SECRET: "${LIVEKIT_API_SECRET:-}"
   LIVEKIT_TOKEN_TTL_SEC: "${LIVEKIT_TOKEN_TTL_SEC:-3600}"
   LIVEKIT_DEVICE_ROOM_PREFIX: "${LIVEKIT_DEVICE_ROOM_PREFIX:-device}"
-  RTC_MODE_DEFAULT: "${RTC_MODE_DEFAULT:-legacy}"
+  RTC_MODE_DEFAULT: "${RTC_MODE_DEFAULT:-livekit}"
   RTC_BRIDGE_ACTIVE_TTL_SEC: "${RTC_BRIDGE_ACTIVE_TTL_SEC:-90}"
   RTC_CONTROL_TTL_SEC: "${RTC_CONTROL_TTL_SEC:-120}"
   CLOUD_BACKEND_BASE_URL: "${CLOUD_BACKEND_BASE_URL:-}"
@@ -382,37 +382,12 @@ services:
       <<: *go-env
       CLOUD_RUNTIME_ROLE: contact_sync_worker
 
-  python-sdk-executor-sidecar:
-    build:
-      context: ../../../Python
-      dockerfile: backend/Dockerfile
-    image: "${PYTHON_SDK_EXECUTOR_IMAGE:-wework-python-sdk-executor:${GO_IMAGE_TAG:-latest}}"
-    restart: unless-stopped
-    env_file:
-      - .env
-    command: ["python", "-m", "app.entrypoints.sdk_executor_sidecar"]
-    environment:
-      CLOUD_RUNTIME_ROLE: send-dispatcher
-      SDK_EXECUTOR_API_TOKEN: "${SDK_EXECUTOR_API_TOKEN:-}"
-      SDK_EXECUTOR_SIDECAR_PORT: "9107"
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:9107/healthz', timeout=2)"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-    volumes:
-      - go-data:/app/data
-    networks:
-      - wework-go-net
-
   go-send-dispatcher:
     <<: *go-service
     depends_on:
       go-redis:
         condition: service_healthy
       go-cache-redis:
-        condition: service_healthy
-      python-sdk-executor-sidecar:
         condition: service_healthy
     build:
       context: ../..
@@ -423,8 +398,8 @@ services:
     environment:
       <<: *go-env
       CLOUD_RUNTIME_ROLE: send_dispatcher
-      GO_SDK_EXECUTOR_BASE_URL: "${GO_SDK_EXECUTOR_BASE_URL:-http://python-sdk-executor-sidecar:9107}"
-      GO_SDK_EXECUTOR_API_TOKEN: "${SDK_EXECUTOR_API_TOKEN:-}"
+      GO_SDK_EXECUTOR_BASE_URL: "${GO_SDK_EXECUTOR_BASE_URL:-}"
+      GO_SDK_EXECUTOR_API_TOKEN: "${GO_SDK_EXECUTOR_API_TOKEN:-}"
       GO_SDK_EXECUTOR_TIMEOUT_SEC: "${GO_SDK_EXECUTOR_TIMEOUT_SEC:-180}"
 
   go-archive-sync-worker:

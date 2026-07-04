@@ -1,4 +1,4 @@
-// Command cutover-readiness emits profile-based cutover readiness reports.
+// Command cutover-readiness emits profile-based release readiness reports.
 package main
 
 import (
@@ -22,7 +22,7 @@ type aggregateReport struct {
 }
 
 func main() {
-	profileName := flag.String("profile", "admin-observability", "cutover profile name")
+	profileName := flag.String("profile", "admin-observability", "release profile name")
 	profiles := flag.String("profiles", "", "comma-separated profile names")
 	allProfiles := flag.Bool("all", false, "evaluate all built-in profiles")
 	envPath := flag.String("env", "deploy/cloud/.env.example", "env file to inspect")
@@ -100,11 +100,11 @@ func main() {
 func markdownRunbook(profileNames []string) string {
 	var b strings.Builder
 	b.WriteString("# Cutover Profile Runbooks\n\n")
-	b.WriteString("These runbooks are generated from `internal/cutover.DefaultProfiles()` and define the minimum route, flag, env, service, and golden-fixture evidence expected before a profile can move from Python to Go.\n\n")
+	b.WriteString("These runbooks are generated from `internal/cutover.DefaultProfiles()` and define the minimum route, flag, env, service, and golden-fixture evidence expected before a profile can be released.\n\n")
 	b.WriteString("Common sequence:\n\n")
 	b.WriteString("1. Run `go run ./cmd/cutover-readiness -profile <profile> -format markdown` and inspect failures.\n")
 	b.WriteString("2. Fix route, golden, and compose-service failures first; these are repository issues.\n")
-	b.WriteString("3. Configure required env/secrets in the cutover environment.\n")
+	b.WriteString("3. Configure required env/secrets in the release environment.\n")
 	b.WriteString("4. Run the related golden/live/shadow gate, then enable the listed `GO_ENABLE_*` flags.\n")
 	b.WriteString("5. Re-run with `-strict` before canary or traffic movement.\n\n")
 	b.WriteString("## Profile Index\n\n")

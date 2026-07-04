@@ -418,14 +418,14 @@ func DefaultProfiles() []Profile {
 				"CLOUD_DB_DSN",
 				"SESSION_JWT_SECRET",
 				"CLOUD_WS_REDIS_URL",
-				"SDK_EXECUTOR_API_TOKEN",
+				"GO_SDK_EXECUTOR_BASE_URL",
 				"CLOUD_LOCK_REDIS_URL",
 				"CLOUD_CACHE_REDIS_URL",
 				"ARCHIVE_MEDIA_OBJECT_UPLOAD_URL",
 				"ARCHIVE_MEDIA_OBJECT_UPLOAD_TOKEN",
 				"ARCHIVE_MEDIA_SIGNING_KEY",
 			},
-			Services: []string{"go-api", "go-web", "go-send-dispatcher", "python-sdk-executor-sidecar", "go-redis", "go-cache-redis"},
+			Services: []string{"go-api", "go-web", "go-send-dispatcher", "go-redis", "go-cache-redis"},
 			GoldenSuites: []string{
 				"phase4-sop-flows.json",
 				"phase4-sop-config-write.json",
@@ -477,7 +477,7 @@ func DefaultProfiles() []Profile {
 		},
 		{
 			Name:        "send-dispatch",
-			Description: "Manual send, media send, group invite, and conversation reply paths with the temporary SDK executor bridge.",
+			Description: "Manual send, media send, group invite, and conversation reply paths with a configured send provider.",
 			Routes: []RouteRequirement{
 				{Method: "POST", Path: "/api/v1/conversations/{conversation_id}/reply"},
 				{Method: "POST", Path: "/send/text"},
@@ -499,12 +499,12 @@ func DefaultProfiles() []Profile {
 			RequiredEnv: []string{
 				"CLOUD_DB_DSN",
 				"SESSION_JWT_SECRET",
-				"SDK_EXECUTOR_API_TOKEN",
+				"GO_SDK_EXECUTOR_BASE_URL",
 				"CLOUD_EVENTBUS_REDIS_URL",
 				"CLOUD_LOCK_REDIS_URL",
 				"CLOUD_CACHE_REDIS_URL",
 			},
-			Services: []string{"go-api", "go-send-dispatcher", "python-sdk-executor-sidecar", "go-redis", "go-cache-redis"},
+			Services: []string{"go-api", "go-send-dispatcher", "go-redis", "go-cache-redis"},
 			GoldenSuites: []string{
 				"phase11-conversation-reply.json",
 				"phase11-send-text.json",
@@ -541,12 +541,12 @@ func DefaultProfiles() []Profile {
 			RequiredEnv: []string{
 				"CLOUD_DB_DSN",
 				"SESSION_JWT_SECRET",
-				"SDK_EXECUTOR_API_TOKEN",
+				"GO_SDK_EXECUTOR_BASE_URL",
 				"CLOUD_EVENTBUS_REDIS_URL",
 				"CLOUD_LOCK_REDIS_URL",
 				"CLOUD_CACHE_REDIS_URL",
 			},
-			Services: []string{"go-api", "go-send-dispatcher", "python-sdk-executor-sidecar", "go-redis", "go-cache-redis"},
+			Services: []string{"go-api", "go-send-dispatcher", "go-redis", "go-cache-redis"},
 			GoldenSuites: []string{
 				"phase4-conversation-read.json",
 				"phase4-conversation-ai-write.json",
@@ -558,7 +558,7 @@ func DefaultProfiles() []Profile {
 		},
 		{
 			Name:        "contact-sync",
-			Description: "Manual and scheduled WeWork contact cache sync through the Go API and contact-sync worker.",
+			Description: "Manual and scheduled contact cache sync through the configured contact connector and contact-sync worker.",
 			Routes: []RouteRequirement{
 				{Method: "POST", Path: "/api/v1/contacts/sync/external-contacts"},
 				{Method: "POST", Path: "/api/v1/contacts/sync/full"},
@@ -579,7 +579,7 @@ func DefaultProfiles() []Profile {
 		},
 		{
 			Name:        "wework-events",
-			Description: "WeWork friend-added and customer-contact notify callbacks with durable outbox delivery.",
+			Description: "Optional WeWork connector friend-added and customer-contact notify callbacks with durable outbox delivery.",
 			Routes: []RouteRequirement{
 				{Method: "POST", Path: "/api/v1/events/friend-added"},
 				{Method: "GET", Path: "/api/v1/notify/event/{enterprise_id}"},
@@ -598,7 +598,7 @@ func DefaultProfiles() []Profile {
 		},
 		{
 			Name:        "platform-proxy",
-			Description: "Platform read/write proxy routes and device sidebar commands backed by durable SDK tasks.",
+			Description: "Platform read/write proxy routes and device sidebar commands backed by durable provider tasks.",
 			Routes: []RouteRequirement{
 				{Method: "GET", Path: "/api/v1/platform/options"},
 				{Method: "GET", Path: "/api/v1/platform/community/options"},
@@ -639,11 +639,11 @@ func DefaultProfiles() []Profile {
 				"PLATFORM_DEFAULT_USER_ID",
 				"PLATFORM_DEFAULT_CORP_ID",
 				"PLATFORM_DEFAULT_WECHAT",
-				"SDK_EXECUTOR_API_TOKEN",
+				"GO_SDK_EXECUTOR_BASE_URL",
 				"CLOUD_LOCK_REDIS_URL",
 				"CLOUD_CACHE_REDIS_URL",
 			},
-			Services: []string{"go-api", "go-send-dispatcher", "python-sdk-executor-sidecar", "go-redis", "go-cache-redis"},
+			Services: []string{"go-api", "go-send-dispatcher", "go-redis", "go-cache-redis"},
 			GoldenSuites: []string{
 				"phase10-platform-proxy-read.json",
 				"phase10-platform-proxy-write.json",
@@ -666,12 +666,12 @@ func DefaultProfiles() []Profile {
 				"PLATFORM_DEFAULT_USER_ID",
 				"PLATFORM_DEFAULT_CORP_ID",
 				"PLATFORM_DEFAULT_WECHAT",
-				"SDK_EXECUTOR_API_TOKEN",
+				"GO_SDK_EXECUTOR_BASE_URL",
 				"CLOUD_EVENTBUS_REDIS_URL",
 				"CLOUD_LOCK_REDIS_URL",
 				"CLOUD_CACHE_REDIS_URL",
 			},
-			Services:     []string{"go-api", "go-outbox-worker", "go-send-dispatcher", "python-sdk-executor-sidecar", "go-redis", "go-cache-redis"},
+			Services:     []string{"go-api", "go-outbox-worker", "go-send-dispatcher", "go-redis", "go-cache-redis"},
 			GoldenSuites: []string{"phase10-ai-outreach.json"},
 		},
 		{
@@ -873,7 +873,7 @@ func DefaultProfiles() []Profile {
 				"CLOUD_DB_DSN",
 				"SESSION_JWT_SECRET",
 				"AGENT_API_TOKEN",
-				"SDK_EXECUTOR_API_TOKEN",
+				"GO_SDK_EXECUTOR_BASE_URL",
 				"CLOUD_LOCK_REDIS_URL",
 				"CLOUD_CACHE_REDIS_URL",
 				"P1_INTERNAL_IP",
@@ -892,7 +892,7 @@ func DefaultProfiles() []Profile {
 				"P1_RTC_CONTROL_EXECUTOR_BASE_URL",
 				"P1_RTC_CONTROL_EXECUTOR_TOKEN",
 			},
-			Services: []string{"go-api", "go-send-dispatcher", "python-sdk-executor-sidecar", "go-redis", "go-cache-redis"},
+			Services: []string{"go-api", "go-send-dispatcher", "go-redis", "go-cache-redis"},
 			GoldenSuites: []string{
 				"phase4-p1-screen.json",
 				"phase4-devices-list.json",

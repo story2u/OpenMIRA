@@ -52,6 +52,8 @@ Use `-strict` in a release gate so disabled flags or missing settings fail befor
 
 Provider-specific settings are optional unless the matching connector or provider is enabled.
 
+`go-send-dispatcher` is part of the standalone worker set, but it does not assume a bundled device/RPA implementation. Leave `GO_SDK_EXECUTOR_BASE_URL` empty for core/runtime validation. Set it only when an HTTP-compatible send provider is enabled for real outbound delivery.
+
 ## Runtime Roles
 
 Core roles:
@@ -80,6 +82,7 @@ Practical rules:
 
 - Keep core API/Web/Redis/DB deployable without a specific message platform.
 - Keep `go-send-dispatcher` deployable with fake or HTTP providers for validation.
+- Do not add provider sidecars to the default compose graph; use explicit overrides or external services for provider-specific deployments.
 - Put provider secrets behind dedicated env names and avoid leaking them into core service assumptions.
 - Prefer one provider service per capability boundary instead of embedding device or vendor logic in `go-api`.
 - Document every temporary bridge with an owner, replacement path and removal condition.
