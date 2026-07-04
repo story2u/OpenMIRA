@@ -1,6 +1,6 @@
 // Workbench device payloads keep account cards and device login facts aligned.
-// The code ports the stable DB-backed parts of Python bootstrap hydration while
-// leaving SDK/P1 live probing for the later device-gateway migration phase.
+// They normalize DB-backed account/device facts without making a concrete
+// message platform part of the workbench core contract.
 package workbench
 
 import (
@@ -69,25 +69,28 @@ func DeviceIDsForAccounts(accounts []AccountRecord) []string {
 	return deviceIDs
 }
 
-// BuildAccountSummaryPayload builds the legacy accounts array from account facts.
+// BuildAccountSummaryPayload builds the account summary array from account facts.
 func BuildAccountSummaryPayload(accounts []AccountRecord) []ProjectionRow {
 	payload := make([]ProjectionRow, 0, len(accounts))
 	for _, account := range accounts {
-		weworkUserID := strings.TrimSpace(account.WeWorkUserID)
+		channelUserID := strings.TrimSpace(firstNonBlank(account.ChannelUserID, account.WeWorkUserID))
+		weworkUserID := strings.TrimSpace(firstNonBlank(account.WeWorkUserID, channelUserID))
 		enterpriseID := strings.TrimSpace(account.EnterpriseID)
 		payload = append(payload, ProjectionRow{
-			"account_id":             strings.TrimSpace(account.AccountID),
-			"account_name":           strings.TrimSpace(account.AccountName),
-			"device_id":              strings.TrimSpace(account.DeviceID),
-			"wework_user_id":         weworkUserID,
-			"account_wework_user_id": weworkUserID,
-			"assignee_id":            strings.TrimSpace(account.AssigneeID),
-			"assignee_name":          strings.TrimSpace(account.AssigneeName),
-			"organization_name":      "",
-			"enterprise_id":          enterpriseID,
-			"enterprise_bound":       enterpriseID != "",
-			"account_avatar":         "",
-			"ai_enabled":             account.AIEnabled,
+			"account_id":              strings.TrimSpace(account.AccountID),
+			"account_name":            strings.TrimSpace(account.AccountName),
+			"device_id":               strings.TrimSpace(account.DeviceID),
+			"channel_user_id":         channelUserID,
+			"account_channel_user_id": channelUserID,
+			"wework_user_id":          weworkUserID,
+			"account_wework_user_id":  weworkUserID,
+			"assignee_id":             strings.TrimSpace(account.AssigneeID),
+			"assignee_name":           strings.TrimSpace(account.AssigneeName),
+			"organization_name":       "",
+			"enterprise_id":           enterpriseID,
+			"enterprise_bound":        enterpriseID != "",
+			"account_avatar":          "",
+			"ai_enabled":              account.AIEnabled,
 		})
 	}
 	return payload
@@ -139,7 +142,7 @@ func ValidateAccountDeviceBindings(accounts []ProjectionRow, devices []Projectio
 		if !confirmed {
 			continue
 		}
-		userID := NormalizeIDHint(rowText(device, "login_wework_user_id"))
+		userID := NormalizeIDHint(firstNonBlank(rowText(device, "login_channel_user_id"), rowText(device, "login_wework_user_id")))
 		if userID == "" {
 			continue
 		}
@@ -152,7 +155,7 @@ func ValidateAccountDeviceBindings(accounts []ProjectionRow, devices []Projectio
 	normalized := make([]ProjectionRow, 0, len(accounts))
 	for _, account := range accounts {
 		row := cloneProjectionRow(account)
-		accountUserID := NormalizeIDHint(firstNonBlank(rowText(row, "account_wework_user_id"), rowText(row, "wework_user_id")))
+		accountUserID := NormalizeIDHint(firstNonBlank(rowText(row, "account_channel_user_id"), rowText(row, "channel_user_id"), rowText(row, "account_wework_user_id"), rowText(row, "wework_user_id")))
 		deviceID := rowText(row, "device_id")
 		if deviceID == "" {
 			if matched := confirmedDeviceByUserID[accountUserID]; matched != nil {
@@ -175,7 +178,7 @@ func ValidateAccountDeviceBindings(accounts []ProjectionRow, devices []Projectio
 			normalized = append(normalized, row)
 			continue
 		}
-		deviceUserID := NormalizeIDHint(rowText(device, "login_wework_user_id"))
+		deviceUserID := NormalizeIDHint(firstNonBlank(rowText(device, "login_channel_user_id"), rowText(device, "login_wework_user_id")))
 		if accountUserID != "" && deviceUserID != "" {
 			if accountUserID != deviceUserID {
 				if matched := confirmedDeviceByUserID[accountUserID]; matched != nil {
@@ -229,7 +232,7 @@ func deviceRecordPayload(device DeviceRecord) ProjectionRow {
 	return row
 }
 
-// applyLoginSessionOverlay mirrors the stable login-session branch from Python.
+// applyLoginSessionOverlay applies persisted login-session facts to a device row.
 func applyLoginSessionOverlay(row ProjectionRow, session LoginSessionRecord) {
 	status := strings.ToLower(strings.TrimSpace(session.Status))
 	currentLogged, loggedIsBool := row["wework_logged_in"].(bool)
@@ -257,6 +260,7 @@ func applyLoginSessionOverlay(row ProjectionRow, session LoginSessionRecord) {
 		row["login_organization_name"] = value
 	}
 	if value := strings.TrimSpace(session.WeWorkUserID); value != "" {
+		row["login_channel_user_id"] = value
 		row["login_wework_user_id"] = value
 	}
 	if value := strings.TrimSpace(session.AccountAvatar); value != "" {
@@ -284,7 +288,7 @@ func normalizeWeWorkState(row ProjectionRow) ProjectionRow {
 	return row
 }
 
-// sessionHasDisplayableLoginObservation follows Python's conservative display rule.
+// sessionHasDisplayableLoginObservation keeps login overlays conservative.
 func sessionHasDisplayableLoginObservation(session LoginSessionRecord) bool {
 	status := strings.ToLower(strings.TrimSpace(session.Status))
 	if status == "success" || visibleLoginFlowStates[status] {
@@ -304,7 +308,7 @@ func boolPointerValue(value *bool) any {
 	return *value
 }
 
-// normalizeNameKey matches Python's account/display-name comparison key.
+// normalizeNameKey builds a stable account/display-name comparison key.
 func normalizeNameKey(value string) string {
 	value = strings.ToLower(strings.TrimSpace(value))
 	if value == "" {

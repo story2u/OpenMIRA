@@ -7,17 +7,20 @@ import "testing"
 func TestValidateAccountDeviceBindingsClearsConfirmedMismatch(t *testing.T) {
 	accounts := ValidateAccountDeviceBindings(
 		[]ProjectionRow{{
-			"account_id":             "acc-1",
-			"account_name":           "子墨",
-			"device_id":              "device-old",
-			"wework_user_id":         "wx-zimo",
-			"account_wework_user_id": "wx-zimo",
+			"account_id":              "acc-1",
+			"account_name":            "子墨",
+			"device_id":               "device-old",
+			"channel_user_id":         "channel-zimo",
+			"account_channel_user_id": "channel-zimo",
+			"wework_user_id":          "wx-zimo",
+			"account_wework_user_id":  "wx-zimo",
 		}},
 		[]ProjectionRow{{
 			"device_id":             "device-old",
 			"online":                true,
 			"wework_logged_in":      true,
 			"wework_status":         "normal",
+			"login_channel_user_id": "channel-other",
 			"login_wework_user_id":  "wx-other",
 			"login_account_name":    "其他账号",
 			"login_organization_id": "ent-a",
@@ -32,18 +35,21 @@ func TestValidateAccountDeviceBindingsClearsConfirmedMismatch(t *testing.T) {
 func TestValidateAccountDeviceBindingsPreservesUnconfirmedDevice(t *testing.T) {
 	accounts := ValidateAccountDeviceBindings(
 		[]ProjectionRow{{
-			"account_id":             "acc-1",
-			"account_name":           "子墨",
-			"device_id":              "device-old",
-			"wework_user_id":         "wx-zimo",
-			"account_wework_user_id": "wx-zimo",
+			"account_id":              "acc-1",
+			"account_name":            "子墨",
+			"device_id":               "device-old",
+			"channel_user_id":         "channel-zimo",
+			"account_channel_user_id": "channel-zimo",
+			"wework_user_id":          "wx-zimo",
+			"account_wework_user_id":  "wx-zimo",
 		}},
 		[]ProjectionRow{{
-			"device_id":            "device-old",
-			"online":               false,
-			"wework_logged_in":     nil,
-			"wework_status":        nil,
-			"login_wework_user_id": "wx-other",
+			"device_id":             "device-old",
+			"online":                false,
+			"wework_logged_in":      nil,
+			"wework_status":         nil,
+			"login_channel_user_id": "channel-other",
+			"login_wework_user_id":  "wx-other",
 		}},
 	)
 
@@ -80,22 +86,29 @@ func TestBuildScopedDevicesPayloadOverlaysLoginSession(t *testing.T) {
 	if row["wework_logged_in"] != true || rowText(row, "login_wework_user_id") != "wx-zimo" || rowText(row, "login_account_name") != "子墨" {
 		t.Fatalf("unexpected device payload: %+v", row)
 	}
+	if rowText(row, "login_channel_user_id") != "wx-zimo" {
+		t.Fatalf("login_channel_user_id = %q", rowText(row, "login_channel_user_id"))
+	}
 }
 
 func TestBuildAccountSummaryPayloadUsesAccountFacts(t *testing.T) {
 	accounts := BuildAccountSummaryPayload([]AccountRecord{{
-		AccountID:    "acc-1",
-		AccountName:  "子墨",
-		DeviceID:     "device-1",
-		WeWorkUserID: "wx-zimo",
-		AssigneeID:   "cs-1",
-		AssigneeName: "客服1",
-		EnterpriseID: "ent-a",
-		AIEnabled:    true,
+		AccountID:     "acc-1",
+		AccountName:   "子墨",
+		DeviceID:      "device-1",
+		ChannelUserID: "channel-zimo",
+		WeWorkUserID:  "wx-zimo",
+		AssigneeID:    "cs-1",
+		AssigneeName:  "客服1",
+		EnterpriseID:  "ent-a",
+		AIEnabled:     true,
 	}})
 
 	row := accounts[0]
 	if rowText(row, "account_name") != "子墨" || rowText(row, "assignee_name") != "客服1" || row["enterprise_bound"] != true || row["ai_enabled"] != true {
 		t.Fatalf("unexpected account summary: %+v", row)
+	}
+	if rowText(row, "channel_user_id") != "channel-zimo" || rowText(row, "account_channel_user_id") != "channel-zimo" || rowText(row, "wework_user_id") != "wx-zimo" {
+		t.Fatalf("unexpected account channel identity: %+v", row)
 	}
 }

@@ -1,6 +1,6 @@
 // Projection row conversion keeps raw SQL rows out of HTTP payloads.
-// It ports the legacy projection-to-overview normalization before the full
-// Python hydrate pipeline is replaced by Go services.
+// It normalizes DB-backed workbench projection facts into the public
+// conversation row shape used by the standalone IM console.
 package workbench
 
 import "strings"
@@ -20,13 +20,16 @@ func ProjectionRowToOverviewRow(row ProjectionRow) ProjectionRow {
 	if customerAvatar == "" {
 		customerAvatar = senderAvatar
 	}
-	weworkUserID := firstNonBlank(rowText(row, "account_wework_user_id"), rowText(row, "wework_user_id"))
+	channelUserID := firstNonBlank(rowText(row, "channel_user_id"), rowText(row, "account_channel_user_id"), rowText(row, "account_wework_user_id"), rowText(row, "wework_user_id"))
+	weworkUserID := firstNonBlank(rowText(row, "account_wework_user_id"), rowText(row, "wework_user_id"), channelUserID)
 	customerName := firstNonBlank(rowText(row, "customer_name"), rowText(row, "sender_name"))
 	conversationName := firstNonBlank(rowText(row, "conversation_name"), rowText(row, "customer_name"), rowText(row, "sender_name"))
 	return ProjectionRow{
 		"conversation_id":          rowText(row, "conversation_id"),
 		"device_id":                rowText(row, "device_id"),
 		"account_device_id":        rowText(row, "account_device_id"),
+		"channel_user_id":          channelUserID,
+		"account_channel_user_id":  channelUserID,
 		"account_wework_user_id":   weworkUserID,
 		"wework_user_id":           weworkUserID,
 		"tenant_id":                tenantID,
@@ -69,10 +72,13 @@ func ProjectionRowToOverviewRow(row ProjectionRow) ProjectionRow {
 
 // SerializeConversationRowPayload returns the public conversation row shape.
 func SerializeConversationRowPayload(row ProjectionRow) ProjectionRow {
+	channelUserID := firstNonBlank(rowText(row, "channel_user_id"), rowText(row, "account_channel_user_id"), rowText(row, "wework_user_id"), rowText(row, "account_wework_user_id"))
+	weworkUserID := firstNonBlank(rowText(row, "wework_user_id"), rowText(row, "account_wework_user_id"), channelUserID)
 	return ProjectionRow{
 		"conversation_id":                   row["conversation_id"],
 		"conversation_key":                  firstNonBlank(rowText(row, "conversation_key"), rowText(row, "conversation_id")),
-		"wework_user_id":                    firstNonBlank(rowText(row, "wework_user_id"), rowText(row, "account_wework_user_id")),
+		"channel_user_id":                   channelUserID,
+		"wework_user_id":                    weworkUserID,
 		"external_userid":                   firstNonBlank(rowText(row, "external_userid"), rowText(row, "sender_id")),
 		"room_id":                           row["room_id"],
 		"conversation_type":                 firstNonBlank(rowText(row, "conversation_type"), "single"),
@@ -104,6 +110,7 @@ func SerializeConversationRowPayload(row ProjectionRow) ProjectionRow {
 		"sop_runtime_state":                 row["sop_runtime_state"],
 		"account_id":                        row["account_id"],
 		"account_name":                      row["account_name"],
+		"account_channel_user_id":           firstNonBlank(rowText(row, "account_channel_user_id"), channelUserID),
 		"account_wework_user_id":            row["account_wework_user_id"],
 		"account_avatar":                    row["account_avatar"],
 		"enterprise_id":                     row["enterprise_id"],

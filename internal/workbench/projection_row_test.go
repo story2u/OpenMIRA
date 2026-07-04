@@ -2,10 +2,11 @@ package workbench
 
 import "testing"
 
-func TestProjectionRowToOverviewRowNormalizesLegacyFields(t *testing.T) {
+func TestProjectionRowToOverviewRowNormalizesChannelIdentity(t *testing.T) {
 	overview := ProjectionRowToOverviewRow(ProjectionRow{
 		"conversation_id":                    "conv-001",
 		"tenant_id":                          "ent-a",
+		"channel_user_id":                    "channel-1801",
 		"wework_user_id":                     "DY-1801",
 		"sender_id":                          "external-1",
 		"sender_name":                        "Alice",
@@ -20,7 +21,7 @@ func TestProjectionRowToOverviewRowNormalizesLegacyFields(t *testing.T) {
 		"sensitive_handoff_message_trace_id": "trace-1",
 	})
 
-	if overview["wework_user_id"] != "DY-1801" || overview["enterprise_id"] != "ent-a" {
+	if overview["channel_user_id"] != "channel-1801" || overview["account_channel_user_id"] != "channel-1801" || overview["wework_user_id"] != "DY-1801" || overview["enterprise_id"] != "ent-a" {
 		t.Fatalf("unexpected identity fields: %+v", overview)
 	}
 	if overview["external_userid"] != "external-1" || overview["customer_name"] != "Alice" || overview["customer_avatar"] != "avatar-a" {
@@ -49,9 +50,10 @@ func TestProjectionRowToOverviewRowSetsOutgoingTime(t *testing.T) {
 	}
 }
 
-func TestSerializeConversationRowPayloadMatchesCoreLegacyShape(t *testing.T) {
+func TestSerializeConversationRowPayloadIncludesChannelIdentity(t *testing.T) {
 	payload := SerializeConversationRowPayload(ProjectionRowToOverviewRow(ProjectionRow{
 		"conversation_id": "conv-001",
+		"channel_user_id": "channel-1801",
 		"wework_user_id":  "DY-1801",
 		"sender_id":       "external-1",
 		"sender_name":     "Alice",
@@ -61,6 +63,9 @@ func TestSerializeConversationRowPayloadMatchesCoreLegacyShape(t *testing.T) {
 
 	if payload["conversation_key"] != "conv-001" || payload["conversation_type"] != "single" {
 		t.Fatalf("unexpected identity payload: %+v", payload)
+	}
+	if payload["channel_user_id"] != "channel-1801" || payload["account_channel_user_id"] != "channel-1801" || payload["wework_user_id"] != "DY-1801" {
+		t.Fatalf("unexpected channel identity payload: %+v", payload)
 	}
 	if payload["external_userid"] != "external-1" || payload["send_target_name"] != "VIP" {
 		t.Fatalf("unexpected sender payload: %+v", payload)
