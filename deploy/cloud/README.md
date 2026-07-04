@@ -19,7 +19,7 @@ The `Deploy to VPS` workflow deploys the GHCR images built by `Docker Build & Pu
 
 - Variables or secrets: `VPS_HOST`, `VPS_USER`, optional `VPS_PORT`, optional `VPS_DEPLOY_DIR`, optional `VPS_API_URL`, optional `VPS_WEB_URL`.
 - Secret: `VPS_SSH_KEY`, the private key used by the workflow to SSH into the VPS.
-- Optional secret: `VPS_ENV_FILE`, the full production `.env` content to write to the VPS deploy directory.
+- Optional secret: `VPS_ENV_FILE`, the full production `.env` content to write to the VPS deploy directory. Use the repository root `.env.example` as the VPS template and replace every `change-me` value before saving the secret.
 - Optional variable: `VPS_COMPOSE_SERVICES`, defaults to `go-redis go-cache-redis go-api go-web go-outbox-worker go-incoming-worker`.
 - Optional variable/secret: `GHCR_USERNAME` / `GHCR_TOKEN` when the package registry requires a token other than the workflow token.
 
