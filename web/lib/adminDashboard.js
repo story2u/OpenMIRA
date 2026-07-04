@@ -5,7 +5,7 @@ export const adminGroups = [
     sections: [
       {
         key: "accounts",
-        label: "企微账号",
+        label: "通道账号",
         path: "/accounts",
         params: { limit: 100 },
         columns: ["account_name", "account_id", "device_id", "assignee_name", "status", "ai_enabled"],

@@ -55,6 +55,7 @@ test("normalizeAdminAccounts keeps account rows and management fields", () => {
   assert.equal(accounts[0].accountName, "账号一");
   assert.equal(accounts[0].agentId, "agent-1");
   assert.equal(accounts[0].deviceId, "device-1");
+  assert.equal(accounts[0].channelUserId, "DY-1");
   assert.equal(accounts[0].weworkUserId, "DY-1");
   assert.equal(accounts[0].enterpriseId, "ent-1");
   assert.equal(accounts[0].sopFlowId, "flow-a");
@@ -70,13 +71,13 @@ test("normalizeAdminAccounts keeps account rows and management fields", () => {
   assert.equal(accounts[1].aiLabel, "关闭");
 });
 
-test("buildAccountUpsertMutation mirrors legacy POST body", () => {
+test("buildAccountUpsertMutation sends channel user identity with compatibility field", () => {
   const mutation = buildAccountUpsertMutation({
     accountId: " acc-1 ",
     accountName: " 账号一 ",
     agentId: " agent-1 ",
     deviceId: " device-1 ",
-    weworkUserId: " DY-1 ",
+    channelUserId: " DY-1 ",
     enterpriseId: " ent-1 ",
     sopFlowId: " flow-a ",
     sopEnabled: false,
@@ -95,6 +96,7 @@ test("buildAccountUpsertMutation mirrors legacy POST body", () => {
     account_name: "账号一",
     agent_id: "agent-1",
     device_id: "device-1",
+    channel_user_id: "DY-1",
     wework_user_id: "DY-1",
     enterprise_id: "ent-1",
     sop_flow_id: "flow-a",
@@ -123,7 +125,7 @@ test("buildAccountUpsertMutation reports missing fields", () => {
 test("account device binding helpers prefer exact device and agent matches", () => {
   const accounts = normalizeAdminAccounts({
     accounts: [
-      { account_id: "acc-1", account_name: "账号一", agent_id: "legacy-agent", device_id: "device-1" },
+      { account_id: "acc-1", account_name: "账号一", agent_id: "agent-existing", device_id: "device-1" },
       { account_id: "acc-2", account_name: "账号二", agent_id: "sdk:device-1", device_id: "device-1", wework_user_id: "DY-2", ai_enabled: true },
     ],
   });
@@ -141,6 +143,7 @@ test("account device binding helpers prefer exact device and agent matches", () 
     accountName: "账号二",
     agentId: "sdk:device-1",
     deviceId: "device-1",
+    channelUserId: "DY-2",
     weworkUserId: "DY-2",
     enterpriseId: "",
     assigneeId: "",
@@ -163,11 +166,12 @@ test("account device binding draft can start a new account from login identity",
   assert.equal(draft.accountName, "子墨");
   assert.equal(draft.agentId, "sdk:slot-18");
   assert.equal(draft.deviceId, "slot-18");
+  assert.equal(draft.channelUserId, "dy1801");
   assert.equal(draft.weworkUserId, "dy1801");
   assert.equal(draft.editing, false);
 });
 
-test("buildAccountAIEnabledMutation mirrors legacy toggle route", () => {
+test("buildAccountAIEnabledMutation builds account AI toggle route", () => {
   const enabled = buildAccountAIEnabledMutation("acc/1", true);
   const disabled = buildAccountAIEnabledMutation("acc-2", false);
 
@@ -183,7 +187,7 @@ test("buildAccountAIEnabledMutation reports missing fields", () => {
   assert.equal(buildAccountAIEnabledMutation("acc-1", "true").error, "enabled_required");
 });
 
-test("buildAccountAssignMutation mirrors legacy assign route", () => {
+test("buildAccountAssignMutation builds account assign route", () => {
   const mutation = buildAccountAssignMutation("acc/1", {
     assigneeId: " cs-1 ",
     assigneeName: " 客服一 ",
@@ -203,7 +207,7 @@ test("buildAccountAssignMutation reports missing fields", () => {
   assert.equal(buildAccountAssignMutation("acc-1", {}).error, "assignee_id_required");
 });
 
-test("buildAccountUnassignMutation mirrors legacy unassign route", () => {
+test("buildAccountUnassignMutation builds account unassign route", () => {
   const mutation = buildAccountUnassignMutation("acc/1");
 
   assert.equal(mutation.ok, true);
@@ -212,7 +216,7 @@ test("buildAccountUnassignMutation mirrors legacy unassign route", () => {
   assert.equal(buildAccountUnassignMutation("").error, "account_required");
 });
 
-test("buildAccountBatchImportMutation mirrors legacy CSV import route", () => {
+test("buildAccountBatchImportMutation builds CSV import route", () => {
   const file = { name: "accounts.csv" };
   const mutation = buildAccountBatchImportMutation({ file, FormDataCtor: FakeFormData });
 
@@ -229,7 +233,7 @@ test("buildAccountBatchImportMutation reports invalid upload prerequisites", () 
   assert.equal(buildAccountBatchImportMutation({ file: { name: "accounts.csv" }, FormDataCtor: null }).error, "formdata_unavailable");
 });
 
-test("buildAccountDeleteMutation mirrors legacy DELETE path", () => {
+test("buildAccountDeleteMutation builds account DELETE path", () => {
   const mutation = buildAccountDeleteMutation("acc/1");
 
   assert.equal(mutation.ok, true);

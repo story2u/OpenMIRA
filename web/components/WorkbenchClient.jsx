@@ -1,8 +1,8 @@
 "use client";
 
 /*
- * CS workbench read-only client for the Next.js migration.
- * It passes filters to Go/Python-compatible APIs and renders returned facts
+ * CS workbench read-only client for the standalone Next.js workbench.
+ * It passes filters to backend APIs and renders returned facts
  * without reimplementing backend-owned business filtering in the browser.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -1560,7 +1560,7 @@ function ConversationRow({ conversation, selected, onSelect }) {
       </div>
       <div className="mt-1 truncate text-xs text-[#566072]">{conversation.last_content || conversation.account_name || conversation.search_kind || ""}</div>
       <div className="mt-2 flex items-center gap-2 text-xs text-[#697386]">
-        <span>{conversation.account_name || conversation.account_wework_user_id || conversation.device_id || "未绑定账号"}</span>
+        <span>{conversation.account_name || conversation.account_channel_user_id || conversation.account_wework_user_id || conversation.device_id || "未绑定账号"}</span>
         {Number(conversation.unread_count || 0) > 0 && <span className="bg-[#d92d20] px-1.5 py-0.5 text-white">{conversation.unread_count}</span>}
       </div>
       <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px]">

@@ -48,7 +48,7 @@ func TestServiceToggleAccountAIEnabledPublishesAuditsAndSyncsConversations(t *te
 		t.Fatalf("payload = %#v", payload)
 	}
 	account := payload["account"].(ProjectionRow)
-	if account["account_id"] != "acc-001" || account["ai_enabled"] != true || account["wework_user_id"] != "DY-1801" {
+	if account["account_id"] != "acc-001" || account["ai_enabled"] != true || account["channel_user_id"] != "DY-1801" || account["wework_user_id"] != "DY-1801" {
 		t.Fatalf("account payload = %#v", account)
 	}
 	conversations := payload["conversations"].([]ProjectionRow)

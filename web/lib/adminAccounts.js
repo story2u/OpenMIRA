@@ -23,12 +23,14 @@ export function normalizeAdminAccount(account = {}) {
   if (!accountId) return null;
   const aiEnabled = parseBool(firstDefined(account?.ai_enabled, account?.aiEnabled), false);
   const sopEnabled = parseBool(firstDefined(account?.sop_enabled, account?.sopEnabled), false);
+  const channelUserId = cleanText(firstDefined(account?.channel_user_id, account?.channelUserId, account?.wework_user_id, account?.weworkUserId));
   return {
     accountId,
     accountName: cleanText(account?.account_name || account?.accountName || account?.name) || accountId,
     agentId: cleanText(account?.agent_id || account?.agentId),
     deviceId: cleanText(account?.device_id || account?.deviceId),
-    weworkUserId: cleanText(account?.wework_user_id || account?.weworkUserId),
+    channelUserId,
+    weworkUserId: channelUserId,
     enterpriseId: cleanText(account?.enterprise_id || account?.enterpriseId),
     assigneeName: cleanText(account?.assignee_name || account?.assigneeName),
     assigneeId: cleanText(account?.assignee_id || account?.assigneeId),
@@ -57,7 +59,8 @@ export function buildAccountUpsertMutation(options = {}) {
     account_name: accountName,
     agent_id: cleanText(firstDefined(options.agentId, options.agent_id)),
     device_id: cleanText(firstDefined(options.deviceId, options.device_id)),
-    wework_user_id: cleanText(firstDefined(options.weworkUserId, options.wework_user_id)),
+    channel_user_id: cleanText(firstDefined(options.channelUserId, options.channel_user_id, options.weworkUserId, options.wework_user_id)),
+    wework_user_id: cleanText(firstDefined(options.channelUserId, options.channel_user_id, options.weworkUserId, options.wework_user_id)),
     enterprise_id: cleanText(firstDefined(options.enterpriseId, options.enterprise_id)),
     sop_flow_id: cleanText(firstDefined(options.sopFlowId, options.sop_flow_id)),
     sop_reply_window_start: cleanText(firstDefined(options.sopReplyWindowStart, options.sop_reply_window_start)),
@@ -106,14 +109,16 @@ export function buildAccountDeviceBindingDraft(device = {}, account = {}) {
   const agentId = cleanText(firstDefined(device?.agentId, device?.agent_id, account?.agentId, account?.agent_id));
   const accountId = cleanText(firstDefined(account?.accountId, account?.account_id));
   const loginAccountName = cleanText(firstDefined(device?.loginAccountName, device?.login_account_name));
-  const loginWeWorkUserId = cleanText(firstDefined(device?.loginWeWorkUserId, device?.login_wework_user_id));
+  const loginChannelUserId = cleanText(firstDefined(device?.loginChannelUserId, device?.login_channel_user_id, device?.loginWeWorkUserId, device?.login_wework_user_id));
   const accountName = cleanText(firstDefined(account?.accountName, account?.account_name, loginAccountName, deviceId, accountId));
+  const channelUserId = cleanText(firstDefined(account?.channelUserId, account?.channel_user_id, account?.weworkUserId, account?.wework_user_id, loginChannelUserId));
   return {
     accountId,
     accountName,
     agentId,
     deviceId,
-    weworkUserId: cleanText(firstDefined(account?.weworkUserId, account?.wework_user_id, loginWeWorkUserId)),
+    channelUserId,
+    weworkUserId: channelUserId,
     enterpriseId: cleanText(firstDefined(account?.enterpriseId, account?.enterprise_id)),
     assigneeId: cleanText(firstDefined(account?.assigneeId, account?.assignee_id)),
     assigneeName: cleanText(firstDefined(account?.assigneeName, account?.assignee_name)),

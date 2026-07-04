@@ -18,7 +18,7 @@ function cleanText(value) {
 function cleanDisplay(value) {
   const text = cleanText(value);
   if (!text || text.includes("\uFFFD")) return "";
-  if (["企微客户", "企微用户", "未知客户", "-", "--", "—", "——"].includes(text)) return "";
+  if (["通道客户", "通道用户", "企微客户", "企微用户", "未知客户", "-", "--", "—", "——"].includes(text)) return "";
   const stripped = text.replace(/[?？\s]/g, "");
   return stripped ? text : "";
 }

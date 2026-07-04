@@ -884,12 +884,12 @@ function AccountsPanel({ snapshot, workloadSnapshot, onRefresh }) {
         </div>
         <div className="grid gap-3 md:grid-cols-[minmax(120px,1fr)_minmax(120px,1fr)_minmax(120px,1fr)_minmax(120px,1fr)] md:items-end">
           <label className="grid gap-1">
-            <span className="text-xs font-medium text-[#697386]">企微 UserID</span>
+            <span className="text-xs font-medium text-[#697386]">通道 UserID</span>
             <input
               className="h-9 border border-[#cfd6e3] px-3 text-sm outline-none focus:border-[#2f6fed]"
               value={form.weworkUserId}
               onChange={(event) => setForm((current) => ({ ...current, weworkUserId: event.target.value }))}
-              placeholder="wework_user_id"
+              placeholder="channel_user_id"
             />
           </label>
           <label className="grid gap-1">
@@ -1077,7 +1077,7 @@ function AccountsPanel({ snapshot, workloadSnapshot, onRefresh }) {
             <tr>
               <th className="border-b border-[#d8dde8] px-3 py-2">账号</th>
               <th className="border-b border-[#d8dde8] px-3 py-2">设备</th>
-              <th className="border-b border-[#d8dde8] px-3 py-2">企微</th>
+              <th className="border-b border-[#d8dde8] px-3 py-2">通道</th>
               <th className="border-b border-[#d8dde8] px-3 py-2">客服</th>
               <th className="border-b border-[#d8dde8] px-3 py-2">SOP</th>
               <th className="border-b border-[#d8dde8] px-3 py-2">状态</th>
@@ -4947,8 +4947,8 @@ function DevicesPanel({ snapshot, accountsSnapshot, workloadSnapshot, onRefresh 
   const handleControlAction = useCallback((action) => {
     const input = { ...controlForm, action };
     const actionLabels = {
-      open_wework: "已提交打开企微任务",
-      stop_wework: "已提交停止企微任务",
+      open_wework: "已提交打开通道客户端任务",
+      stop_wework: "已提交停止通道客户端任务",
       prepare_call_audio_output: "已提交音频准备任务",
     };
     void runDeviceMutation(
@@ -5064,7 +5064,7 @@ function DevicesPanel({ snapshot, accountsSnapshot, workloadSnapshot, onRefresh 
     void runDeviceMutation(
       buildWeWorkLogoutMutation(controlForm),
       "control:logout",
-      "已提交退出企微任务",
+      "已提交退出通道客户端任务",
     );
   }, [controlForm, runDeviceMutation]);
 
@@ -5136,7 +5136,7 @@ function DevicesPanel({ snapshot, accountsSnapshot, workloadSnapshot, onRefresh 
             在线
           </label>
           <label className="grid gap-1">
-            <span className="text-xs font-medium text-[#697386]">企微登录</span>
+            <span className="text-xs font-medium text-[#697386]">通道登录</span>
             <select
               className="h-9 border border-[#cfd6e3] bg-white px-3 text-sm outline-none focus:border-[#2f6fed]"
               value={form.weworkLoggedIn}
@@ -5207,12 +5207,12 @@ function DevicesPanel({ snapshot, accountsSnapshot, workloadSnapshot, onRefresh 
             />
           </label>
           <label className="grid gap-1">
-            <span className="text-xs font-medium text-[#697386]">企微 UserID</span>
+            <span className="text-xs font-medium text-[#697386]">通道 UserID</span>
             <input
               className="h-9 border border-[#cfd6e3] px-3 text-sm outline-none focus:border-[#2f6fed]"
               value={bindingForm.weworkUserId}
               onChange={(event) => setBindingForm((current) => ({ ...current, weworkUserId: event.target.value }))}
-              placeholder="wework_user_id"
+              placeholder="channel_user_id"
             />
           </label>
         </div>
@@ -5490,7 +5490,7 @@ function DevicesPanel({ snapshot, accountsSnapshot, workloadSnapshot, onRefresh 
             >
               <option value="auto">auto</option>
               <option value="livekit">livekit</option>
-              <option value="legacy">legacy</option>
+              <option value="legacy">provider</option>
             </select>
           </label>
           <label className="grid gap-1">
@@ -5578,13 +5578,13 @@ function DevicesPanel({ snapshot, accountsSnapshot, workloadSnapshot, onRefresh 
             登录码
           </button>
           <button className="h-8 border border-[#cfd6e3] bg-white px-3 text-xs font-medium text-[#172033] disabled:border-[#c4cad6] disabled:bg-[#f4f6fa] disabled:text-[#697386]" type="button" disabled={Boolean(busyKey)} onClick={handleLogout}>
-            退出企微
+            退出通道
           </button>
           <button className="h-8 border border-[#cfd6e3] bg-white px-3 text-xs font-medium text-[#172033] disabled:border-[#c4cad6] disabled:bg-[#f4f6fa] disabled:text-[#697386]" type="button" disabled={Boolean(busyKey)} onClick={() => handleControlAction("open_wework")}>
-            打开企微
+            打开通道
           </button>
           <button className="h-8 border border-[#cfd6e3] bg-white px-3 text-xs font-medium text-[#172033] disabled:border-[#c4cad6] disabled:bg-[#f4f6fa] disabled:text-[#697386]" type="button" disabled={Boolean(busyKey)} onClick={() => handleControlAction("stop_wework")}>
-            停止企微
+            停止通道
           </button>
           <button className="h-8 border border-[#cfd6e3] bg-white px-3 text-xs font-medium text-[#172033] disabled:border-[#c4cad6] disabled:bg-[#f4f6fa] disabled:text-[#697386]" type="button" disabled={Boolean(busyKey)} onClick={() => handleControlAction("prepare_call_audio_output")}>
             准备音频
@@ -5635,7 +5635,7 @@ function DevicesPanel({ snapshot, accountsSnapshot, workloadSnapshot, onRefresh 
             <tr>
               <th className="border-b border-[#d8dde8] px-3 py-2">设备</th>
               <th className="border-b border-[#d8dde8] px-3 py-2">状态</th>
-              <th className="border-b border-[#d8dde8] px-3 py-2">企微</th>
+              <th className="border-b border-[#d8dde8] px-3 py-2">通道</th>
               <th className="border-b border-[#d8dde8] px-3 py-2">型号</th>
               <th className="border-b border-[#d8dde8] px-3 py-2">来源</th>
               <th className="border-b border-[#d8dde8] px-3 py-2 text-right">操作</th>
@@ -5809,7 +5809,7 @@ function DeviceControlResultSummary({ result }) {
     ["status", "状态", result.status],
     ["device", "设备", result.deviceID],
     ["account", "账号", result.accountName],
-    ["wework", "企微 ID", result.weworkUserID],
+    ["wework", "通道 ID", result.weworkUserID],
     ["mode", "模式", [result.mode, result.modeReason && `(${result.modeReason})`].filter(Boolean).join(" ")],
     ["room", "房间", result.roomName],
     ["participant", "参与者", result.participantIdentity],
@@ -5973,7 +5973,7 @@ function deviceMutationErrorMessage(error) {
     device_id_required: "请输入设备 ID",
     participant_identity_required: "请输入 RTC 参与者",
     quality_invalid: "画质必须是 0 或 1",
-    rtc_mode_invalid: "RTC 模式必须是 auto、legacy 或 livekit",
+    rtc_mode_invalid: "RTC 模式必须是 auto、provider 或 livekit",
     unknown_device_action: "未知设备动作",
     unknown_rtc_control_action: "未知 RTC 控制动作",
     verify_code_required: "请输入验证码",

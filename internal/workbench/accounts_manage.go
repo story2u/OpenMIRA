@@ -15,7 +15,7 @@ import (
 )
 
 var (
-	// ErrAccountNameRequired preserves FastAPI's account_name validation.
+	// ErrAccountNameRequired enforces the account_name validation boundary.
 	ErrAccountNameRequired       = errors.New("account_name is required")
 	ErrAccountBatchFileRequired  = errors.New("file is required")
 	ErrAccountBatchCSVOnly       = errors.New("only .csv file is supported")
@@ -30,6 +30,7 @@ type AccountUpsertBody struct {
 	AccountName         string `json:"account_name"`
 	AgentID             string `json:"agent_id"`
 	DeviceID            string `json:"device_id"`
+	ChannelUserID       string `json:"channel_user_id"`
 	WeWorkUserID        string `json:"wework_user_id"`
 	EnterpriseID        string `json:"enterprise_id"`
 	SOPFlowID           string `json:"sop_flow_id"`
@@ -41,13 +42,13 @@ type AccountUpsertBody struct {
 	KnowledgeTag        string `json:"knowledge_tag"`
 }
 
-// AccountUpsertRequest carries the legacy account create/update request.
+// AccountUpsertRequest carries the account create/update request.
 type AccountUpsertRequest struct {
 	Session auth.Session
 	Command AccountUpsertCommand
 }
 
-// AccountDeleteRequest carries the legacy account delete request.
+// AccountDeleteRequest carries the account delete request.
 type AccountDeleteRequest struct {
 	Session   auth.Session
 	AccountID string
@@ -79,6 +80,7 @@ type AccountUpsertCommand struct {
 
 // NewAccountUpsertRequest normalizes account create/update input.
 func NewAccountUpsertRequest(body AccountUpsertBody, session auth.Session) AccountUpsertRequest {
+	channelUserID := strings.TrimSpace(firstNonBlank(body.ChannelUserID, body.WeWorkUserID))
 	return AccountUpsertRequest{
 		Session: session,
 		Command: AccountUpsertCommand{
@@ -86,7 +88,7 @@ func NewAccountUpsertRequest(body AccountUpsertBody, session auth.Session) Accou
 			AccountName:         strings.TrimSpace(body.AccountName),
 			AgentID:             strings.TrimSpace(body.AgentID),
 			DeviceID:            strings.TrimSpace(body.DeviceID),
-			WeWorkUserID:        strings.TrimSpace(body.WeWorkUserID),
+			WeWorkUserID:        channelUserID,
 			EnterpriseID:        strings.TrimSpace(body.EnterpriseID),
 			SOPFlowID:           strings.TrimSpace(body.SOPFlowID),
 			SOPEnabled:          body.SOPEnabled,

@@ -59,6 +59,18 @@ func TestServiceUpsertAccountGeneratesAccountID(t *testing.T) {
 	}
 }
 
+func TestNewAccountUpsertRequestPrefersChannelUserID(t *testing.T) {
+	request := NewAccountUpsertRequest(AccountUpsertBody{
+		AccountName:   "账号一",
+		ChannelUserID: " channel-1 ",
+		WeWorkUserID:  " old-channel-1 ",
+	}, auth.Session{Role: "admin"})
+
+	if request.Command.WeWorkUserID != "channel-1" {
+		t.Fatalf("WeWorkUserID compatibility value = %q, want channel-1", request.Command.WeWorkUserID)
+	}
+}
+
 func TestServiceUpsertAccountValidation(t *testing.T) {
 	service := Service{Accounts: &fakeAccountManageStore{}}
 

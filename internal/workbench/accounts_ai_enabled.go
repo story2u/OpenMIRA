@@ -126,12 +126,14 @@ func findAccountByID(accounts []AccountRecord, accountID string) (AccountRecord,
 }
 
 func accountRecordFullPayload(account AccountRecord) ProjectionRow {
+	channelUserID := strings.TrimSpace(firstNonBlank(account.ChannelUserID, account.WeWorkUserID))
 	payload := ProjectionRow{
 		"account_id":             strings.TrimSpace(account.AccountID),
 		"account_name":           strings.TrimSpace(account.AccountName),
 		"agent_id":               nilIfBlank(strings.TrimSpace(account.AgentID)),
 		"device_id":              nilIfBlank(strings.TrimSpace(account.DeviceID)),
-		"wework_user_id":         nilIfBlank(strings.TrimSpace(account.WeWorkUserID)),
+		"channel_user_id":        nilIfBlank(channelUserID),
+		"wework_user_id":         nilIfBlank(channelUserID),
 		"enterprise_id":          nilIfBlank(strings.TrimSpace(account.EnterpriseID)),
 		"assignee_id":            nilIfBlank(strings.TrimSpace(account.AssigneeID)),
 		"assignee_name":          nilIfBlank(strings.TrimSpace(account.AssigneeName)),
