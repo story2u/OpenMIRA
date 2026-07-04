@@ -1,6 +1,6 @@
 // Account stats SQL stays separate from row pagination SQL because unread here
 // means pending conversations. Keeping the aggregate builder isolated makes the
-// phase-three harness catch regressions before the route is enabled.
+// harness catch regressions before the route is enabled.
 package workbenchprojection
 
 import (
@@ -98,7 +98,7 @@ type normalizedAccountStatsQuery struct {
 func normalizeAccountStatsQuery(query workbench.AccountStatsQuery) normalizedAccountStatsQuery {
 	return normalizedAccountStatsQuery{
 		deviceIDs:                    normalizeStrings(query.DeviceIDs),
-		weworkUserIDs:                normalizeStrings(query.WeWorkUserIDs),
+		weworkUserIDs:                normalizeChannelScopeIDs(query.ChannelUserIDs, query.WeWorkUserIDs),
 		assigneeID:                   strings.TrimSpace(query.AssigneeID),
 		tenantID:                     strings.TrimSpace(query.TenantID),
 		unreadOnly:                   query.UnreadOnly,

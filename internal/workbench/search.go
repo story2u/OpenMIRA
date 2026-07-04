@@ -57,14 +57,15 @@ func (service Service) Search(ctx context.Context, request SearchRequest) (Paylo
 		assigneeID = ""
 	}
 	rows, err := searcher.SearchRows(ctx, ProjectionSearchQuery{
-		Keyword:       keyword,
-		DeviceIDs:     DeviceIDsForAccounts(scope.Accounts),
-		WeWorkUserIDs: scope.WeWorkUserIDs,
-		AssigneeID:    assigneeID,
-		TenantID:      scope.TenantID,
-		ModeFilter:    projectionModeFilter(request.ModeFilter, scope),
-		StatusFilter:  request.StatusFilter,
-		Limit:         searchResultBuildLimit,
+		Keyword:        keyword,
+		DeviceIDs:      DeviceIDsForAccounts(scope.Accounts),
+		ChannelUserIDs: scope.ChannelUserIDs,
+		WeWorkUserIDs:  scope.ChannelUserIDs,
+		AssigneeID:     assigneeID,
+		TenantID:       scope.TenantID,
+		ModeFilter:     projectionModeFilter(request.ModeFilter, scope),
+		StatusFilter:   request.StatusFilter,
+		Limit:          searchResultBuildLimit,
 	})
 	if err != nil {
 		return nil, err

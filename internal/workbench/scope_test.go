@@ -29,8 +29,8 @@ func TestResolveAccountScopeDefaultsToAllForAssigneeAccounts(t *testing.T) {
 		t.Fatalf("tenant = %q, want empty for multi-enterprise all scope", scope.TenantID)
 	}
 	wantIDs := []string{"DY-1801", "dy-1801", "dy1801", "dy1802"}
-	if !reflect.DeepEqual(scope.WeWorkUserIDs, wantIDs) {
-		t.Fatalf("wework ids = %#v, want %#v", scope.WeWorkUserIDs, wantIDs)
+	if !reflect.DeepEqual(scope.ChannelUserIDs, wantIDs) || !reflect.DeepEqual(scope.WeWorkUserIDs, wantIDs) {
+		t.Fatalf("channel ids = %#v compatibility=%#v, want %#v", scope.ChannelUserIDs, scope.WeWorkUserIDs, wantIDs)
 	}
 }
 
@@ -39,7 +39,7 @@ func TestResolveAccountScopeDefaultsToAssignedSessionsWithoutAccounts(t *testing
 	if err != nil {
 		t.Fatalf("ResolveAccountScope returned error: %v", err)
 	}
-	if scope.SelectedAccountKey != "assigned-sessions" || !scope.AssignedSessions || len(scope.WeWorkUserIDs) != 0 {
+	if scope.SelectedAccountKey != "assigned-sessions" || !scope.AssignedSessions || len(scope.ChannelUserIDs) != 0 || len(scope.WeWorkUserIDs) != 0 {
 		t.Fatalf("unexpected scope: %+v", scope)
 	}
 }
@@ -94,8 +94,8 @@ func TestResolveAccountScopeIncludesExplicitVisibleAccount(t *testing.T) {
 	if scope.TenantID != "ent-b" {
 		t.Fatalf("tenant = %q, want explicit selected account tenant", scope.TenantID)
 	}
-	if !reflect.DeepEqual(scope.WeWorkUserIDs, []string{"DY-1802", "dy-1802", "dy1802"}) {
-		t.Fatalf("wework ids = %#v", scope.WeWorkUserIDs)
+	if !reflect.DeepEqual(scope.ChannelUserIDs, []string{"DY-1802", "dy-1802", "dy1802"}) {
+		t.Fatalf("channel ids = %#v", scope.ChannelUserIDs)
 	}
 }
 
@@ -121,13 +121,21 @@ func TestResolveSelectedScopedAccountMatchesAutoDeviceID(t *testing.T) {
 	}
 }
 
-func TestAccountDeviceCandidatesUseExplicitWeWorkUserIDOnly(t *testing.T) {
+func TestAccountChannelCandidatesPreferExplicitChannelUserID(t *testing.T) {
+	got := AccountChannelCandidates(AccountRecord{DeviceID: "device-1", ChannelUserID: "channel-001", WeWorkUserID: "DY-1801"})
+	want := []string{"channel-001", "channel001"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("candidates = %#v, want %#v", got, want)
+	}
+}
+
+func TestAccountDeviceCandidatesKeepCompatibilityUserID(t *testing.T) {
 	got := AccountDeviceCandidates(AccountRecord{DeviceID: "device-1", WeWorkUserID: "DY-1801"})
 	want := []string{"DY-1801", "dy-1801", "dy1801"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("candidates = %#v, want %#v", got, want)
 	}
 	if candidates := AccountDeviceCandidates(AccountRecord{DeviceID: "device-1"}); len(candidates) != 0 {
-		t.Fatalf("candidates = %#v, want empty without explicit wework id", candidates)
+		t.Fatalf("candidates = %#v, want empty without explicit channel id", candidates)
 	}
 }

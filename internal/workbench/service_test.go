@@ -42,8 +42,8 @@ func TestServiceBootstrapBuildsProjectionCandidatePayload(t *testing.T) {
 	}
 	query := projection.listQueries[0]
 	wantIDs := []string{"DY-1801", "dy-1801", "dy1801", "dy1802"}
-	if !reflect.DeepEqual(query.WeWorkUserIDs, wantIDs) {
-		t.Fatalf("wework ids = %#v, want %#v", query.WeWorkUserIDs, wantIDs)
+	if !reflect.DeepEqual(query.ChannelUserIDs, wantIDs) || !reflect.DeepEqual(query.WeWorkUserIDs, wantIDs) {
+		t.Fatalf("channel ids = %#v compatibility=%#v, want %#v", query.ChannelUserIDs, query.WeWorkUserIDs, wantIDs)
 	}
 	if query.AssigneeID != "cs-001" || query.TenantID != "ent-a" || query.ModeFilter != "all" || query.StatusFilter != "pending" || query.Limit != 500 {
 		t.Fatalf("unexpected projection query: %+v", query)
@@ -85,8 +85,8 @@ func TestServiceBootstrapSelectedOwnAccountOmitsAssigneeUnion(t *testing.T) {
 	if query.AssigneeID != "" || query.TenantID != "ent-a" || query.ModeFilter != "all" {
 		t.Fatalf("unexpected selected-account query: %+v", query)
 	}
-	if !reflect.DeepEqual(query.WeWorkUserIDs, []string{"DY-1801", "dy-1801", "dy1801"}) {
-		t.Fatalf("wework ids = %#v", query.WeWorkUserIDs)
+	if !reflect.DeepEqual(query.ChannelUserIDs, []string{"DY-1801", "dy-1801", "dy1801"}) {
+		t.Fatalf("channel ids = %#v", query.ChannelUserIDs)
 	}
 }
 
@@ -167,7 +167,7 @@ func TestServiceBootstrapAssignedSessionsUsesAssignmentConversationIDs(t *testin
 		t.Fatalf("list queries = %d, want 1", len(projection.listQueries))
 	}
 	query := projection.listQueries[0]
-	if !reflect.DeepEqual(query.ConversationIDs, []string{"conv-001", "conv-002"}) || query.AssigneeID != "" || len(query.WeWorkUserIDs) != 0 {
+	if !reflect.DeepEqual(query.ConversationIDs, []string{"conv-001", "conv-002"}) || query.AssigneeID != "" || len(query.ChannelUserIDs) != 0 || len(query.WeWorkUserIDs) != 0 {
 		t.Fatalf("unexpected assigned-sessions projection query: %+v", query)
 	}
 	if len(projection.counts) != 0 {
@@ -450,7 +450,7 @@ func TestServiceAccountStatsBuildsProjectionPayload(t *testing.T) {
 	if query.AssigneeID != "cs-001" || query.TenantID != "ent-a" || !query.UnreadOnly || query.StatusFilter != "pending" || !query.IncludeUnassignedForAssignee {
 		t.Fatalf("unexpected account stats query: %+v", query)
 	}
-	if len(query.DeviceIDs) != 0 || len(query.WeWorkUserIDs) != 0 {
+	if len(query.DeviceIDs) != 0 || len(query.ChannelUserIDs) != 0 || len(query.WeWorkUserIDs) != 0 {
 		t.Fatalf("tenant-scoped all-account stats should not enumerate account ids: %+v", query)
 	}
 	rows := payload["accounts"].([]ProjectionRow)
@@ -488,8 +488,8 @@ func TestServiceAccountStatsRequestedAccountNarrowsScope(t *testing.T) {
 	if !reflect.DeepEqual(query.DeviceIDs, []string{"device-2"}) {
 		t.Fatalf("device ids = %#v", query.DeviceIDs)
 	}
-	if !reflect.DeepEqual(query.WeWorkUserIDs, []string{"wx-b", "wxb"}) {
-		t.Fatalf("wework ids = %#v", query.WeWorkUserIDs)
+	if !reflect.DeepEqual(query.ChannelUserIDs, []string{"wx-b", "wxb"}) {
+		t.Fatalf("channel ids = %#v", query.ChannelUserIDs)
 	}
 	rows := payload["accounts"].([]ProjectionRow)
 	if len(rows) != 1 || rowText(rows[0], "account_key") != "account:acc-002" || rows[0]["total"] != 7 {

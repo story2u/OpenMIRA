@@ -62,7 +62,7 @@ func (service Service) panelPayload(ctx context.Context, request PanelBootstrapR
 	if err != nil {
 		return nil, err
 	}
-	scopedAccounts, explicitAccountScope, directDeviceIDs, directWeWorkUserIDs := resolveAccountStatsAccountScope(accounts, statsRequest)
+	scopedAccounts, explicitAccountScope, directDeviceIDs, directChannelUserIDs := resolveAccountStatsAccountScope(accounts, statsRequest)
 	scopeAccounts := accountsForStatsScope(accounts, scopedAccounts, statsRequest, resolvedAssigneeID)
 	tenantID := ResolveScopeTenantID(ScopeTenantInput{
 		SessionTenantID:          panelSessionClaim(request, "tenant_id"),
@@ -70,7 +70,7 @@ func (service Service) panelPayload(ctx context.Context, request PanelBootstrapR
 		HasExplicitSessionTenant: panelHasSessionClaim(request, "tenant_id") || panelHasSessionClaim(request, "organization_name"),
 		ScopedAccounts:           scopeAccounts,
 	})
-	statsRows, err := service.panelAccountStats(ctx, statsStore, statsRequest, scopeAccounts, explicitAccountScope, directDeviceIDs, directWeWorkUserIDs, tenantID, resolvedAssigneeID)
+	statsRows, err := service.panelAccountStats(ctx, statsStore, statsRequest, scopeAccounts, explicitAccountScope, directDeviceIDs, directChannelUserIDs, tenantID, resolvedAssigneeID)
 	if err != nil {
 		return nil, err
 	}
@@ -83,7 +83,7 @@ func (service Service) panelPayload(ctx context.Context, request PanelBootstrapR
 	}
 
 	selectedAccount, hasSelectedAccount := selectPanelAccount(accountStats, scopeAccounts, scopedAccounts)
-	panelQuery := panelRowsQuery(request, selectedAccount, hasSelectedAccount, scopeAccounts, tenantID, resolvedAssigneeID, directDeviceIDs, directWeWorkUserIDs)
+	panelQuery := panelRowsQuery(request, selectedAccount, hasSelectedAccount, scopeAccounts, tenantID, resolvedAssigneeID, directDeviceIDs, directChannelUserIDs)
 	panelQuery.CursorLastMessageAt = cursorLastMessageAt
 	panelQuery.CursorConversationID = cursorConversationID
 	rawRows, err := rowsStore.ListPanelRows(ctx, panelQuery)
@@ -154,17 +154,18 @@ func panelStatsRequest(request PanelBootstrapRequest) AccountStatsRequest {
 	}
 }
 
-func (service Service) panelAccountStats(ctx context.Context, store AccountStatsStore, request AccountStatsRequest, scopeAccounts []AccountRecord, explicitAccountScope bool, directDeviceIDs []string, directWeWorkUserIDs []string, tenantID string, assigneeID string) ([]ProjectionRow, error) {
-	deviceIDs, weworkUserIDs := accountStatsScopeIDs(scopeAccounts)
+func (service Service) panelAccountStats(ctx context.Context, store AccountStatsStore, request AccountStatsRequest, scopeAccounts []AccountRecord, explicitAccountScope bool, directDeviceIDs []string, directChannelUserIDs []string, tenantID string, assigneeID string) ([]ProjectionRow, error) {
+	deviceIDs, channelUserIDs := accountStatsScopeIDs(scopeAccounts)
 	deviceIDs = appendUniqueStrings(deviceIDs, directDeviceIDs...)
-	weworkUserIDs = appendUniqueStrings(weworkUserIDs, directWeWorkUserIDs...)
+	channelUserIDs = appendUniqueStrings(channelUserIDs, directChannelUserIDs...)
 	if !explicitAccountScope && tenantID != "" {
 		deviceIDs = nil
-		weworkUserIDs = nil
+		channelUserIDs = nil
 	}
 	return store.ListAccountStats(ctx, AccountStatsQuery{
 		DeviceIDs:                    deviceIDs,
-		WeWorkUserIDs:                weworkUserIDs,
+		ChannelUserIDs:               channelUserIDs,
+		WeWorkUserIDs:                channelUserIDs,
 		AssigneeID:                   assigneeID,
 		TenantID:                     tenantID,
 		UnreadOnly:                   request.UnreadOnly,
@@ -194,23 +195,24 @@ func selectPanelAccount(stats []ProjectionRow, scopeAccounts []AccountRecord, ex
 func emptyAccountRecord(account AccountRecord) bool {
 	return strings.TrimSpace(account.AccountID) == "" &&
 		strings.TrimSpace(account.DeviceID) == "" &&
+		strings.TrimSpace(account.ChannelUserID) == "" &&
 		strings.TrimSpace(account.WeWorkUserID) == "" &&
 		strings.TrimSpace(account.AccountName) == ""
 }
 
-func panelRowsQuery(request PanelBootstrapRequest, selectedAccount AccountRecord, hasSelectedAccount bool, scopeAccounts []AccountRecord, tenantID string, assigneeID string, directDeviceIDs []string, directWeWorkUserIDs []string) PanelRowsQuery {
+func panelRowsQuery(request PanelBootstrapRequest, selectedAccount AccountRecord, hasSelectedAccount bool, scopeAccounts []AccountRecord, tenantID string, assigneeID string, directDeviceIDs []string, directChannelUserIDs []string) PanelRowsQuery {
 	deviceIDs := appendUniqueStrings(nil, directDeviceIDs...)
-	weworkUserIDs := appendUniqueStrings(nil, directWeWorkUserIDs...)
+	channelUserIDs := appendUniqueStrings(nil, directChannelUserIDs...)
 	if hasSelectedAccount {
 		if deviceID := strings.TrimSpace(selectedAccount.DeviceID); deviceID != "" {
 			deviceIDs = appendUniqueStrings(deviceIDs, deviceID)
 		}
-		weworkUserIDs = appendUniqueStrings(weworkUserIDs, AccountDeviceCandidates(selectedAccount)...)
+		channelUserIDs = appendUniqueStrings(channelUserIDs, AccountChannelCandidates(selectedAccount)...)
 		if tenantID == "" {
 			tenantID = strings.TrimSpace(selectedAccount.EnterpriseID)
 		}
-	} else if len(deviceIDs) == 0 && len(weworkUserIDs) == 0 && tenantID == "" {
-		deviceIDs, weworkUserIDs = accountStatsScopeIDs(scopeAccounts)
+	} else if len(deviceIDs) == 0 && len(channelUserIDs) == 0 && tenantID == "" {
+		deviceIDs, channelUserIDs = accountStatsScopeIDs(scopeAccounts)
 	}
 	statusFilter := "all"
 	unassignedOnly := request.UnassignedOnly
@@ -220,7 +222,8 @@ func panelRowsQuery(request PanelBootstrapRequest, selectedAccount AccountRecord
 	}
 	return PanelRowsQuery{
 		DeviceIDs:      deviceIDs,
-		WeWorkUserIDs:  weworkUserIDs,
+		ChannelUserIDs: channelUserIDs,
+		WeWorkUserIDs:  channelUserIDs,
 		AssigneeID:     assigneeID,
 		TenantID:       tenantID,
 		UnassignedOnly: unassignedOnly,

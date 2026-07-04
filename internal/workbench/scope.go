@@ -1,6 +1,7 @@
 // Account scope helpers keep CS workbench account selection independent from SQL.
-// They mirror the legacy rules that decide which account ids become projection
-// scope, while leaving canonical account enrichment for later service layers.
+// They apply account-selection rules that decide which account ids become
+// projection scope, while leaving canonical account enrichment for later service
+// layers.
 package workbench
 
 import (
@@ -8,7 +9,7 @@ import (
 	"strings"
 )
 
-// ErrInvalidAccountScope means a historical bare selected_account_id is unknown.
+// ErrInvalidAccountScope means a bare selected_account_id is unknown.
 var ErrInvalidAccountScope = errors.New("cs workbench account scope is invalid")
 
 // AccountRecord is the minimal account fact needed to resolve workbench scope.
@@ -17,6 +18,7 @@ type AccountRecord struct {
 	AccountName         string
 	DeviceID            string
 	AgentID             string
+	ChannelUserID       string
 	WeWorkUserID        string
 	AssigneeID          string
 	AssigneeName        string
@@ -58,6 +60,7 @@ type AccountScope struct {
 	Accounts           []AccountRecord
 	SelectedAccount    *AccountRecord
 	TenantID           string
+	ChannelUserIDs     []string
 	WeWorkUserIDs      []string
 	AssignedSessions   bool
 }
@@ -85,16 +88,16 @@ func ResolveAccountScope(input AccountScopeInput) (AccountScope, error) {
 		SelectedAccount:          selectedAccount,
 		ScopedAccounts:           scopedAccounts,
 	})
-	weworkUserIDs := make([]string, 0)
+	channelUserIDs := make([]string, 0)
 	if ok {
-		weworkUserIDs = AccountDeviceCandidates(selectedAccount)
+		channelUserIDs = AccountChannelCandidates(selectedAccount)
 	} else if selectedKey != "assigned-sessions" {
 		seen := make(map[string]bool)
 		for _, account := range scopedAccounts {
-			for _, candidate := range AccountDeviceCandidates(account) {
+			for _, candidate := range AccountChannelCandidates(account) {
 				if !seen[candidate] {
 					seen[candidate] = true
-					weworkUserIDs = append(weworkUserIDs, candidate)
+					channelUserIDs = append(channelUserIDs, candidate)
 				}
 			}
 		}
@@ -103,7 +106,8 @@ func ResolveAccountScope(input AccountScopeInput) (AccountScope, error) {
 		SelectedAccountKey: selectedKey,
 		Accounts:           scopedAccounts,
 		TenantID:           tenantID,
-		WeWorkUserIDs:      weworkUserIDs,
+		ChannelUserIDs:     channelUserIDs,
+		WeWorkUserIDs:      channelUserIDs,
 		AssignedSessions:   selectedKey == "assigned-sessions",
 	}
 	if ok {
@@ -113,7 +117,7 @@ func ResolveAccountScope(input AccountScopeInput) (AccountScope, error) {
 	return scope, nil
 }
 
-// CanonicalAccountKey normalizes historical bare account selector values.
+// CanonicalAccountKey normalizes bare account selector values.
 func CanonicalAccountKey(selectedAccountKey string, accounts []AccountRecord) string {
 	normalizedKey := strings.TrimSpace(selectedAccountKey)
 	if normalizedKey == "" || normalizedKey == "all" || normalizedKey == "assigned-sessions" || strings.HasPrefix(normalizedKey, "account:") {
@@ -124,18 +128,21 @@ func CanonicalAccountKey(selectedAccountKey string, accounts []AccountRecord) st
 	for _, account := range accounts {
 		accountID := strings.TrimSpace(account.AccountID)
 		deviceID := strings.TrimSpace(account.DeviceID)
+		channelUserID := strings.TrimSpace(account.ChannelUserID)
 		weworkUserID := strings.TrimSpace(account.WeWorkUserID)
 		if (accountID != "" && strings.ToLower(accountID) == lookup) ||
 			(deviceID != "" && strings.ToLower(deviceID) == lookup) ||
+			(channelUserID != "" && strings.ToLower(channelUserID) == lookup) ||
 			(weworkUserID != "" && strings.ToLower(weworkUserID) == lookup) ||
+			(normalizedLookup != "" && NormalizeIDHint(channelUserID) == normalizedLookup) ||
 			(normalizedLookup != "" && NormalizeIDHint(weworkUserID) == normalizedLookup) {
-			return "account:" + firstNonBlank(accountID, deviceID, weworkUserID)
+			return "account:" + firstNonBlank(accountID, deviceID, channelUserID, weworkUserID)
 		}
 	}
 	return normalizedKey
 }
 
-// ResolveDefaultAccountKey applies legacy defaults for empty account selectors.
+// ResolveDefaultAccountKey applies defaults for empty account selectors.
 func ResolveDefaultAccountKey(scopedAccounts []AccountRecord, selectedAccountKey string, allAccounts []AccountRecord) (string, error) {
 	lookupAccounts := make([]AccountRecord, 0, len(scopedAccounts)+len(allAccounts))
 	lookupAccounts = append(lookupAccounts, scopedAccounts...)
@@ -174,6 +181,7 @@ func ResolveSelectedScopedAccount(scopedAccounts []AccountRecord, selectedAccoun
 	for _, account := range scopedAccounts {
 		if strings.TrimSpace(account.AccountID) == accountLookup ||
 			strings.TrimSpace(account.DeviceID) == accountLookup ||
+			strings.TrimSpace(account.ChannelUserID) == accountLookup ||
 			strings.TrimSpace(account.WeWorkUserID) == accountLookup {
 			return account, true
 		}
@@ -217,9 +225,9 @@ func ResolveScopeTenantID(input ScopeTenantInput) string {
 	return sessionTenantID
 }
 
-// AccountDeviceCandidates returns the explicit wework ids used by projection.
-func AccountDeviceCandidates(account AccountRecord) []string {
-	userID := strings.TrimSpace(account.WeWorkUserID)
+// AccountChannelCandidates returns the explicit channel account ids used by projection.
+func AccountChannelCandidates(account AccountRecord) []string {
+	userID := strings.TrimSpace(firstNonBlank(account.ChannelUserID, account.WeWorkUserID))
 	if userID == "" {
 		return nil
 	}
@@ -234,7 +242,12 @@ func AccountDeviceCandidates(account AccountRecord) []string {
 	return candidates
 }
 
-// NormalizeIDHint matches the Python userid/device hint comparison key.
+// AccountDeviceCandidates keeps older call sites on the channel identity rules.
+func AccountDeviceCandidates(account AccountRecord) []string {
+	return AccountChannelCandidates(account)
+}
+
+// NormalizeIDHint normalizes account and device hint comparison keys.
 func NormalizeIDHint(value string) string {
 	return strings.ToLower(strings.ReplaceAll(strings.TrimSpace(value), "-", ""))
 }
@@ -243,7 +256,7 @@ func collapseOrphanAutoAccounts(scopedAccounts []AccountRecord) []AccountRecord 
 	collapsed := make([]AccountRecord, 0, len(scopedAccounts))
 	for _, account := range scopedAccounts {
 		accountID := strings.TrimSpace(account.AccountID)
-		if strings.HasPrefix(accountID, "auto-") && strings.TrimSpace(account.DeviceID) == "" && NormalizeIDHint(account.WeWorkUserID) == "" {
+		if strings.HasPrefix(accountID, "auto-") && strings.TrimSpace(account.DeviceID) == "" && NormalizeIDHint(firstNonBlank(account.ChannelUserID, account.WeWorkUserID)) == "" {
 			continue
 		}
 		collapsed = append(collapsed, account)
@@ -265,7 +278,7 @@ func includeExplicitAccount(scopedAccounts []AccountRecord, allAccounts []Accoun
 	seen := make(map[string]bool)
 	merged := make([]AccountRecord, 0, len(scopedAccounts)+1)
 	for _, account := range append(append([]AccountRecord{}, scopedAccounts...), selected) {
-		key := firstNonBlank(strings.TrimSpace(account.AccountID), NormalizeIDHint(account.WeWorkUserID), strings.TrimSpace(account.DeviceID))
+		key := firstNonBlank(strings.TrimSpace(account.AccountID), NormalizeIDHint(firstNonBlank(account.ChannelUserID, account.WeWorkUserID)), strings.TrimSpace(account.DeviceID))
 		if key == "" || seen[key] {
 			continue
 		}

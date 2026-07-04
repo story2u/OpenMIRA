@@ -1,6 +1,6 @@
-// Account stats service code keeps the legacy management read path projection-backed.
+// Account stats service code keeps management reads projection-backed.
 // It resolves auth scope and account metadata in the domain layer, while SQL remains
-// in infra so the route can stay read-only and fail closed during migration.
+// in infra so the route can stay read-only and fail closed.
 package workbench
 
 import (
@@ -12,9 +12,9 @@ import (
 var (
 	// ErrAccountStatsStoreUnavailable means account aggregate rows cannot be loaded.
 	ErrAccountStatsStoreUnavailable = errors.New("workbench account stats store is unavailable")
-	// ErrCSSessionMissingAssignee preserves the legacy CS read-scope guard.
+	// ErrCSSessionMissingAssignee enforces the CS read-scope guard.
 	ErrCSSessionMissingAssignee = errors.New("current cs session is missing assignee_id")
-	// ErrCSAssigneeScope preserves the legacy CS cross-assignee guard.
+	// ErrCSAssigneeScope enforces the CS cross-assignee guard.
 	ErrCSAssigneeScope = errors.New("cs cannot query conversations of another assignee")
 )
 
@@ -40,8 +40,8 @@ func (service Service) AccountStats(ctx context.Context, request AccountStatsReq
 	if err != nil {
 		return nil, err
 	}
-	scopedAccounts, explicitAccountScope, directDeviceIDs, directWeWorkUserIDs := resolveAccountStatsAccountScope(accounts, request)
-	if explicitAccountScope && len(scopedAccounts) == 0 && len(directDeviceIDs) == 0 && len(directWeWorkUserIDs) == 0 {
+	scopedAccounts, explicitAccountScope, directDeviceIDs, directChannelUserIDs := resolveAccountStatsAccountScope(accounts, request)
+	if explicitAccountScope && len(scopedAccounts) == 0 && len(directDeviceIDs) == 0 && len(directChannelUserIDs) == 0 {
 		return accountStatsPayload(nil, request.AccountQuery), nil
 	}
 	scopeAccounts := accountsForStatsScope(accounts, scopedAccounts, request, resolvedAssigneeID)
@@ -51,17 +51,18 @@ func (service Service) AccountStats(ctx context.Context, request AccountStatsReq
 		HasExplicitSessionTenant: hasSessionClaim(BootstrapRequest{Session: request.Session}, "tenant_id") || hasSessionClaim(BootstrapRequest{Session: request.Session}, "organization_name"),
 		ScopedAccounts:           scopeAccounts,
 	})
-	deviceIDs, weworkUserIDs := accountStatsScopeIDs(scopeAccounts)
+	deviceIDs, channelUserIDs := accountStatsScopeIDs(scopeAccounts)
 	deviceIDs = appendUniqueStrings(deviceIDs, directDeviceIDs...)
-	weworkUserIDs = appendUniqueStrings(weworkUserIDs, directWeWorkUserIDs...)
+	channelUserIDs = appendUniqueStrings(channelUserIDs, directChannelUserIDs...)
 	if !explicitAccountScope && tenantID != "" {
 		deviceIDs = nil
-		weworkUserIDs = nil
+		channelUserIDs = nil
 	}
 
 	rows, err := store.ListAccountStats(ctx, AccountStatsQuery{
 		DeviceIDs:                    deviceIDs,
-		WeWorkUserIDs:                weworkUserIDs,
+		ChannelUserIDs:               channelUserIDs,
+		WeWorkUserIDs:                channelUserIDs,
 		AssigneeID:                   resolvedAssigneeID,
 		TenantID:                     tenantID,
 		UnreadOnly:                   request.UnreadOnly,
@@ -115,17 +116,17 @@ func resolveAccountStatsAccountScope(accounts []AccountRecord, request AccountSt
 		}
 	}
 	deviceIDs := make([]string, 0)
-	weworkUserIDs := make([]string, 0)
+	channelUserIDs := make([]string, 0)
 	prefix, value, ok := splitAccountStatsIdentityKey(accountKey)
 	if ok {
 		switch prefix {
 		case "device":
 			deviceIDs = append(deviceIDs, value)
-		case "wework", "archive_user":
-			weworkUserIDs = appendUniqueStrings(weworkUserIDs, value, strings.ToLower(value), NormalizeIDHint(value))
+		case "channel", "account_user", "wework", "archive_user":
+			channelUserIDs = appendUniqueStrings(channelUserIDs, value, strings.ToLower(value), NormalizeIDHint(value))
 		}
 	}
-	return matched, true, normalizeStringsLocal(deviceIDs), normalizeStringsLocal(weworkUserIDs)
+	return matched, true, normalizeStringsLocal(deviceIDs), normalizeStringsLocal(channelUserIDs)
 }
 
 func accountStatsAccountMatches(account AccountRecord, accountName string, accountKey string) bool {
@@ -140,6 +141,14 @@ func accountStatsAccountMatches(account AccountRecord, accountName string, accou
 	trimmedKey := key
 	if value, ok := strings.CutPrefix(rawKey, "account:"); ok {
 		trimmedKey = strings.TrimSpace(key[len("account:"):])
+		rawKey = strings.TrimSpace(value)
+	}
+	if value, ok := strings.CutPrefix(rawKey, "channel:"); ok {
+		trimmedKey = strings.TrimSpace(key[len("channel:"):])
+		rawKey = strings.TrimSpace(value)
+	}
+	if value, ok := strings.CutPrefix(rawKey, "account_user:"); ok {
+		trimmedKey = strings.TrimSpace(key[len("account_user:"):])
 		rawKey = strings.TrimSpace(value)
 	}
 	if value, ok := strings.CutPrefix(rawKey, "wework:"); ok {
@@ -158,6 +167,7 @@ func accountStatsAccountMatches(account AccountRecord, accountName string, accou
 	for _, candidate := range []string{
 		strings.TrimSpace(account.AccountID),
 		strings.TrimSpace(account.DeviceID),
+		strings.TrimSpace(account.ChannelUserID),
 		strings.TrimSpace(account.WeWorkUserID),
 		strings.TrimSpace(account.AccountName),
 	} {
@@ -192,14 +202,14 @@ func accountsForStatsScope(allAccounts []AccountRecord, selectedAccounts []Accou
 
 func accountStatsScopeIDs(accounts []AccountRecord) ([]string, []string) {
 	deviceIDs := make([]string, 0)
-	weworkUserIDs := make([]string, 0)
+	channelUserIDs := make([]string, 0)
 	for _, account := range accounts {
 		if deviceID := strings.TrimSpace(account.DeviceID); deviceID != "" {
 			deviceIDs = append(deviceIDs, deviceID)
 		}
-		weworkUserIDs = appendUniqueStrings(weworkUserIDs, AccountDeviceCandidates(account)...)
+		channelUserIDs = appendUniqueStrings(channelUserIDs, AccountChannelCandidates(account)...)
 	}
-	return normalizeStringsLocal(deviceIDs), normalizeStringsLocal(weworkUserIDs)
+	return normalizeStringsLocal(deviceIDs), normalizeStringsLocal(channelUserIDs)
 }
 
 func buildAccountStatsRows(rows []ProjectionRow, accounts []AccountRecord) []ProjectionRow {

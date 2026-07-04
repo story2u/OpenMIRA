@@ -1,6 +1,6 @@
-// Bootstrap services compose account scope and projection reads for phase three.
-// The service remains unmounted until row hydration, account summaries, and
-// device status payloads pass golden comparison with the Python implementation.
+// Bootstrap services compose account scope and projection reads for workbench views.
+// The service keeps row hydration, account summaries, and device status payloads
+// behind explicit harness coverage.
 package workbench
 
 import (
@@ -29,7 +29,7 @@ var (
 	ErrAccountNotFound = errors.New("account not found")
 	// ErrProjectionStoreUnavailable means projection rows cannot be loaded.
 	ErrProjectionStoreUnavailable = errors.New("workbench projection store is unavailable")
-	// ErrConversationListStoreUnavailable means legacy conversation list rows cannot be loaded.
+	// ErrConversationListStoreUnavailable means conversation list rows cannot be loaded.
 	ErrConversationListStoreUnavailable = errors.New("workbench conversation list store is unavailable")
 	// ErrCustomerProfileContactClientUnavailable means WeCom contact editing cannot run.
 	ErrCustomerProfileContactClientUnavailable = errors.New("workbench customer profile contact client is unavailable")
@@ -76,7 +76,7 @@ type ProjectionStore interface {
 	CountScoped(ctx context.Context, query ProjectionQuery) (ProjectionStats, error)
 }
 
-// ConversationListStore loads the bounded legacy /api/v1/conversations list.
+// ConversationListStore loads the bounded /api/v1/conversations list.
 type ConversationListStore interface {
 	ListConversationRows(ctx context.Context, query ConversationListQuery) ([]ProjectionRow, error)
 }
@@ -156,7 +156,7 @@ type AssignmentPoolRuntimeSelector interface {
 	SelectRatioPoolUser(ctx context.Context, poolID string, weights map[string]int, availableIDs []string) (string, bool, error)
 }
 
-// AssignmentRuntimeState mirrors Python's best-effort Redis assignment counters.
+// AssignmentRuntimeState tracks best-effort Redis assignment counters.
 type AssignmentRuntimeState interface {
 	ClaimAssignmentState(ctx context.Context, tenantID string, assigneeID string, conversationID string) error
 	ReleaseAssignmentState(ctx context.Context, tenantID string, assigneeID string, conversationID string) error
@@ -168,7 +168,7 @@ type AssignmentRuntimeLoadCounter interface {
 	CountAssignmentLoadState(ctx context.Context, tenantID string, assigneeIDs []string) (map[string]int, []string, error)
 }
 
-// AssignmentOperationLocker serializes claim writes with Python-compatible Redis locks.
+// AssignmentOperationLocker serializes claim writes with Redis locks.
 type AssignmentOperationLocker interface {
 	AcquireAssignmentOperationLock(ctx context.Context, conversationID string, token string) (bool, error)
 	ReleaseAssignmentOperationLock(ctx context.Context, conversationID string, token string) error
@@ -208,7 +208,7 @@ type ReplyScriptWriteStore interface {
 	DeleteReplyScript(ctx context.Context, scriptID string) (bool, error)
 }
 
-// WorkbenchEventPublisher publishes Python-compatible workbench change events.
+// WorkbenchEventPublisher publishes workbench change events.
 type WorkbenchEventPublisher interface {
 	Publish(ctx context.Context, channel string, event string, topic string, payload map[string]any) error
 }
@@ -322,18 +322,18 @@ type StatsAIReplyBreakdownStore interface {
 	GetStatsAIReplyBreakdown(ctx context.Context, start time.Time, end time.Time) ([]StatsAIReplyBreakdownItem, error)
 }
 
-// DiagnosticConversationStore reads legacy conversation diagnostics.
+// DiagnosticConversationStore reads conversation diagnostics.
 type DiagnosticConversationStore interface {
 	ListDiagnosticOrphanConversations(ctx context.Context) ([]DiagnosticOrphanConversationRecord, error)
 	ListDiagnosticForkedConversations(ctx context.Context) ([]DiagnosticForkedConversationGroupRecord, error)
 }
 
-// DiagnosticContactStore reads legacy contact identity diagnostics.
+// DiagnosticContactStore reads contact identity diagnostics.
 type DiagnosticContactStore interface {
 	ListDiagnosticDirtyContacts(ctx context.Context, limit int) ([]ProjectionRow, error)
 }
 
-// DiagnosticArchiveSyncStore reads legacy enterprise archive sync snapshots.
+// DiagnosticArchiveSyncStore reads enterprise archive sync snapshots.
 type DiagnosticArchiveSyncStore interface {
 	ListDiagnosticArchiveSyncStatuses(ctx context.Context) ([]DiagnosticArchiveSyncStatusRecord, error)
 }
@@ -597,7 +597,7 @@ func (service Service) Summary(ctx context.Context, request SummaryRequest) (Pay
 	}, nil
 }
 
-// assignedConversationIDs mirrors Python's assignment-first assigned-sessions scope.
+// assignedConversationIDs applies assignment-first assigned-sessions scope.
 func (service Service) assignedConversationIDs(ctx context.Context, request BootstrapRequest, scope AccountScope) ([]string, error) {
 	if !scope.AssignedSessions {
 		return nil, nil
@@ -636,14 +636,15 @@ func (service Service) projectionQuery(request BootstrapRequest, scope AccountSc
 	if scope.SelectedAccount != nil && strings.TrimSpace(scope.SelectedAccount.AssigneeID) == assigneeID {
 		assigneeID = ""
 	}
-	weworkUserIDs := scope.WeWorkUserIDs
+	channelUserIDs := scope.ChannelUserIDs
 	if scope.AssignedSessions {
 		assigneeID = ""
-		weworkUserIDs = nil
+		channelUserIDs = nil
 	}
 	modeFilter := projectionModeFilter(request.ModeFilter, scope)
 	return ProjectionQuery{
-		WeWorkUserIDs:       weworkUserIDs,
+		ChannelUserIDs:      channelUserIDs,
+		WeWorkUserIDs:       channelUserIDs,
 		ConversationIDs:     assignedConversationIDs,
 		AssigneeID:          assigneeID,
 		TenantID:            scope.TenantID,

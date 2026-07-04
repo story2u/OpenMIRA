@@ -1,6 +1,6 @@
-// Package workbenchprojection reads the legacy conversation overview projection.
+// Package workbenchprojection reads the conversation overview projection.
 // The repository keeps SQL construction isolated from workbench services so the
-// bootstrap migration can prove scope, pagination, and filter behavior first.
+// bootstrap path can prove scope, pagination, and filter behavior first.
 package workbenchprojection
 
 import (
@@ -46,7 +46,7 @@ func NewSQLRepository(db *sql.DB) *Repository {
 	return &Repository{DB: sqlQueryer{db: db}}
 }
 
-// ListRows mirrors the legacy projection list_rows query shape for workbench reads.
+// ListRows reads scoped projection rows for workbench views.
 func (repository *Repository) ListRows(ctx context.Context, query workbench.ProjectionQuery) ([]workbench.ProjectionRow, error) {
 	if repository.DB == nil {
 		return nil, fmt.Errorf("workbench projection database is not configured")
@@ -94,7 +94,7 @@ func (repository *Repository) CountScoped(ctx context.Context, query workbench.P
 	}, nil
 }
 
-// ListConversationRows returns the bounded legacy /api/v1/conversations scan.
+// ListConversationRows returns the bounded /api/v1/conversations scan.
 func (repository *Repository) ListConversationRows(ctx context.Context, query workbench.ConversationListQuery) ([]workbench.ProjectionRow, error) {
 	if repository.DB == nil {
 		return nil, fmt.Errorf("workbench projection database is not configured")
@@ -331,7 +331,7 @@ func normalizeQuery(query workbench.ProjectionQuery) normalizedQuery {
 	}
 	return normalizedQuery{
 		deviceIDs:            normalizeStrings(query.DeviceIDs),
-		weworkUserIDs:        normalizeStrings(query.WeWorkUserIDs),
+		weworkUserIDs:        normalizeChannelScopeIDs(query.ChannelUserIDs, query.WeWorkUserIDs),
 		conversationIDs:      normalizeStrings(query.ConversationIDs),
 		assigneeID:           strings.TrimSpace(query.AssigneeID),
 		tenantID:             strings.TrimSpace(query.TenantID),
@@ -457,6 +457,14 @@ func normalizeStrings(values []string) []string {
 		}
 	}
 	return result
+}
+
+func normalizeChannelScopeIDs(channelUserIDs []string, compatibilityUserIDs []string) []string {
+	normalized := normalizeStrings(channelUserIDs)
+	if len(normalized) > 0 {
+		return normalized
+	}
+	return normalizeStrings(compatibilityUserIDs)
 }
 
 func stringsToAny(values []string) []any {

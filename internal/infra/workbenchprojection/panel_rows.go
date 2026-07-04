@@ -1,6 +1,6 @@
 // Panel row SQL joins current assignment facts before returning projection rows.
-// This avoids treating stale projection assignee fields as the source of truth
-// for management assignment panels.
+// This avoids treating stale projection assignee fields as authoritative for
+// management assignment panels.
 package workbenchprojection
 
 import (
@@ -101,7 +101,7 @@ func normalizePanelRowsQuery(query workbench.PanelRowsQuery) normalizedPanelRows
 	}
 	return normalizedPanelRowsQuery{
 		deviceIDs:            normalizeStrings(query.DeviceIDs),
-		weworkUserIDs:        normalizeStrings(query.WeWorkUserIDs),
+		weworkUserIDs:        normalizeChannelScopeIDs(query.ChannelUserIDs, query.WeWorkUserIDs),
 		assigneeID:           strings.TrimSpace(query.AssigneeID),
 		tenantID:             strings.TrimSpace(query.TenantID),
 		cursorLastMessageAt:  panelCursorText(query.CursorLastMessageAt),

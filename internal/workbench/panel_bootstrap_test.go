@@ -57,7 +57,7 @@ func TestServicePanelBootstrapBuildsAssignmentPayload(t *testing.T) {
 	if rowsQuery.AssigneeID != "cs-001" || rowsQuery.TenantID != "ent-a" || !rowsQuery.UnassignedOnly || rowsQuery.StatusFilter != "pending" || rowsQuery.Limit != 2 {
 		t.Fatalf("unexpected panel rows query: %+v", rowsQuery)
 	}
-	if !reflect.DeepEqual(rowsQuery.DeviceIDs, []string{"device-1"}) || !reflect.DeepEqual(rowsQuery.WeWorkUserIDs, []string{"wx-a", "wxa"}) {
+	if !reflect.DeepEqual(rowsQuery.DeviceIDs, []string{"device-1"}) || !reflect.DeepEqual(rowsQuery.ChannelUserIDs, []string{"wx-a", "wxa"}) {
 		t.Fatalf("unexpected account scope: %+v", rowsQuery)
 	}
 	if assignments.countTenant != "ent-a" || !reflect.DeepEqual(assignments.countIDs, []string{"cs-002", "cs-001"}) {

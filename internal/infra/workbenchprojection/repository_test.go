@@ -1,6 +1,6 @@
 // Package workbenchprojection tests SQL contracts for workbench projection reads.
-// The fake queryer captures generated SQL and parameters so the phase-three
-// harness can freeze scope behavior before any route is mounted.
+// The fake queryer captures generated SQL and parameters so the harness can
+// freeze scope behavior before any route is mounted.
 package workbenchprojection
 
 import (
@@ -23,7 +23,7 @@ func TestListRowsBuildsScopedUnionQuery(t *testing.T) {
 	repository := &Repository{DB: db}
 
 	rows, err := repository.ListRows(context.Background(), workbench.ProjectionQuery{
-		WeWorkUserIDs:        []string{" wu-1 ", "wu-2"},
+		ChannelUserIDs:       []string{" wu-1 ", "wu-2"},
 		AssigneeID:           " cs-001 ",
 		TenantID:             " tenant-1 ",
 		CursorLastMessageAt:  "2026-06-29 10:00:00",
@@ -86,10 +86,10 @@ func TestListRowsConversationIDScope(t *testing.T) {
 	}
 }
 
-func TestListConversationRowsBuildsBoundedLegacyListQuery(t *testing.T) {
+func TestListConversationRowsBuildsBoundedListQuery(t *testing.T) {
 	db := &fakeDB{rows: &fakeRows{
 		columns: []string{"conversation_id", "last_content"},
-		values:  [][]any{{"conv-legacy", []byte("hello")}},
+		values:  [][]any{{"conv-existing", []byte("hello")}},
 	}}
 	repository := &Repository{DB: db}
 
@@ -105,7 +105,7 @@ func TestListConversationRowsBuildsBoundedLegacyListQuery(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListConversationRows returned error: %v", err)
 	}
-	if len(rows) != 1 || rows[0]["conversation_id"] != "conv-legacy" || rows[0]["last_content"] != "hello" {
+	if len(rows) != 1 || rows[0]["conversation_id"] != "conv-existing" || rows[0]["last_content"] != "hello" {
 		t.Fatalf("unexpected rows: %#v", rows)
 	}
 	for _, want := range []string{
@@ -141,10 +141,10 @@ func TestCountScopedBuildsScopedUnionQuery(t *testing.T) {
 	repository := &Repository{DB: db}
 
 	stats, err := repository.CountScoped(context.Background(), workbench.ProjectionQuery{
-		WeWorkUserIDs: []string{"wu-1"},
-		AssigneeID:    "cs-001",
-		TenantID:      "tenant-1",
-		StatusFilter:  "unread",
+		ChannelUserIDs: []string{"wu-1"},
+		AssigneeID:     "cs-001",
+		TenantID:       "tenant-1",
+		StatusFilter:   "unread",
 	})
 	if err != nil {
 		t.Fatalf("CountScoped returned error: %v", err)
@@ -167,7 +167,7 @@ func TestCountScopedBuildsScopedUnionQuery(t *testing.T) {
 	}
 }
 
-// TestListAccountStatsBuildsPendingAggregateQuery verifies legacy unread semantics.
+// TestListAccountStatsBuildsPendingAggregateQuery verifies pending unread semantics.
 func TestListAccountStatsBuildsPendingAggregateQuery(t *testing.T) {
 	db := &fakeDB{rows: &fakeRows{
 		columns: []string{"wework_user_id", "device_id", "total", "unread", "unassigned_unread"},
@@ -177,7 +177,7 @@ func TestListAccountStatsBuildsPendingAggregateQuery(t *testing.T) {
 
 	rows, err := repository.ListAccountStats(context.Background(), workbench.AccountStatsQuery{
 		DeviceIDs:                    []string{" device-1 "},
-		WeWorkUserIDs:                []string{" wx-1 "},
+		ChannelUserIDs:               []string{" wx-1 "},
 		AssigneeID:                   " cs-001 ",
 		TenantID:                     " tenant-1 ",
 		UnreadOnly:                   true,
@@ -250,7 +250,7 @@ func TestListPanelRowsBuildsAssignmentJoinQuery(t *testing.T) {
 
 	rows, err := repository.ListPanelRows(context.Background(), workbench.PanelRowsQuery{
 		DeviceIDs:      []string{" device-1 "},
-		WeWorkUserIDs:  []string{" wx-1 "},
+		ChannelUserIDs: []string{" wx-1 "},
 		TenantID:       " tenant-1 ",
 		UnassignedOnly: true,
 		StatusFilter:   " pending ",
@@ -351,13 +351,13 @@ func TestSearchRowsBuildsScopedWeightedQueries(t *testing.T) {
 	repository := &Repository{DB: db}
 
 	rows, err := repository.SearchRows(context.Background(), workbench.ProjectionSearchQuery{
-		Keyword:       " golden ",
-		WeWorkUserIDs: []string{" wu-1 "},
-		AssigneeID:    " cs-001 ",
-		TenantID:      " tenant-1 ",
-		ModeFilter:    "all",
-		StatusFilter:  "pending",
-		Limit:         80,
+		Keyword:        " golden ",
+		ChannelUserIDs: []string{" wu-1 "},
+		AssigneeID:     " cs-001 ",
+		TenantID:       " tenant-1 ",
+		ModeFilter:     "all",
+		StatusFilter:   "pending",
+		Limit:          80,
 	})
 	if err != nil {
 		t.Fatalf("SearchRows returned error: %v", err)
@@ -385,7 +385,7 @@ func TestSearchRowsBuildsScopedWeightedQueries(t *testing.T) {
 	}
 }
 
-// TestSearchRowsFallsBackToContainsOnlyWhenPrefixMisses mirrors Python behavior.
+// TestSearchRowsFallsBackToContainsOnlyWhenPrefixMisses verifies search fallback behavior.
 func TestSearchRowsFallsBackToContainsOnlyWhenPrefixMisses(t *testing.T) {
 	db := &fakeDB{rowsets: []*fakeRows{
 		{}, {}, {},

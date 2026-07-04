@@ -124,7 +124,7 @@ func normalizeSearchQuery(query workbench.ProjectionSearchQuery) normalizedSearc
 	return normalizedSearchQuery{
 		keyword:       strings.TrimSpace(query.Keyword),
 		deviceIDs:     normalizeStrings(query.DeviceIDs),
-		weworkUserIDs: normalizeStrings(query.WeWorkUserIDs),
+		weworkUserIDs: normalizeChannelScopeIDs(query.ChannelUserIDs, query.WeWorkUserIDs),
 		assigneeID:    strings.TrimSpace(query.AssigneeID),
 		tenantID:      strings.TrimSpace(query.TenantID),
 		modeFilter:    defaultLower(query.ModeFilter, "all"),
