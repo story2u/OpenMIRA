@@ -375,7 +375,7 @@ export function AdminDashboardClient() {
 
   return (
     <div className="mx-auto grid max-w-7xl gap-4 px-4 py-4 lg:grid-rows-[auto_1fr] lg:px-6">
-      <section className="grid gap-3 border border-[#d8dde8] bg-white p-3 md:grid-cols-[minmax(220px,1fr)_auto_auto]">
+      <section className="grid gap-3 border border-[#d8dde8] bg-white p-3 md:grid-cols-[minmax(220px,1fr)_auto]">
         <div className="grid gap-1">
           <span className="text-xs font-medium text-[#697386]">管理会话</span>
           <span className="h-9 truncate border border-[#e5e9f2] bg-[#f9fafc] px-2 py-2 text-sm text-[#172033]">
@@ -389,9 +389,6 @@ export function AdminDashboardClient() {
           <button className="h-9 border border-[#172033] bg-[#172033] px-3 text-sm font-medium text-white" type="button" onClick={() => void handleLogout()}>
             退出
           </button>
-        </div>
-        <div className="flex items-end text-xs text-[#697386] md:justify-end">
-          <span className="truncate">{apiBasePath}</span>
         </div>
       </section>
 
@@ -1088,7 +1085,7 @@ function AccountsPanel({ snapshot, workloadSnapshot, onRefresh }) {
               <th className="border-b border-[#d8dde8] px-3 py-2">账号</th>
               <th className="border-b border-[#d8dde8] px-3 py-2">设备</th>
               <th className="border-b border-[#d8dde8] px-3 py-2">通道</th>
-              <th className="border-b border-[#d8dde8] px-3 py-2">客服</th>
+              <th className="border-b border-[#d8dde8] px-3 py-2">消息端</th>
               <th className="border-b border-[#d8dde8] px-3 py-2">SOP</th>
               <th className="border-b border-[#d8dde8] px-3 py-2">状态</th>
               <th className="border-b border-[#d8dde8] px-3 py-2">AI</th>
@@ -1983,15 +1980,15 @@ function SOPConfigPanel({ snapshot, onRefresh }) {
             </select>
           </label>
           <label className="grid gap-1">
-            <span className="text-xs font-medium text-[#697386]">适用客服</span>
+            <span className="text-xs font-medium text-[#697386]">适用消息端</span>
             <select
               className="h-9 border border-[#cfd6e3] bg-white px-3 text-sm outline-none focus:border-[#2f6fed]"
               value={flowForm.targetAudienceMode}
               onChange={(event) => setFlowForm((current) => ({ ...current, targetAudienceMode: event.target.value }))}
             >
               <option value="none">未选择</option>
-              <option value="all">全部客服</option>
-              <option value="specific">指定客服</option>
+              <option value="all">全部消息端</option>
+              <option value="specific">指定消息端</option>
             </select>
           </label>
           <label className="grid gap-1">
@@ -2564,7 +2561,7 @@ function sopPolicyReplySummary(policy) {
 function sopConfigMutationErrorMessage(error) {
   const messages = {
     flow_id_required: "请输入规则集 ID",
-    target_audience_required: "启用规则集前请选择适用客服",
+    target_audience_required: "启用规则集前请选择适用消息端",
     default_flow_protected: "默认规则集不能删除",
     policy_id_required: "缺少策略 ID",
     day_stage_required: "请输入 Day 阶段",
@@ -4367,7 +4364,7 @@ function AIReplyObservabilityPanel() {
                   className="h-9 border border-[#cfd6e3] px-3 text-sm outline-none focus:border-[#2f6fed]"
                   value={logFilters.keyword}
                   onChange={(event) => setLogFilters((current) => ({ ...current, keyword: event.target.value }))}
-                  placeholder="客户/客服/账号/trace"
+                  placeholder="客户/消息端/账号/trace"
                 />
               </label>
               <label className="grid gap-1">
@@ -4437,7 +4434,7 @@ function AIReplyObservabilityPanel() {
               <thead className="bg-[#f1f4f8] text-xs font-semibold text-[#566072]">
                 <tr>
                   <th className="border-b border-[#d8dde8] px-3 py-2">时间</th>
-                  <th className="border-b border-[#d8dde8] px-3 py-2">客服</th>
+                  <th className="border-b border-[#d8dde8] px-3 py-2">消息端</th>
                   <th className="border-b border-[#d8dde8] px-3 py-2">账号/接收人</th>
                   <th className="border-b border-[#d8dde8] px-3 py-2">消息</th>
                   <th className="border-b border-[#d8dde8] px-3 py-2">状态</th>
@@ -5255,7 +5252,7 @@ function DevicesPanel({ snapshot, accountsSnapshot, workloadSnapshot, onRefresh 
             />
           </label>
           <label className="grid gap-1">
-            <span className="text-xs font-medium text-[#697386]">分配客服</span>
+            <span className="text-xs font-medium text-[#697386]">分配消息端</span>
             {assignees.length > 0 ? (
               <select
                 className="h-9 border border-[#cfd6e3] bg-white px-3 text-sm outline-none focus:border-[#2f6fed]"
@@ -6194,7 +6191,7 @@ function CSUsersPanel({ snapshot, onRefresh }) {
 
   const handleAIBulkToggle = useCallback(async (user) => {
     const nextEnabled = !user.aiEnabled;
-    const confirmed = typeof window === "undefined" || window.confirm(`${nextEnabled ? "开启" : "关闭"} ${user.assigneeName} 的 AI 托管，并同步该客服当前会话？`);
+    const confirmed = typeof window === "undefined" || window.confirm(`${nextEnabled ? "开启" : "关闭"} ${user.assigneeName} 的 AI 托管，并同步该消息端当前会话？`);
     if (!confirmed) return;
     const mutation = buildCSUserAIBulkMutation(user.assigneeId, nextEnabled, { syncCSUser: true });
     if (!mutation.ok) {
@@ -6281,7 +6278,7 @@ function CSUsersPanel({ snapshot, onRefresh }) {
               value={form.role}
               onChange={(event) => setForm((current) => ({ ...current, role: event.target.value }))}
             >
-              <option value="cs">客服</option>
+              <option value="cs">消息端</option>
               <option value="supervisor">主管</option>
               <option value="admin">管理员</option>
             </select>
@@ -6393,7 +6390,7 @@ function CSUsersPanel({ snapshot, onRefresh }) {
         <table className="min-w-full border-collapse text-left text-sm">
           <thead className="bg-[#f1f4f8] text-xs font-semibold text-[#566072]">
             <tr>
-              <th className="border-b border-[#d8dde8] px-3 py-2">客服</th>
+              <th className="border-b border-[#d8dde8] px-3 py-2">消息端</th>
               <th className="border-b border-[#d8dde8] px-3 py-2">角色</th>
               <th className="border-b border-[#d8dde8] px-3 py-2">接待</th>
               <th className="border-b border-[#d8dde8] px-3 py-2">密码</th>
@@ -6639,7 +6636,7 @@ function AssignmentsPanel({ csUsersSnapshot, onRefresh }) {
       });
       const result = normalizeAssignmentTransferResult(response);
       const target = result.transfer.toAssigneeName || result.transfer.toAssigneeId || transferForm.targetAssigneeName || transferForm.targetAssigneeId;
-      setNotice(`会话已转接给 ${target || "目标客服"}`);
+      setNotice(`会话已转接给 ${target || "目标消息端"}`);
       setTransferForm((current) => ({
         ...current,
         conversationId: "",
@@ -6730,7 +6727,7 @@ function AssignmentsPanel({ csUsersSnapshot, onRefresh }) {
     <div className="grid gap-4">
       <form className="grid gap-3 border border-[#d8dde8] bg-white p-3 md:grid-cols-[minmax(180px,1fr)_120px_auto_auto_auto] md:items-end" onSubmit={handleFilterSubmit}>
         <label className="grid gap-1">
-          <span className="text-xs font-medium text-[#697386]">客服</span>
+          <span className="text-xs font-medium text-[#697386]">消息端</span>
           {users.length > 0 ? (
             <select
               className="h-9 border border-[#cfd6e3] bg-white px-3 text-sm outline-none focus:border-[#2f6fed]"
@@ -6805,7 +6802,7 @@ function AssignmentsPanel({ csUsersSnapshot, onRefresh }) {
             />
           </label>
           <label className="grid gap-1">
-            <span className="text-xs font-medium text-[#697386]">目标客服</span>
+            <span className="text-xs font-medium text-[#697386]">目标消息端</span>
             {users.length > 0 ? (
               <select
                 className="h-9 border border-[#cfd6e3] bg-white px-3 text-sm outline-none focus:border-[#2f6fed]"
@@ -6883,7 +6880,7 @@ function AssignmentsPanel({ csUsersSnapshot, onRefresh }) {
             />
           </label>
           <label className="grid gap-1">
-            <span className="text-xs font-medium text-[#697386]">原客服</span>
+            <span className="text-xs font-medium text-[#697386]">原消息端</span>
             <input
               className="h-9 border border-[#cfd6e3] px-3 text-sm outline-none focus:border-[#2f6fed]"
               value={transferForm.fromAssigneeId}
@@ -6892,7 +6889,7 @@ function AssignmentsPanel({ csUsersSnapshot, onRefresh }) {
             />
           </label>
           <label className="grid gap-1">
-            <span className="text-xs font-medium text-[#697386]">目标客服</span>
+            <span className="text-xs font-medium text-[#697386]">目标消息端</span>
             {users.length > 0 ? (
               <select
                 className="h-9 border border-[#cfd6e3] bg-white px-3 text-sm outline-none focus:border-[#2f6fed]"
@@ -6947,7 +6944,7 @@ function AssignmentsPanel({ csUsersSnapshot, onRefresh }) {
           <thead className="bg-[#f1f4f8] text-xs font-semibold text-[#566072]">
             <tr>
               <th className="border-b border-[#d8dde8] px-3 py-2">会话</th>
-              <th className="border-b border-[#d8dde8] px-3 py-2">客服</th>
+              <th className="border-b border-[#d8dde8] px-3 py-2">消息端</th>
               <th className="border-b border-[#d8dde8] px-3 py-2">租户</th>
               <th className="border-b border-[#d8dde8] px-3 py-2">分配时间</th>
               <th className="border-b border-[#d8dde8] px-3 py-2">更新时间</th>
@@ -7232,8 +7229,8 @@ function ReplyScriptsPanel({ snapshot, onRefresh }) {
               onChange={(event) => setForm((current) => ({ ...current, audienceMode: event.target.value }))}
             >
               <option value="none">未分配</option>
-              <option value="all">全部客服</option>
-              <option value="custom">指定客服</option>
+              <option value="all">全部消息端</option>
+              <option value="custom">指定消息端</option>
             </select>
           </label>
           <label className="grid gap-1">
@@ -7823,13 +7820,13 @@ function AIConfigPanel({ snapshot, onRefresh }) {
               onChange={(event) => setForm((current) => ({ ...current, localTargetScope: event.target.value }))}
             >
               <option value="none">不启用</option>
-              <option value="assignee">按客服</option>
+              <option value="assignee">按消息端</option>
               <option value="account">按账号</option>
               <option value="all">全部账号</option>
             </select>
           </label>
           <label className="grid gap-1">
-            <span className="text-xs font-medium text-[#697386]">客服范围</span>
+            <span className="text-xs font-medium text-[#697386]">消息端范围</span>
             <input
               className="h-9 border border-[#cfd6e3] px-3 text-sm outline-none focus:border-[#2f6fed]"
               value={form.localTargetAudience}

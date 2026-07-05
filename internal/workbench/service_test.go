@@ -98,7 +98,7 @@ func TestServiceBootstrapHydratesAccountsAndDevices(t *testing.T) {
 		DeviceID:     "device-old",
 		WeWorkUserID: "wx-zimo",
 		AssigneeID:   "cs-001",
-		AssigneeName: "客服1",
+		AssigneeName: "消息端1",
 		EnterpriseID: "ent-a",
 		AIEnabled:    true,
 	}}}

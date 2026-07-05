@@ -23,7 +23,7 @@ func (generator HTTPAITextGenerator) GenerateText(ctx context.Context, input Scr
 	payload, err := json.Marshal(map[string]any{
 		"model": strings.TrimSpace(input.Model),
 		"messages": []map[string]string{
-			{"role": "system", "content": defaultText(strings.TrimSpace(input.SystemPrompt), "你是企微客服助手，请使用专业、友好、清晰的中文回复客户。先准确理解问题，再给出可执行建议；不夸大、不承诺无法保证的结果，必要时引导转人工跟进。")},
+			{"role": "system", "content": defaultText(strings.TrimSpace(input.SystemPrompt), "你是企微消息端助手，请使用专业、友好、清晰的中文回复客户。先准确理解问题，再给出可执行建议；不夸大、不承诺无法保证的结果，必要时引导转人工跟进。")},
 			{"role": "user", "content": input.Prompt},
 		},
 		"temperature": input.Temperature,

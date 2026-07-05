@@ -33,7 +33,7 @@ func TestServiceStatusBuildsLegacyPayload(t *testing.T) {
 		},
 		LoginSessions: fakeLoginReader{session: LoginSession{
 			Status:           "normal",
-			AccountName:      "客服一",
+			AccountName:      "消息端一",
 			WeWorkUserID:     "wm-user",
 			OrganizationName: "测试企业",
 		}},
@@ -52,7 +52,7 @@ func TestServiceStatusBuildsLegacyPayload(t *testing.T) {
 		t.Fatalf("payload = %#v", payload)
 	}
 	login := payload["login_status"].(map[string]any)
-	if login["status"] != "normal" || login["account_name"] != "客服一" || login["wework_user_id"] != "wm-user" {
+	if login["status"] != "normal" || login["account_name"] != "消息端一" || login["wework_user_id"] != "wm-user" {
 		t.Fatalf("login = %#v", login)
 	}
 	transport := payload["transport_health"].(map[string]any)

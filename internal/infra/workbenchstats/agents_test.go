@@ -12,10 +12,10 @@ import (
 func TestGetStatsAgentsAggregatesAssignmentsAndOutgoingMessages(t *testing.T) {
 	db := &fakeStatsDB{rows: []*fakeStatsRows{
 		{values: [][]any{
-			{"cs-002", "客服二", "conv-b"},
-			{"cs-001", "客服一", "conv-a"},
-			{"cs-001", "客服一", "conv-a"},
-			{"cs-001", "客服一", "conv-c"},
+			{"cs-002", "消息端二", "conv-b"},
+			{"cs-001", "消息端一", "conv-a"},
+			{"cs-001", "消息端一", "conv-a"},
+			{"cs-001", "消息端一", "conv-c"},
 			{"", "bad", "conv-x"},
 			{"cs-003", "", ""},
 			{"cs-003", nil, "conv-d"},
@@ -31,7 +31,7 @@ func TestGetStatsAgentsAggregatesAssignmentsAndOutgoingMessages(t *testing.T) {
 	if len(records) != 2 {
 		t.Fatalf("len(records) = %d; records=%+v", len(records), records)
 	}
-	if records[0].AssigneeID != "cs-001" || records[0].AssigneeName != "客服一" || records[0].Conversations != 2 || records[0].Messages != 7 {
+	if records[0].AssigneeID != "cs-001" || records[0].AssigneeName != "消息端一" || records[0].Conversations != 2 || records[0].Messages != 7 {
 		t.Fatalf("first record = %+v", records[0])
 	}
 	if records[1].AssigneeID != "cs-002" || records[1].Conversations != 1 || records[1].Messages != 8 {

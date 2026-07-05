@@ -31,8 +31,8 @@ const (
 )
 
 var ignoredClientErrorMessages = map[string]struct{}{
-	"当前客服未绑定任何企微账号，无法加载会话工作台": {},
-	"当前客服没有可用账号，无法初始化会话工作台":   {},
+	"当前消息端未绑定任何企微账号，无法加载会话工作台": {},
+	"当前消息端没有可用账号，无法初始化会话工作台":   {},
 }
 
 var defaultClientLogRateLimiter = NewClientLogRateLimiter(defaultClientLogLimit, defaultClientLogWindow)

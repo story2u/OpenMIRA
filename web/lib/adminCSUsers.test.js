@@ -23,7 +23,7 @@ test("normalizeAdminCSUsers keeps legacy roster fields", () => {
     users: [
       {
         assignee_id: "cs-1",
-        assignee_name: "客服一",
+        assignee_name: "消息端一",
         role: "supervisor",
         enabled: false,
         ai_enabled: true,
@@ -49,13 +49,13 @@ test("normalizeAdminCSUsers keeps legacy roster fields", () => {
 test("buildCSUserUpsertMutation mirrors legacy POST body", () => {
   const create = buildCSUserUpsertMutation({
     assigneeId: " cs-1 ",
-    assigneeName: " 客服一 ",
+    assigneeName: " 消息端一 ",
     password: " secret1 ",
     createOnly: true,
   });
   const update = buildCSUserUpsertMutation({
     assigneeId: "cs-2",
-    assigneeName: "客服二",
+    assigneeName: "消息端二",
     role: "supervisor",
     enabled: false,
     aiEnabled: true,
@@ -67,7 +67,7 @@ test("buildCSUserUpsertMutation mirrors legacy POST body", () => {
   assert.equal(create.path, CS_USERS_PATH);
   assert.deepEqual(create.body, {
     assignee_id: "cs-1",
-    assignee_name: "客服一",
+    assignee_name: "消息端一",
     role: "cs",
     enabled: true,
     ai_enabled: false,
@@ -77,7 +77,7 @@ test("buildCSUserUpsertMutation mirrors legacy POST body", () => {
   });
   assert.deepEqual(update.body, {
     assignee_id: "cs-2",
-    assignee_name: "客服二",
+    assignee_name: "消息端二",
     role: "supervisor",
     enabled: false,
     ai_enabled: true,
@@ -87,10 +87,10 @@ test("buildCSUserUpsertMutation mirrors legacy POST body", () => {
 });
 
 test("buildCSUserUpsertMutation reports invalid fields", () => {
-  assert.equal(buildCSUserUpsertMutation({ assigneeName: "客服" }).error, "assignee_id_required");
+  assert.equal(buildCSUserUpsertMutation({ assigneeName: "消息端" }).error, "assignee_id_required");
   assert.equal(buildCSUserUpsertMutation({ assigneeId: "cs-1" }).error, "assignee_name_required");
-  assert.equal(buildCSUserUpsertMutation({ assigneeId: "cs-1", assigneeName: "客服", role: "owner" }).error, "role_invalid");
-  assert.equal(buildCSUserUpsertMutation({ assigneeId: "cs-1", assigneeName: "客服", password: "12345" }).error, "password_short");
+  assert.equal(buildCSUserUpsertMutation({ assigneeId: "cs-1", assigneeName: "消息端", role: "owner" }).error, "role_invalid");
+  assert.equal(buildCSUserUpsertMutation({ assigneeId: "cs-1", assigneeName: "消息端", password: "12345" }).error, "password_short");
 });
 
 test("buildCSUserDeleteMutation mirrors legacy DELETE path", () => {
@@ -104,13 +104,13 @@ test("buildCSUserDeleteMutation mirrors legacy DELETE path", () => {
 
 test("buildCSUsersListRequest mirrors legacy keyword filtering", () => {
   const empty = buildCSUsersListRequest("");
-  const filtered = buildCSUsersListRequest(" 客服一 ");
+  const filtered = buildCSUsersListRequest(" 消息端一 ");
 
   assert.equal(empty.ok, true);
   assert.equal(empty.method, "GET");
   assert.equal(empty.path, CS_USERS_PATH);
   assert.deepEqual(empty.params, {});
-  assert.deepEqual(filtered.params, { keyword: "客服一" });
+  assert.deepEqual(filtered.params, { keyword: "消息端一" });
 });
 
 test("workbench token helpers mirror admin generated CS token flow", () => {
@@ -178,7 +178,7 @@ test("isCSUserFormDirty detects create form changes", () => {
 test("buildCSUserFormFromUser creates stable edit baseline", () => {
   const baseline = buildCSUserFormFromUser({
     assignee_id: " cs-1 ",
-    assignee_name: " 客服一 ",
+    assignee_name: " 消息端一 ",
     role: "supervisor",
     enabled: false,
     ai_enabled: true,
@@ -187,7 +187,7 @@ test("buildCSUserFormFromUser creates stable edit baseline", () => {
 
   assert.deepEqual(baseline, {
     assigneeId: "cs-1",
-    assigneeName: "客服一",
+    assigneeName: "消息端一",
     role: "supervisor",
     enabled: false,
     aiEnabled: true,
@@ -195,7 +195,7 @@ test("buildCSUserFormFromUser creates stable edit baseline", () => {
     password: "",
     editing: true,
   });
-  assert.equal(isCSUserFormDirty({ ...baseline, assigneeName: "客服一 " }, baseline), false);
+  assert.equal(isCSUserFormDirty({ ...baseline, assigneeName: "消息端一 " }, baseline), false);
   assert.equal(isCSUserFormDirty({ ...baseline, password: "secret1" }, baseline), true);
   assert.equal(isCSUserFormDirty({ ...baseline, enabled: true }, baseline), true);
 });

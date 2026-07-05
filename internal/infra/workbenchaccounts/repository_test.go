@@ -14,7 +14,7 @@ import (
 
 func TestListAccountsMapsScopeFields(t *testing.T) {
 	db := &fakeDB{rows: &fakeRows{values: [][]any{
-		{"acc-001", "账号一", "device-1", "sdk:device-1", "DY-1801", "cs-001", "客服一", "ent-a", int64(1), "flow-a", int64(1), "09:00", "18:00", "coze", "vip", "2026-01-01", "2026-01-02"},
+		{"acc-001", "账号一", "device-1", "sdk:device-1", "DY-1801", "cs-001", "消息端一", "ent-a", int64(1), "flow-a", int64(1), "09:00", "18:00", "coze", "vip", "2026-01-01", "2026-01-02"},
 		{[]byte("acc-002"), []byte("账号二"), nil, nil, []byte("DY-1802"), "cs-002", nil, "ent-b", []byte("0"), nil, nil, nil, nil, nil, nil, nil, nil},
 	}}}
 	repository := &Repository{DB: db}
@@ -29,7 +29,7 @@ func TestListAccountsMapsScopeFields(t *testing.T) {
 	if len(accounts) != 2 {
 		t.Fatalf("accounts = %+v, want two rows", accounts)
 	}
-	if accounts[0].AccountID != "acc-001" || accounts[0].AccountName != "账号一" || accounts[0].AssigneeName != "客服一" || accounts[0].DeviceID != "device-1" || accounts[0].AgentID != "sdk:device-1" || !accounts[0].AIEnabled {
+	if accounts[0].AccountID != "acc-001" || accounts[0].AccountName != "账号一" || accounts[0].AssigneeName != "消息端一" || accounts[0].DeviceID != "device-1" || accounts[0].AgentID != "sdk:device-1" || !accounts[0].AIEnabled {
 		t.Fatalf("first account = %+v", accounts[0])
 	}
 	if accounts[0].SOPFlowID != "flow-a" || accounts[0].SOPEnabled == nil || !*accounts[0].SOPEnabled || accounts[0].AIModel != "coze" || accounts[0].KnowledgeTag != "vip" || accounts[0].CreatedAt != "2026-01-01" {
@@ -41,7 +41,7 @@ func TestListAccountsMapsScopeFields(t *testing.T) {
 }
 
 func TestListAccountsByAssigneeFiltersAndTrimsAssignee(t *testing.T) {
-	db := &fakeDB{rows: &fakeRows{values: [][]any{{"acc-001", "账号一", "device-1", "sdk:device-1", "DY-1801", "cs-001", "客服一", "ent-a", "true", nil, nil, nil, nil, nil, nil, nil, nil}}}}
+	db := &fakeDB{rows: &fakeRows{values: [][]any{{"acc-001", "账号一", "device-1", "sdk:device-1", "DY-1801", "cs-001", "消息端一", "ent-a", "true", nil, nil, nil, nil, nil, nil, nil, nil}}}}
 	repository := &Repository{DB: db}
 
 	accounts, err := repository.ListAccountsByAssignee(context.Background(), " cs-001 ")
@@ -76,7 +76,7 @@ func TestListAccountsByAssigneeSkipsBlankAssignee(t *testing.T) {
 }
 
 func TestFindAccountsByIdentityUsesExactIndexedPredicates(t *testing.T) {
-	db := &fakeDB{rows: &fakeRows{values: [][]any{{"acc-001", "alice", "device-1", "sdk:device-1", "DY-1801", "cs-001", "客服一", "ent-a", int64(1), nil, nil, nil, nil, nil, nil, nil, nil}}}}
+	db := &fakeDB{rows: &fakeRows{values: [][]any{{"acc-001", "alice", "device-1", "sdk:device-1", "DY-1801", "cs-001", "消息端一", "ent-a", int64(1), nil, nil, nil, nil, nil, nil, nil, nil}}}}
 	repository := &Repository{DB: db}
 
 	accounts, err := repository.FindAccountsByIdentity(context.Background(), " DY-1801 ", 999)
@@ -131,7 +131,7 @@ func TestNewSQLRepositoryWrapsNilDB(t *testing.T) {
 
 func TestSetAccountAIEnabledUpdatesAndReturnsAccount(t *testing.T) {
 	db := &fakeDB{rowsByQuery: [][][]any{
-		{{"acc-001", "账号一", "device-1", "sdk:device-1", "DY-1801", "cs-001", "客服一", "ent-a", int64(1), nil, nil, nil, nil, nil, nil, "2026-01-01", "2026-01-02"}},
+		{{"acc-001", "账号一", "device-1", "sdk:device-1", "DY-1801", "cs-001", "消息端一", "ent-a", int64(1), nil, nil, nil, nil, nil, nil, "2026-01-01", "2026-01-02"}},
 	}}
 	repository := &Repository{DB: db}
 
@@ -153,8 +153,8 @@ func TestSetAccountAIEnabledUpdatesAndReturnsAccount(t *testing.T) {
 func TestUpsertAccountUpdatesExistingAccountWithPreserveSemantics(t *testing.T) {
 	enabled := true
 	db := &fakeDB{rowsByQuery: [][][]any{
-		{{"acc-001", "旧账号", "old-device", "old-agent", "DY-1801", "cs-001", "客服一", "ent-a", int64(0), "flow-a", int64(0), "09:00", "18:00", "old-model", "old-tag", "2026-01-01", "2026-01-02"}},
-		{{"acc-001", "新账号", "", "", "DY-1801", "cs-001", "客服一", "ent-a", int64(1), "flow-a", int64(1), "09:00", "18:00", "deepseek", "old-tag", "2026-01-01", "2026-01-03"}},
+		{{"acc-001", "旧账号", "old-device", "old-agent", "DY-1801", "cs-001", "消息端一", "ent-a", int64(0), "flow-a", int64(0), "09:00", "18:00", "old-model", "old-tag", "2026-01-01", "2026-01-02"}},
+		{{"acc-001", "新账号", "", "", "DY-1801", "cs-001", "消息端一", "ent-a", int64(1), "flow-a", int64(1), "09:00", "18:00", "deepseek", "old-tag", "2026-01-01", "2026-01-03"}},
 	}}
 	repository := &Repository{DB: db}
 
@@ -180,8 +180,8 @@ func TestUpsertAccountUpdatesExistingAccountWithPreserveSemantics(t *testing.T) 
 
 func TestUpsertAccountPreservesDisplayNameWhenIncomingNameIsUserID(t *testing.T) {
 	db := &fakeDB{rowsByQuery: [][][]any{
-		{{"acc-001", "张三", "device-1", "agent-1", "DY-1801", "cs-001", "客服一", "ent-a", int64(1), nil, nil, nil, nil, nil, nil, "2026-01-01", "2026-01-02"}},
-		{{"acc-001", "张三", "device-1", "agent-1", "DY-1801", "cs-001", "客服一", "ent-a", int64(1), nil, nil, nil, nil, nil, nil, "2026-01-01", "2026-01-03"}},
+		{{"acc-001", "张三", "device-1", "agent-1", "DY-1801", "cs-001", "消息端一", "ent-a", int64(1), nil, nil, nil, nil, nil, nil, "2026-01-01", "2026-01-02"}},
+		{{"acc-001", "张三", "device-1", "agent-1", "DY-1801", "cs-001", "消息端一", "ent-a", int64(1), nil, nil, nil, nil, nil, nil, "2026-01-01", "2026-01-03"}},
 	}}
 	repository := &Repository{DB: db}
 
@@ -248,21 +248,21 @@ func TestDeleteAccountUsesRowsAffected(t *testing.T) {
 
 func TestAssignAccountUpdatesAssigneeAndReturnsAccount(t *testing.T) {
 	db := &fakeDB{rowsByQuery: [][][]any{
-		{{"acc-001", "账号一", "device-1", "sdk:device-1", "DY-1801", "cs-002", "客服二", "ent-a", int64(1), nil, nil, nil, nil, nil, nil, "2026-01-01", "2026-01-02"}},
+		{{"acc-001", "账号一", "device-1", "sdk:device-1", "DY-1801", "cs-002", "消息端二", "ent-a", int64(1), nil, nil, nil, nil, nil, nil, "2026-01-01", "2026-01-02"}},
 	}}
 	repository := &Repository{DB: db}
 
-	account, updated, err := repository.AssignAccount(context.Background(), " acc-001 ", " cs-002 ", " 客服二 ")
+	account, updated, err := repository.AssignAccount(context.Background(), " acc-001 ", " cs-002 ", " 消息端二 ")
 	if err != nil {
 		t.Fatalf("AssignAccount returned error: %v", err)
 	}
-	if !updated || account.AccountID != "acc-001" || account.AssigneeID != "cs-002" || account.AssigneeName != "客服二" {
+	if !updated || account.AccountID != "acc-001" || account.AssigneeID != "cs-002" || account.AssigneeName != "消息端二" {
 		t.Fatalf("account=%+v updated=%t", account, updated)
 	}
 	if len(db.execs) != 1 || db.execs[0].query != "UPDATE wework_accounts SET assignee_id = ?, assignee_name = ?, updated_at = CURRENT_TIMESTAMP WHERE account_id = ?" {
 		t.Fatalf("execs = %+v", db.execs)
 	}
-	wantArgs := []any{"cs-002", "客服二", "acc-001"}
+	wantArgs := []any{"cs-002", "消息端二", "acc-001"}
 	for index, want := range wantArgs {
 		if db.execs[0].args[index] != want {
 			t.Fatalf("arg[%d]=%#v want %#v; args=%#v", index, db.execs[0].args[index], want, db.execs[0].args)
@@ -411,7 +411,7 @@ func TestSetConversationAIModeOverrideBulkUpdatesConversationsAndProjection(t *t
 
 func TestListAssigneeScopedConversationAIIDsUsesProjectionAndAccountDevices(t *testing.T) {
 	db := &fakeDB{rowsByQuery: [][][]any{
-		{{"acc-001", "账号一", "device-1", "sdk:device-1", "wx-1", "cs-001", "客服一", "ent-a", int64(1), nil, nil, nil, nil, nil, nil, nil, nil}},
+		{{"acc-001", "账号一", "device-1", "sdk:device-1", "wx-1", "cs-001", "消息端一", "ent-a", int64(1), nil, nil, nil, nil, nil, nil, nil, nil}},
 		{{"conv-1"}, {"conv-2"}},
 	}}
 	repository := &Repository{DB: db}

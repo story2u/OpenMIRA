@@ -88,7 +88,7 @@ func TestServiceUpsertSOPFlowRejectsInvalidAudience(t *testing.T) {
 	service := Service{SOPFlowStore: fakeSOPFlowStore{}, SOPFlowWriteStore: &fakeSOPFlowWriteStore{}}
 	_, err := service.UpsertSOPFlow(context.Background(), NewSOPFlowUpsertRequest(SOPFlowUpsertBody{FlowID: "flow-b", Enabled: true}, auth.Session{}))
 	var validation SOPConfigValidationError
-	if err == nil || !strings.Contains(err.Error(), "启用规则集前请先选择客服") || !asSOPValidation(err, &validation) {
+	if err == nil || !strings.Contains(err.Error(), "启用规则集前请先选择消息端") || !asSOPValidation(err, &validation) {
 		t.Fatalf("error = %v, want SOPConfigValidationError", err)
 	}
 }
@@ -102,7 +102,7 @@ func TestServiceUpsertSOPFlowRejectsOverlappingAudience(t *testing.T) {
 		SOPFlowWriteStore: &fakeSOPFlowWriteStore{},
 	}
 	_, err := service.UpsertSOPFlow(context.Background(), NewSOPFlowUpsertRequest(SOPFlowUpsertBody{FlowID: "flow-b", TargetAudience: "cs-2", ExecutionMode: "local_days", Enabled: true}, auth.Session{}))
-	if err == nil || !strings.Contains(err.Error(), "不能共用客服") {
+	if err == nil || !strings.Contains(err.Error(), "不能共用消息端") {
 		t.Fatalf("error = %v, want overlap validation", err)
 	}
 }

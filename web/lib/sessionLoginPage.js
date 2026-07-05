@@ -30,7 +30,7 @@ const loginPageConfigs = {
   passwordless: {
     mode: "passwordless",
     kind: "cs",
-    title: "客服免密登录",
+    title: "消息端免密登录",
     identifierLabel: "账号",
     identifierParam: "cs_id",
     identifierPlaceholder: "请输入账号",
@@ -78,7 +78,7 @@ export function loginConfirmation(mode = "cs", identifier = "") {
   if (!config.requiresConfirmation || !normalizedIdentifier) {
     return { required: false, title: "", message: "", text: "" };
   }
-  const title = config.mode === "admin" ? "管理员登录" : "客服登录";
+  const title = config.mode === "admin" ? "管理员登录" : "消息端登录";
   const message = `登录账号：${normalizedIdentifier}`;
   return {
     required: true,

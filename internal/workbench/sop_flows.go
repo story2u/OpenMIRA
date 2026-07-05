@@ -276,7 +276,7 @@ func (service Service) normalizeSOPFlowCommand(command SOPFlowCommand, flows []S
 	command.TargetAudience = targetAudience
 	candidateSelection := parseSOPTargetAudienceSelection(targetAudience, false)
 	if command.Enabled && candidateSelection.mode == "none" {
-		return command, SOPConfigValidationError{Detail: "启用规则集前请先选择客服，或点击全部客服"}
+		return command, SOPConfigValidationError{Detail: "启用规则集前请先选择消息端，或点击全部消息端"}
 	}
 	currentMode := ""
 	currentSelection := sopTargetAudienceSelection{mode: "none", ids: map[string]bool{}}
@@ -305,7 +305,7 @@ func (service Service) normalizeSOPFlowCommand(command SOPFlowCommand, flows []S
 				if command.ExecutionMode == "platform_pull" {
 					modeLabel = "接口拉任务"
 				}
-				return command, SOPConfigValidationError{Detail: fmt.Sprintf("%s不能共用客服：与规则集 %s 存在冲突，请调整适用客服", modeLabel, existingFlowID)}
+				return command, SOPConfigValidationError{Detail: fmt.Sprintf("%s不能共用消息端：与规则集 %s 存在冲突，请调整适用消息端", modeLabel, existingFlowID)}
 			}
 		}
 	}

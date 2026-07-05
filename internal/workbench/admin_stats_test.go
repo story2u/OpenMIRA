@@ -101,7 +101,7 @@ func TestServiceStatsTrendFailsClosedWithoutStore(t *testing.T) {
 // TestServiceStatsAgentsBuildsPayload keeps agent ranking response keys stable.
 func TestServiceStatsAgentsBuildsPayload(t *testing.T) {
 	store := &fakeStatsStore{agents: []StatsAgentRecord{
-		{AssigneeID: "cs-001", AssigneeName: "客服一", Conversations: 3, Messages: 8},
+		{AssigneeID: "cs-001", AssigneeName: "消息端一", Conversations: 3, Messages: 8},
 		{AssigneeID: "cs-002", Conversations: 1, Messages: 2},
 	}}
 	service := Service{StatsAgentsStore: store}

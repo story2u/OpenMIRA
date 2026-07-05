@@ -15,7 +15,7 @@ import (
 	"im-go/internal/contactidentity"
 )
 
-const defaultCustomerTagGroupName = "客服工作台"
+const defaultCustomerTagGroupName = "消息端工作台"
 
 var (
 	ErrCustomerProfileConversationIDRequired = errors.New("conversation_id is required")

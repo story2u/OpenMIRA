@@ -69,7 +69,7 @@ func TestServiceAIReplyLogsBuildsLocalPayload(t *testing.T) {
 			"message_sender_name":        "消息发送人",
 			"account_name":               "",
 			"assignee_id":                "cs-1",
-			"assignee_name":              "客服一",
+			"assignee_name":              "消息端一",
 		}},
 		Pagination: ProjectionRow{"page": 1, "page_size": 50, "total": 1, "total_pages": 1},
 	}}

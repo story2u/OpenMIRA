@@ -61,7 +61,7 @@ func TestServiceClaimAssignmentEnforcesCSScopeAndPublishes(t *testing.T) {
 }
 
 func TestServiceClaimAssignmentReturnsExistingWhenOperationLockBusy(t *testing.T) {
-	store := &fakeAssignmentWriteStore{existing: &AssignmentRecord{TenantID: "tenant-a", ConversationID: "conv-1", AssigneeID: "cs-existing", AssigneeName: "客服旧"}}
+	store := &fakeAssignmentWriteStore{existing: &AssignmentRecord{TenantID: "tenant-a", ConversationID: "conv-1", AssigneeID: "cs-existing", AssigneeName: "消息端旧"}}
 	events := &fakeScriptEventPublisher{}
 	locker := &fakeAssignmentOperationLock{acquired: false}
 	service := Service{
@@ -146,7 +146,7 @@ func TestServiceReleaseAssignmentPublishesOnlyWhenReleased(t *testing.T) {
 func TestServiceReleaseAssignmentUsesExistingAssigneeForRuntimeState(t *testing.T) {
 	store := &fakeAssignmentWriteStore{
 		releaseResult: true,
-		existing:      &AssignmentRecord{TenantID: "tenant-a", ConversationID: "conv-1", AssigneeID: "cs-old", AssigneeName: "客服旧"},
+		existing:      &AssignmentRecord{TenantID: "tenant-a", ConversationID: "conv-1", AssigneeID: "cs-old", AssigneeName: "消息端旧"},
 	}
 	runtimeState := &fakeAssignmentRuntimeState{}
 	service := Service{

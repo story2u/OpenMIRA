@@ -13,7 +13,7 @@ func TestVerifyCodeCreatesTaskAndMarksSessionVerifying(t *testing.T) {
 		DeviceID:         "device-1",
 		Status:           "need_verify",
 		QRCodeBase64:     "qr",
-		AccountName:      "客服一",
+		AccountName:      "消息端一",
 		OrganizationName: "企业A",
 		ExpiresAt:        "2026-07-02T08:05:00Z",
 	}}}
@@ -54,10 +54,10 @@ func TestVerifyCodeCreatesTaskAndMarksSessionVerifying(t *testing.T) {
 		t.Fatalf("writes = %+v", store.writes)
 	}
 	write := store.writes[0]
-	if write.Status != "verifying" || write.QRCodeBase64 != "qr" || write.ExpiresAt == "" || write.AccountName != "客服一" || write.TaskID != "task-01" {
+	if write.Status != "verifying" || write.QRCodeBase64 != "qr" || write.ExpiresAt == "" || write.AccountName != "消息端一" || write.TaskID != "task-01" {
 		t.Fatalf("session write = %+v", write)
 	}
-	if len(events.events) != 1 || events.events[0].payload["status"] != "verifying" || events.events[0].payload["verify_type"] != "sms" || events.events[0].payload["account_name"] != "客服一" {
+	if len(events.events) != 1 || events.events[0].payload["status"] != "verifying" || events.events[0].payload["verify_type"] != "sms" || events.events[0].payload["account_name"] != "消息端一" {
 		t.Fatalf("events = %+v", events.events)
 	}
 }

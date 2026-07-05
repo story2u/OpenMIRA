@@ -47,9 +47,9 @@ func TestAIConfigWriteHandlerMapsValidationErrors(t *testing.T) {
 		t.Fatalf("response = %d %s", response.Code, response.Body.String())
 	}
 
-	service.err = workbench.AIConfigValidationError{Detail: "一个客服只能分配一个 AI 自动回复逻辑"}
+	service.err = workbench.AIConfigValidationError{Detail: "一个消息端只能分配一个 AI 自动回复逻辑"}
 	response = performAIConfigWrite(handler, "Bearer "+token, "/api/v1/admin/ai-config", `{"base_url":"x","model":"m"}`)
-	if response.Code != http.StatusUnprocessableEntity || !strings.Contains(response.Body.String(), "一个客服只能分配一个 AI 自动回复逻辑") {
+	if response.Code != http.StatusUnprocessableEntity || !strings.Contains(response.Body.String(), "一个消息端只能分配一个 AI 自动回复逻辑") {
 		t.Fatalf("validation response = %d %s", response.Code, response.Body.String())
 	}
 }

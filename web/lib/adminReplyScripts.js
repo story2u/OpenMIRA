@@ -126,7 +126,7 @@ export function replyScriptAudienceMode(value = "") {
 
 export function replyScriptAudienceLabel(value = "") {
   const normalized = normalizeTargetAudience(value);
-  if (normalized === TARGET_AUDIENCE_ALL) return "全部客服";
+  if (normalized === TARGET_AUDIENCE_ALL) return "全部消息端";
   if (normalized === TARGET_AUDIENCE_NONE) return "未分配";
   const parts = normalized.split(",").filter(Boolean);
   if (parts.length <= 2) return parts.join(", ");

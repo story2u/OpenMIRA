@@ -17,7 +17,7 @@ func TestStatusBuildsLegacyPayloadFromSessionAndDevice(t *testing.T) {
 			Status:           "idle",
 			QRCodeBase64:     "qr",
 			VerifyType:       "sms",
-			AccountName:      " 客服一 ",
+			AccountName:      " 消息端一 ",
 			WeWorkUserID:     " wm-user ",
 			OrganizationName: " 企业A ",
 			AccountAvatar:    " avatar.png ",
@@ -39,7 +39,7 @@ func TestStatusBuildsLegacyPayloadFromSessionAndDevice(t *testing.T) {
 	if payload["logged_in"] != true || payload["status"] != "success" || payload["wework_status"] != "normal" {
 		t.Fatalf("status payload = %#v", payload)
 	}
-	if payload["account_name"] != "客服一" || payload["wework_user_id"] != "wm-user" || payload["qrcode_base64"] != "" {
+	if payload["account_name"] != "消息端一" || payload["wework_user_id"] != "wm-user" || payload["qrcode_base64"] != "" {
 		t.Fatalf("identity payload = %#v", payload)
 	}
 	if payload["expires_at"] != nil || payload["profile_error"] != nil {
@@ -168,7 +168,7 @@ func TestStatusRepairsSessionSuccessFromLoggedInDevice(t *testing.T) {
 		DeviceID:         "device-1",
 		Status:           "idle",
 		QRCodeBase64:     "qr",
-		AccountName:      "客服一",
+		AccountName:      "消息端一",
 		WeWorkUserID:     "wm-user",
 		OrganizationName: "企业A",
 		ExpiresAt:        "2026-07-02T08:05:00Z",
@@ -200,7 +200,7 @@ func TestStatusRepairsSessionSuccessFromLoggedInDevice(t *testing.T) {
 	if len(store.writes) != 1 || store.writes[0].Status != "success" || store.writes[0].ExpiresAt != "" || store.writes[0].LastError != "" || store.writes[0].UpdatedAt != "2026-07-02T01:00:00Z" {
 		t.Fatalf("writes = %+v", store.writes)
 	}
-	if len(events.events) != 1 || events.events[0].payload["status"] != "success" || events.events[0].payload["account_name"] != "客服一" {
+	if len(events.events) != 1 || events.events[0].payload["status"] != "success" || events.events[0].payload["account_name"] != "消息端一" {
 		t.Fatalf("events = %+v", events.events)
 	}
 }

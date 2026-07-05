@@ -201,20 +201,20 @@ func TestAssigneeLoginIssuesLegacyToken(t *testing.T) {
 	service.PasswordlessLogin = true
 	service.Users = userMap{"cs-001": {
 		AssigneeID:   "cs-001",
-		AssigneeName: "客服一",
+		AssigneeName: "消息端一",
 		Role:         "supervisor",
 		Enabled:      true,
 	}}
 
 	response, err := service.AssigneeLogin(context.Background(), AssigneeLoginRequest{
 		AssigneeID:   " cs-001 ",
-		AssigneeName: "客服一号",
+		AssigneeName: "消息端一号",
 		TTLHours:     2,
 	})
 	if err != nil {
 		t.Fatalf("AssigneeLogin returned error: %v", err)
 	}
-	if !response.Success || response.Token == "" || response.AssigneeID != "cs-001" || response.AssigneeName != "客服一号" || response.Role != "supervisor" {
+	if !response.Success || response.Token == "" || response.AssigneeID != "cs-001" || response.AssigneeName != "消息端一号" || response.Role != "supervisor" {
 		t.Fatalf("unexpected assignee login response: %+v", response)
 	}
 	if response.ExpiresAt != "1970-01-01T02:16:40+00:00" {
@@ -224,7 +224,7 @@ func TestAssigneeLoginIssuesLegacyToken(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Verify assignee token returned error: %v", err)
 	}
-	if verified.AssigneeID != "cs-001" || verified.AssigneeName != "客服一号" || verified.Role != "supervisor" {
+	if verified.AssigneeID != "cs-001" || verified.AssigneeName != "消息端一号" || verified.Role != "supervisor" {
 		t.Fatalf("unexpected assignee token claims: %+v", verified)
 	}
 }
@@ -235,7 +235,7 @@ func TestAssigneeLoginWritesLegacyAudit(t *testing.T) {
 	service.AuditLogs = &auditRecorder{}
 	service.Users = userMap{"cs-001": {
 		AssigneeID:   "cs-001",
-		AssigneeName: "客服一",
+		AssigneeName: "消息端一",
 		Role:         "cs",
 		Enabled:      true,
 	}}
@@ -245,7 +245,7 @@ func TestAssigneeLoginWritesLegacyAudit(t *testing.T) {
 		t.Fatalf("AssigneeLogin returned error: %v", err)
 	}
 	audit := service.AuditLogs.(*auditRecorder)
-	if len(audit.entries) != 1 || audit.entries[0].Operator != "cs-001" || audit.entries[0].Detail != "用户 客服一(cs-001) 登录" || audit.entries[0].IP != "10.0.0.1" {
+	if len(audit.entries) != 1 || audit.entries[0].Operator != "cs-001" || audit.entries[0].Detail != "用户 消息端一(cs-001) 登录" || audit.entries[0].IP != "10.0.0.1" {
 		t.Fatalf("audit entries = %+v", audit.entries)
 	}
 }
@@ -279,7 +279,7 @@ func TestCSLoginVerifiesPasswordAndUpdatesLastSeen(t *testing.T) {
 	service.LastSeen = lastSeen
 	service.Users = userMap{"cs-001": {
 		AssigneeID:   "cs-001",
-		AssigneeName: "客服一",
+		AssigneeName: "消息端一",
 		Role:         "cs",
 		Enabled:      true,
 		PasswordHash: passwordHash("secret"),
@@ -289,7 +289,7 @@ func TestCSLoginVerifiesPasswordAndUpdatesLastSeen(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CSLogin returned error: %v", err)
 	}
-	if !response.Success || response.Token == "" || response.AssigneeID != "cs-001" || response.AssigneeName != "客服一" || response.Role != "cs" {
+	if !response.Success || response.Token == "" || response.AssigneeID != "cs-001" || response.AssigneeName != "消息端一" || response.Role != "cs" {
 		t.Fatalf("unexpected cs login response: %+v", response)
 	}
 	if response.ExpiresAt != "1970-01-08T00:16:40+00:00" {
@@ -302,7 +302,7 @@ func TestCSLoginVerifiesPasswordAndUpdatesLastSeen(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Verify cs token returned error: %v", err)
 	}
-	if verified.AssigneeID != "cs-001" || verified.AssigneeName != "客服一" || verified.Role != "cs" {
+	if verified.AssigneeID != "cs-001" || verified.AssigneeName != "消息端一" || verified.Role != "cs" {
 		t.Fatalf("unexpected cs token claims: %+v", verified)
 	}
 }
@@ -312,7 +312,7 @@ func TestCSLoginWritesLegacyAudit(t *testing.T) {
 	service.AuditLogs = &auditRecorder{}
 	service.Users = userMap{"cs-001": {
 		AssigneeID:   "cs-001",
-		AssigneeName: "客服一",
+		AssigneeName: "消息端一",
 		Role:         "cs",
 		Enabled:      true,
 		PasswordHash: passwordHash("secret"),
@@ -323,7 +323,7 @@ func TestCSLoginWritesLegacyAudit(t *testing.T) {
 		t.Fatalf("CSLogin returned error: %v", err)
 	}
 	audit := service.AuditLogs.(*auditRecorder)
-	if len(audit.entries) != 1 || audit.entries[0].Operator != "cs-001" || audit.entries[0].Detail != "客服 客服一(cs-001) 密码登录" || audit.entries[0].IP != "10.0.0.2" {
+	if len(audit.entries) != 1 || audit.entries[0].Operator != "cs-001" || audit.entries[0].Detail != "消息端 消息端一(cs-001) 密码登录" || audit.entries[0].IP != "10.0.0.2" {
 		t.Fatalf("audit entries = %+v", audit.entries)
 	}
 }
@@ -355,7 +355,7 @@ func TestGenerateCSTokenIssuesShortLivedWorkspaceToken(t *testing.T) {
 	service := testService(t)
 	service.Users = userMap{"cs-001": {
 		AssigneeID:   "cs-001",
-		AssigneeName: "客服一",
+		AssigneeName: "消息端一",
 		Role:         "cs",
 		Enabled:      true,
 	}}
@@ -372,7 +372,7 @@ func TestGenerateCSTokenIssuesShortLivedWorkspaceToken(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GenerateCSToken returned error: %v", err)
 	}
-	if !response.Success || response.Token == "" || response.AssigneeID != "cs-001" || response.AssigneeName != "客服一" {
+	if !response.Success || response.Token == "" || response.AssigneeID != "cs-001" || response.AssigneeName != "消息端一" {
 		t.Fatalf("unexpected generate token response: %+v", response)
 	}
 	if response.ExpiresAt != "1970-01-02T00:16:40+00:00" {
@@ -382,7 +382,7 @@ func TestGenerateCSTokenIssuesShortLivedWorkspaceToken(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Verify generated cs token returned error: %v", err)
 	}
-	if verified.AssigneeID != "cs-001" || verified.AssigneeName != "客服一" || verified.Role != "cs" {
+	if verified.AssigneeID != "cs-001" || verified.AssigneeName != "消息端一" || verified.Role != "cs" {
 		t.Fatalf("unexpected generated token claims: %+v", verified)
 	}
 }
@@ -392,7 +392,7 @@ func TestGenerateCSTokenWritesLegacyImpersonationAudit(t *testing.T) {
 	service.AuditLogs = &auditRecorder{}
 	service.Users = userMap{"cs-001": {
 		AssigneeID:   "cs-001",
-		AssigneeName: "客服一",
+		AssigneeName: "消息端一",
 		Role:         "cs",
 		Enabled:      true,
 	}}
@@ -409,7 +409,7 @@ func TestGenerateCSTokenWritesLegacyImpersonationAudit(t *testing.T) {
 		t.Fatalf("GenerateCSToken returned error: %v", err)
 	}
 	audit := service.AuditLogs.(*auditRecorder)
-	if len(audit.entries) != 1 || audit.entries[0].Operator != "admin-1" || audit.entries[0].ActionType != "impersonate" || audit.entries[0].Detail != "管理员 admin-1 为客服 cs-001(客服一) 生成工作台 Token" || audit.entries[0].IP != "10.0.0.3" {
+	if len(audit.entries) != 1 || audit.entries[0].Operator != "admin-1" || audit.entries[0].ActionType != "impersonate" || audit.entries[0].Detail != "管理员 admin-1 为消息端 cs-001(消息端一) 生成工作台 Token" || audit.entries[0].IP != "10.0.0.3" {
 		t.Fatalf("audit entries = %+v", audit.entries)
 	}
 }
@@ -463,7 +463,7 @@ func TestCurrentUserReturnsLegacyMeResponse(t *testing.T) {
 	token := signSessionToken(t, service.Verifier.Secret, map[string]any{
 		"iss":  "im-cloud",
 		"sub":  "cs-001",
-		"name": "客服一",
+		"name": "消息端一",
 		"role": "cs",
 		"exp":  int64(2000),
 		"jti":  "jwt-test",
@@ -473,7 +473,7 @@ func TestCurrentUserReturnsLegacyMeResponse(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CurrentUser returned error: %v", err)
 	}
-	if response.AssigneeID != "cs-001" || response.AssigneeName != "客服一" || response.Role != "cs" || !response.AIEnabled {
+	if response.AssigneeID != "cs-001" || response.AssigneeName != "消息端一" || response.Role != "cs" || !response.AIEnabled {
 		t.Fatalf("unexpected response: %+v", response)
 	}
 	if response.ExpiresAt != "1970-01-01T00:33:20+00:00" {
@@ -541,7 +541,7 @@ func TestRefreshRevokesOldTokenAndReturnsLegacyResponse(t *testing.T) {
 	oldToken := signSessionToken(t, service.Verifier.Secret, map[string]any{
 		"iss":  "im-cloud",
 		"sub":  "cs-001",
-		"name": "客服一",
+		"name": "消息端一",
 		"role": "cs",
 		"exp":  int64(2000),
 		"jti":  "jwt-old",
@@ -552,7 +552,7 @@ func TestRefreshRevokesOldTokenAndReturnsLegacyResponse(t *testing.T) {
 		t.Fatalf("Refresh returned error: %v", err)
 	}
 
-	if !response.Success || response.Token == "" || response.AssigneeID != "cs-001" || response.AssigneeName != "客服一" || !response.AIEnabled {
+	if !response.Success || response.Token == "" || response.AssigneeID != "cs-001" || response.AssigneeName != "消息端一" || !response.AIEnabled {
 		t.Fatalf("unexpected refresh response: %+v", response)
 	}
 	if response.ExpiresAt != "1970-01-08T00:16:40+00:00" {
@@ -631,7 +631,7 @@ func TestLogoutWritesLegacyAudit(t *testing.T) {
 	token := signSessionToken(t, service.Verifier.Secret, map[string]any{
 		"iss":  "im-cloud",
 		"sub":  "cs-001",
-		"name": "客服一",
+		"name": "消息端一",
 		"exp":  int64(2000),
 		"jti":  "jwt-logout",
 	})
@@ -641,7 +641,7 @@ func TestLogoutWritesLegacyAudit(t *testing.T) {
 		t.Fatalf("Logout returned error: %v", err)
 	}
 	audit := service.AuditLogs.(*auditRecorder)
-	if len(audit.entries) != 1 || audit.entries[0].Operator != "cs-001" || audit.entries[0].ActionType != "logout" || audit.entries[0].Detail != "用户 客服一 登出" || audit.entries[0].IP != "10.0.0.4" {
+	if len(audit.entries) != 1 || audit.entries[0].Operator != "cs-001" || audit.entries[0].ActionType != "logout" || audit.entries[0].Detail != "用户 消息端一 登出" || audit.entries[0].IP != "10.0.0.4" {
 		t.Fatalf("audit entries = %+v", audit.entries)
 	}
 }

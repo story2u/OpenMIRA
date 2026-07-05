@@ -11,9 +11,9 @@ func TestServiceAssignmentWorkloadsBuildsAdminPayload(t *testing.T) {
 	assignments := &fakeAssignmentStore{counts: map[string]int{"cs-001": 1, "cs-002": 5}}
 	service := Service{
 		CSUsers: &fakeCSUserStore{users: []CSUserRecord{
-			{AssigneeID: "cs-002", AssigneeName: "客服B", Enabled: true, MaxSessions: 3},
-			{AssigneeID: "cs-001", AssigneeName: "客服A", Enabled: true, MaxSessions: 0},
-			{AssigneeID: "cs-003", AssigneeName: "客服C", Enabled: false, MaxSessions: 10},
+			{AssigneeID: "cs-002", AssigneeName: "消息端B", Enabled: true, MaxSessions: 3},
+			{AssigneeID: "cs-001", AssigneeName: "消息端A", Enabled: true, MaxSessions: 0},
+			{AssigneeID: "cs-003", AssigneeName: "消息端C", Enabled: false, MaxSessions: 10},
 		}},
 		Assignments: assignments,
 	}
@@ -48,8 +48,8 @@ func TestServiceAssignmentWorkloadsUsesRuntimeLoadCounts(t *testing.T) {
 	}
 	service := Service{
 		CSUsers: &fakeCSUserStore{users: []CSUserRecord{
-			{AssigneeID: "cs-001", AssigneeName: "客服A", Enabled: true, MaxSessions: 10},
-			{AssigneeID: "cs-002", AssigneeName: "客服B", Enabled: true, MaxSessions: 10},
+			{AssigneeID: "cs-001", AssigneeName: "消息端A", Enabled: true, MaxSessions: 10},
+			{AssigneeID: "cs-002", AssigneeName: "消息端B", Enabled: true, MaxSessions: 10},
 		}},
 		Assignments:            assignments,
 		AssignmentRuntimeState: runtimeState,
@@ -76,8 +76,8 @@ func TestServiceAssignmentWorkloadsRestrictsCSRole(t *testing.T) {
 	assignments := &fakeAssignmentStore{counts: map[string]int{"cs-002": 2}}
 	service := Service{
 		CSUsers: &fakeCSUserStore{users: []CSUserRecord{
-			{AssigneeID: "cs-001", AssigneeName: "客服A", Enabled: true, MaxSessions: 10},
-			{AssigneeID: "cs-002", AssigneeName: "客服B", Enabled: true, MaxSessions: 10},
+			{AssigneeID: "cs-001", AssigneeName: "消息端A", Enabled: true, MaxSessions: 10},
+			{AssigneeID: "cs-002", AssigneeName: "消息端B", Enabled: true, MaxSessions: 10},
 		}},
 		Assignments: assignments,
 	}

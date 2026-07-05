@@ -16,7 +16,7 @@ import (
 
 func TestGetAssignmentUsesTenantFilter(t *testing.T) {
 	db := &fakeDB{rows: &fakeRows{values: [][]any{
-		{"ent-a", "conv-1", "cs-1", "客服一", time.Date(2026, 6, 29, 10, 0, 0, 0, time.FixedZone("CST", 8*3600)), "2026-06-29T10:05:00Z"},
+		{"ent-a", "conv-1", "cs-1", "消息端一", time.Date(2026, 6, 29, 10, 0, 0, 0, time.FixedZone("CST", 8*3600)), "2026-06-29T10:05:00Z"},
 	}}}
 	repository := &Repository{DB: db}
 
@@ -30,7 +30,7 @@ func TestGetAssignmentUsesTenantFilter(t *testing.T) {
 	if len(db.args) != 1 || db.args[0] != "conv-1" {
 		t.Fatalf("args = %#v", db.args)
 	}
-	if record == nil || record.ConversationID != "conv-1" || record.AssigneeName != "客服一" || record.AssignedAt != "2026-06-29T02:00:00Z" {
+	if record == nil || record.ConversationID != "conv-1" || record.AssigneeName != "消息端一" || record.AssignedAt != "2026-06-29T02:00:00Z" {
 		t.Fatalf("record = %+v", record)
 	}
 
@@ -46,7 +46,7 @@ func TestGetAssignmentUsesTenantFilter(t *testing.T) {
 
 func TestListAssignmentsByAssigneeUsesTenant(t *testing.T) {
 	db := &fakeDB{rows: &fakeRows{values: [][]any{
-		{"ent-a", "conv-1", "cs-1", []byte("客服一"), "2026-06-29T10:00:00Z", "2026-06-29T10:05:00Z"},
+		{"ent-a", "conv-1", "cs-1", []byte("消息端一"), "2026-06-29T10:00:00Z", "2026-06-29T10:05:00Z"},
 		{"ent-a", "", "cs-1", "ignored", "", ""},
 	}}}
 	repository := &Repository{DB: db}
@@ -61,7 +61,7 @@ func TestListAssignmentsByAssigneeUsesTenant(t *testing.T) {
 	if len(db.args) != 3 || db.args[0] != "cs-1" || db.args[1] != "ent-a" || db.args[2] != 20 {
 		t.Fatalf("args = %#v", db.args)
 	}
-	if len(records) != 1 || records[0].ConversationID != "conv-1" || records[0].AssigneeName != "客服一" {
+	if len(records) != 1 || records[0].ConversationID != "conv-1" || records[0].AssigneeName != "消息端一" {
 		t.Fatalf("records = %+v", records)
 	}
 }
@@ -142,20 +142,20 @@ func TestCountByAssigneeIDsSkipsEmptyInput(t *testing.T) {
 func TestClaimAssignmentInsertsAndUpdatesProjection(t *testing.T) {
 	db := &fakeDB{rowsByQuery: [][][]any{
 		{},
-		{{"tenant-a", "conv-1", "cs-1", "客服一", "2026-07-01T09:00:00Z", "2026-07-01T09:00:00Z"}},
+		{{"tenant-a", "conv-1", "cs-1", "消息端一", "2026-07-01T09:00:00Z", "2026-07-01T09:00:00Z"}},
 	}}
 	repository := &Repository{DB: db}
 
 	record, err := repository.ClaimAssignment(context.Background(), workbench.AssignmentClaimCommand{
 		ConversationID: " conv-1 ",
 		AssigneeID:     " cs-1 ",
-		AssigneeName:   " 客服一 ",
+		AssigneeName:   " 消息端一 ",
 		TenantID:       " tenant-a ",
 	})
 	if err != nil {
 		t.Fatalf("ClaimAssignment returned error: %v", err)
 	}
-	if record.ConversationID != "conv-1" || record.AssigneeID != "cs-1" || record.AssigneeName != "客服一" {
+	if record.ConversationID != "conv-1" || record.AssigneeID != "cs-1" || record.AssigneeName != "消息端一" {
 		t.Fatalf("record = %+v", record)
 	}
 	if len(db.execs) != 2 {
@@ -165,21 +165,21 @@ func TestClaimAssignmentInsertsAndUpdatesProjection(t *testing.T) {
 	if !strings.HasPrefix(insert.query, "INSERT INTO conversation_assignments") {
 		t.Fatalf("insert query = %q", insert.query)
 	}
-	if len(insert.args) != 4 || insert.args[0] != "conv-1" || insert.args[1] != "tenant-a" || insert.args[2] != "cs-1" || insert.args[3] != "客服一" {
+	if len(insert.args) != 4 || insert.args[0] != "conv-1" || insert.args[1] != "tenant-a" || insert.args[2] != "cs-1" || insert.args[3] != "消息端一" {
 		t.Fatalf("insert args = %#v", insert.args)
 	}
 	projection := db.execs[1]
 	if projection.query != "UPDATE conversation_overview_projection SET assignee_id = ?, assignee_name = ?, updated_at = CURRENT_TIMESTAMP WHERE conversation_id = ?" {
 		t.Fatalf("projection query = %q", projection.query)
 	}
-	if len(projection.args) != 3 || projection.args[0] != "cs-1" || projection.args[1] != "客服一" || projection.args[2] != "conv-1" {
+	if len(projection.args) != 3 || projection.args[0] != "cs-1" || projection.args[1] != "消息端一" || projection.args[2] != "conv-1" {
 		t.Fatalf("projection args = %#v", projection.args)
 	}
 }
 
 func TestClaimAssignmentRejectsExistingDifferentAssigneeWithoutForce(t *testing.T) {
 	db := &fakeDB{rowsByQuery: [][][]any{
-		{{"tenant-a", "conv-1", "cs-old", "客服旧", "2026-07-01T09:00:00Z", "2026-07-01T09:00:00Z"}},
+		{{"tenant-a", "conv-1", "cs-old", "消息端旧", "2026-07-01T09:00:00Z", "2026-07-01T09:00:00Z"}},
 	}}
 	repository := &Repository{DB: db}
 
@@ -196,7 +196,7 @@ func TestClaimAssignmentRejectsExistingDifferentAssigneeWithoutForce(t *testing.
 
 func TestReleaseAssignmentDeletesAndClearsProjection(t *testing.T) {
 	db := &fakeDB{rowsByQuery: [][][]any{
-		{{"tenant-a", "conv-1", "cs-1", "客服一", "2026-07-01T09:00:00Z", "2026-07-01T09:00:00Z"}},
+		{{"tenant-a", "conv-1", "cs-1", "消息端一", "2026-07-01T09:00:00Z", "2026-07-01T09:00:00Z"}},
 	}}
 	repository := &Repository{DB: db}
 
@@ -222,7 +222,7 @@ func TestReleaseAssignmentDeletesAndClearsProjection(t *testing.T) {
 
 func TestReleaseAssignmentRejectsWrongAssigneeWithoutForce(t *testing.T) {
 	db := &fakeDB{rowsByQuery: [][][]any{
-		{{"tenant-a", "conv-1", "cs-1", "客服一", "2026-07-01T09:00:00Z", "2026-07-01T09:00:00Z"}},
+		{{"tenant-a", "conv-1", "cs-1", "消息端一", "2026-07-01T09:00:00Z", "2026-07-01T09:00:00Z"}},
 	}}
 	repository := &Repository{DB: db}
 

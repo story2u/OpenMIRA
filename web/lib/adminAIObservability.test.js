@@ -81,7 +81,7 @@ test("normalizeAIReplyLogs keeps payload fields and pagination", () => {
         trigger_event: "message.created",
         reply_time: "2026-07-02T10:00:00+08:00",
         assignee_id: "cs-1",
-        assignee_name: "客服一",
+        assignee_name: "消息端一",
         account_id: "acc-1",
         account_name: "企微一",
         receiver_name: "客户一",

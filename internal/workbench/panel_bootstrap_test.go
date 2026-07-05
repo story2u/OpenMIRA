@@ -10,8 +10,8 @@ import (
 
 func TestServicePanelBootstrapBuildsAssignmentPayload(t *testing.T) {
 	accounts := &fakeAccountStore{accounts: []AccountRecord{
-		{AccountID: "acc-001", AccountName: "账号A", DeviceID: "device-1", AssigneeID: "cs-001", AssigneeName: "客服A", WeWorkUserID: "wx-a", EnterpriseID: "ent-a"},
-		{AccountID: "acc-002", AccountName: "账号B", DeviceID: "device-2", AssigneeID: "cs-001", AssigneeName: "客服A", WeWorkUserID: "wx-b", EnterpriseID: "ent-a"},
+		{AccountID: "acc-001", AccountName: "账号A", DeviceID: "device-1", AssigneeID: "cs-001", AssigneeName: "消息端A", WeWorkUserID: "wx-a", EnterpriseID: "ent-a"},
+		{AccountID: "acc-002", AccountName: "账号B", DeviceID: "device-2", AssigneeID: "cs-001", AssigneeName: "消息端A", WeWorkUserID: "wx-b", EnterpriseID: "ent-a"},
 	}}
 	projection := &fakeProjectionStore{
 		accountStatsRows: []ProjectionRow{
@@ -29,8 +29,8 @@ func TestServicePanelBootstrapBuildsAssignmentPayload(t *testing.T) {
 		Projection:  projection,
 		Assignments: assignments,
 		CSUsers: &fakeCSUserStore{users: []CSUserRecord{
-			{AssigneeID: "cs-002", AssigneeName: "客服B", Role: "cs", Enabled: true, MaxSessions: 10, LastSeenAt: "2026-06-29 09:00:00"},
-			{AssigneeID: "cs-001", AssigneeName: "客服A", Role: "cs", Enabled: true, MaxSessions: 10, LastSeenAt: "2026-06-29 10:00:00"},
+			{AssigneeID: "cs-002", AssigneeName: "消息端B", Role: "cs", Enabled: true, MaxSessions: 10, LastSeenAt: "2026-06-29 09:00:00"},
+			{AssigneeID: "cs-001", AssigneeName: "消息端A", Role: "cs", Enabled: true, MaxSessions: 10, LastSeenAt: "2026-06-29 10:00:00"},
 		}},
 	}
 

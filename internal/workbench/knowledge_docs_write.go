@@ -341,7 +341,7 @@ func (service Service) KnowledgeDialogue(ctx context.Context, request KnowledgeD
 		}, nil
 	}
 	return Payload{
-		"reply":            "暂时没有在知识库找到明确答案，建议转人工客服进一步确认。",
+		"reply":            "暂时没有在知识库找到明确答案，建议转人工消息端进一步确认。",
 		"matched_question": "",
 		"source":           "",
 		"confidence":       0.0,

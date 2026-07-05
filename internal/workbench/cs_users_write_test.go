@@ -15,7 +15,7 @@ func TestServiceUpsertCSUserNormalizesPublishesAndAudits(t *testing.T) {
 	aiEnabled := true
 	writeStore := &fakeCSUserWriteStore{user: CSUserRecord{
 		AssigneeID:   "cs-003",
-		AssigneeName: "客服C",
+		AssigneeName: "消息端C",
 		Role:         "supervisor",
 		Enabled:      false,
 		AIEnabled:    true,
@@ -26,7 +26,7 @@ func TestServiceUpsertCSUserNormalizesPublishesAndAudits(t *testing.T) {
 	events := &fakeScriptEventPublisher{}
 	audit := &fakeAuditWriter{}
 	service := Service{
-		CSUsers:          &fakeCSUserStore{users: []CSUserRecord{{AssigneeID: "cs-001", AssigneeName: "客服A"}}},
+		CSUsers:          &fakeCSUserStore{users: []CSUserRecord{{AssigneeID: "cs-001", AssigneeName: "消息端A"}}},
 		CSUserWriteStore: writeStore,
 		CSUserEvents:     events,
 		AuditLogWriter:   audit,
@@ -38,7 +38,7 @@ func TestServiceUpsertCSUserNormalizesPublishesAndAudits(t *testing.T) {
 
 	payload, err := service.UpsertCSUser(context.Background(), NewCSUserUpsertRequest(CSUserUpsertBody{
 		AssigneeID:   " cs-003 ",
-		AssigneeName: " 客服C ",
+		AssigneeName: " 消息端C ",
 		Role:         " supervisor ",
 		Enabled:      &enabled,
 		AIEnabled:    &aiEnabled,
@@ -48,7 +48,7 @@ func TestServiceUpsertCSUserNormalizesPublishesAndAudits(t *testing.T) {
 	if err != nil {
 		t.Fatalf("UpsertCSUser returned error: %v", err)
 	}
-	if writeStore.command.AssigneeID != "cs-003" || writeStore.command.AssigneeName != "客服C" || writeStore.command.Role != "supervisor" || writeStore.command.Enabled || !writeStore.command.AIEnabled || writeStore.command.Password != "secret1" {
+	if writeStore.command.AssigneeID != "cs-003" || writeStore.command.AssigneeName != "消息端C" || writeStore.command.Role != "supervisor" || writeStore.command.Enabled || !writeStore.command.AIEnabled || writeStore.command.Password != "secret1" {
 		t.Fatalf("command = %+v", writeStore.command)
 	}
 	user := payload["user"].(ProjectionRow)
@@ -69,10 +69,10 @@ func TestServiceUpsertCSUserValidationAndConflicts(t *testing.T) {
 		body CSUserUpsertBody
 		want error
 	}{
-		{body: CSUserUpsertBody{AssigneeName: "客服"}, want: ErrCSUserAssigneeIDRequired},
+		{body: CSUserUpsertBody{AssigneeName: "消息端"}, want: ErrCSUserAssigneeIDRequired},
 		{body: CSUserUpsertBody{AssigneeID: "cs-1"}, want: ErrCSUserAssigneeNameRequired},
-		{body: CSUserUpsertBody{AssigneeID: "cs-1", AssigneeName: "客服", Role: "owner"}, want: ErrCSUserInvalidRole},
-		{body: CSUserUpsertBody{AssigneeID: "cs-1", AssigneeName: "客服", Password: "12345"}, want: ErrCSUserPasswordTooShort},
+		{body: CSUserUpsertBody{AssigneeID: "cs-1", AssigneeName: "消息端", Role: "owner"}, want: ErrCSUserInvalidRole},
+		{body: CSUserUpsertBody{AssigneeID: "cs-1", AssigneeName: "消息端", Password: "12345"}, want: ErrCSUserPasswordTooShort},
 	}
 	for _, item := range cases {
 		_, err := service.UpsertCSUser(context.Background(), NewCSUserUpsertRequest(item.body, auth.Session{}))
@@ -82,17 +82,17 @@ func TestServiceUpsertCSUserValidationAndConflicts(t *testing.T) {
 	}
 
 	service = Service{
-		CSUsers:          &fakeCSUserStore{users: []CSUserRecord{{AssigneeID: "cs-2", AssigneeName: "客服A"}}},
+		CSUsers:          &fakeCSUserStore{users: []CSUserRecord{{AssigneeID: "cs-2", AssigneeName: "消息端A"}}},
 		CSUserWriteStore: &fakeCSUserWriteStore{existing: true},
 	}
-	_, err := service.UpsertCSUser(context.Background(), NewCSUserUpsertRequest(CSUserUpsertBody{AssigneeID: "cs-1", AssigneeName: "客服B", CreateOnly: true}, auth.Session{}))
+	_, err := service.UpsertCSUser(context.Background(), NewCSUserUpsertRequest(CSUserUpsertBody{AssigneeID: "cs-1", AssigneeName: "消息端B", CreateOnly: true}, auth.Session{}))
 	var conflict CSUserConflictError
-	if !errors.As(err, &conflict) || !strings.Contains(conflict.Error(), "客服ID已存在") {
+	if !errors.As(err, &conflict) || !strings.Contains(conflict.Error(), "消息端ID已存在") {
 		t.Fatalf("create_only conflict = %v", err)
 	}
 	service.CSUserWriteStore = &fakeCSUserWriteStore{}
-	_, err = service.UpsertCSUser(context.Background(), NewCSUserUpsertRequest(CSUserUpsertBody{AssigneeID: "cs-1", AssigneeName: "客服A"}, auth.Session{}))
-	if !errors.As(err, &conflict) || !strings.Contains(conflict.Error(), "客服名称已存在") {
+	_, err = service.UpsertCSUser(context.Background(), NewCSUserUpsertRequest(CSUserUpsertBody{AssigneeID: "cs-1", AssigneeName: "消息端A"}, auth.Session{}))
+	if !errors.As(err, &conflict) || !strings.Contains(conflict.Error(), "消息端名称已存在") {
 		t.Fatalf("duplicate name conflict = %v", err)
 	}
 }
@@ -113,7 +113,7 @@ func TestServiceDeleteCSUserPublishesAndAuditsWhenDeleted(t *testing.T) {
 	if len(events.events) != 1 || events.events[0].event != "cs.user.deleted" || events.events[0].payload["assignee_id"] != "cs-001" {
 		t.Fatalf("events = %+v", events.events)
 	}
-	if len(audit.entries) != 1 || audit.entries[0].ActionType != "cs_user" || !strings.Contains(audit.entries[0].Detail, "删除客服账号") {
+	if len(audit.entries) != 1 || audit.entries[0].ActionType != "cs_user" || !strings.Contains(audit.entries[0].Detail, "删除消息端账号") {
 		t.Fatalf("audit entries = %+v", audit.entries)
 	}
 }

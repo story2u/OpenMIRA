@@ -71,7 +71,7 @@ func TestLastHandlerDefaultsToNotFoundWithoutStore(t *testing.T) {
 
 func TestLastHandlerSerializesDebugPayload(t *testing.T) {
 	guard, token := guardWithToken(t, "admin")
-	handler := New(guard, fakeLastStore{payload: map[string]any{"account_name": "客服一"}})
+	handler := New(guard, fakeLastStore{payload: map[string]any{"account_name": "消息端一"}})
 	response := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodGet, "/wework/user-info/last?device_id=device-1", nil)
 	request.Header.Set("Authorization", "Bearer "+token)
@@ -79,7 +79,7 @@ func TestLastHandlerSerializesDebugPayload(t *testing.T) {
 	handler.LastHandler(response, request)
 
 	body := response.Body.String()
-	if response.Code != http.StatusOK || !strings.Contains(body, `"found":true`) || !strings.Contains(body, `"account_name":"客服一"`) {
+	if response.Code != http.StatusOK || !strings.Contains(body, `"found":true`) || !strings.Contains(body, `"account_name":"消息端一"`) {
 		t.Fatalf("payload response = %d %s", response.Code, body)
 	}
 }

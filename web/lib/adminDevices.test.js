@@ -62,7 +62,7 @@ test("normalizeAdminDevices keeps device list fields", () => {
         p1_device_ip: "192.168.1.18",
         p1_manager_port: 83,
         p1_slot: 18,
-        login_account_name: "客服一",
+        login_account_name: "消息端一",
         login_channel_user_id: "channel1801",
         login_wework_user_id: "dy1801",
         login_organization_name: "黛伊",
@@ -86,7 +86,7 @@ test("normalizeAdminDevices keeps device list fields", () => {
   assert.equal(devices[0].p1DeviceIP, "192.168.1.18");
   assert.equal(devices[0].p1ManagerPort, 83);
   assert.equal(devices[0].p1Slot, "18");
-  assert.equal(devices[0].loginAccountName, "客服一");
+  assert.equal(devices[0].loginAccountName, "消息端一");
   assert.equal(devices[0].loginChannelUserId, "channel1801");
   assert.equal(devices[0].loginWeWorkUserId, "channel1801");
   assert.equal(devices[0].loginOrganizationName, "黛伊");
@@ -519,13 +519,13 @@ test("device action normalizers keep status and task fields", () => {
   const status = normalizeWeWorkLoginStatus({
     device_id: "device-1",
     status: "normal",
-    account_name: "客服一",
+    account_name: "消息端一",
     wework_user_id: "wm-1",
     task_id: "task-status",
   });
   assert.equal(status.deviceID, "device-1");
   assert.equal(status.status, "normal");
-  assert.equal(status.accountName, "客服一");
+  assert.equal(status.accountName, "消息端一");
   assert.equal(status.weworkUserID, "wm-1");
   assert.equal(status.taskID, "task-status");
 });

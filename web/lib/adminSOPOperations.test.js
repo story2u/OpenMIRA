@@ -59,7 +59,7 @@ test("normalizeSOPDispatchTasks keeps batches, details and pagination", () => {
         flow_name: "正式 SOP",
         conversation_id: "conv-1",
         sender_name: "客户 A",
-        assignee_name: "客服 A",
+        assignee_name: "消息端 A",
         account_id: "acc-1",
         day_stage: "day1",
         status_counts: { failed: 1, success: 2 },

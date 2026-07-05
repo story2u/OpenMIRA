@@ -14,7 +14,7 @@ test("normalizeAdminPayload keeps preferred account columns and metrics", () => 
     total: 2,
     accounts: [
       {
-        account_name: "客服A",
+        account_name: "消息端A",
         account_id: "acc-1",
         device_id: "dev-1",
         assignee_name: "夏南",
@@ -22,7 +22,7 @@ test("normalizeAdminPayload keeps preferred account columns and metrics", () => 
         ai_enabled: false,
         ignored: "x",
       },
-      { account_name: "客服B", account_id: "acc-2", device_id: "dev-2", ai_enabled: true },
+      { account_name: "消息端B", account_id: "acc-2", device_id: "dev-2", ai_enabled: true },
     ],
   });
 

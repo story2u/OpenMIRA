@@ -51,7 +51,7 @@ func TestServiceReportWritesStructuredClientError(t *testing.T) {
 func TestServiceReportIgnoresKnownNoAccountNoise(t *testing.T) {
 	writer := &fakeSystemLogWriter{}
 	err := (Service{Writer: writer}).Report(context.Background(), ReportRequest{
-		Message: "当前客服没有可用账号，无法初始化会话工作台",
+		Message: "当前消息端没有可用账号，无法初始化会话工作台",
 		Detail:  "ChatLayout missing default account",
 	})
 	if err != nil {

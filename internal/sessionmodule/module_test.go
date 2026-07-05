@@ -70,7 +70,7 @@ func TestNewBuildsUnmountedSessionHandler(t *testing.T) {
 	token := signModuleToken(t, "session-secret", map[string]any{
 		"iss":  "im-cloud",
 		"sub":  "cs-001",
-		"name": "客服一",
+		"name": "消息端一",
 		"role": "cs",
 		"exp":  int64(2000),
 		"jti":  "jwt-test",

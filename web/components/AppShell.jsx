@@ -6,7 +6,7 @@
 import { buildVersionLabel, getAppVersionInfo } from "../lib/appVersion.js";
 
 const navItems = [
-  { key: "cs", label: "客服", href: "/" },
+  { key: "cs", label: "消息端", href: "/" },
   { key: "admin", label: "管理", href: "/admin" },
 ];
 

@@ -24,7 +24,7 @@ func TestCSUserUpsertHandlerSerializesServicePayload(t *testing.T) {
 		"jti":  "jwt-cs-user-upsert",
 	})
 
-	response := performCSUserUpsert(handler, "Bearer "+token, "/api/v1/cs-users", `{"assignee_id":" cs-001 ","assignee_name":" 客服A ","role":"","enabled":false,"ai_enabled":true,"max_sessions":3,"password":" secret1 "}`)
+	response := performCSUserUpsert(handler, "Bearer "+token, "/api/v1/cs-users", `{"assignee_id":" cs-001 ","assignee_name":" 消息端A ","role":"","enabled":false,"ai_enabled":true,"max_sessions":3,"password":" secret1 "}`)
 
 	if response.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200; body=%s", response.Code, response.Body.String())
@@ -33,7 +33,7 @@ func TestCSUserUpsertHandlerSerializesServicePayload(t *testing.T) {
 		t.Fatalf("unexpected body: %s", response.Body.String())
 	}
 	command := service.upsertRequest.Command
-	if command.AssigneeID != "cs-001" || command.AssigneeName != "客服A" || command.Role != "cs" || command.Enabled || !command.AIEnabled || command.MaxSessions != 3 || command.Password != "secret1" {
+	if command.AssigneeID != "cs-001" || command.AssigneeName != "消息端A" || command.Role != "cs" || command.Enabled || !command.AIEnabled || command.MaxSessions != 3 || command.Password != "secret1" {
 		t.Fatalf("unexpected upsert request: %+v", service.upsertRequest)
 	}
 }
@@ -49,14 +49,14 @@ func TestCSUserUpsertHandlerMapsValidationAndConflict(t *testing.T) {
 		"jti":  "jwt-cs-user-validation",
 	})
 
-	response := performCSUserUpsert(handler, "Bearer "+token, "/api/v1/cs-users", `{"assignee_id":"cs-001","assignee_name":"客服A","password":"12345"}`)
+	response := performCSUserUpsert(handler, "Bearer "+token, "/api/v1/cs-users", `{"assignee_id":"cs-001","assignee_name":"消息端A","password":"12345"}`)
 	if response.Code != http.StatusUnprocessableEntity || !strings.Contains(response.Body.String(), "密码长度不得少于6位") {
 		t.Fatalf("validation response = %d %s", response.Code, response.Body.String())
 	}
 
-	service.err = workbench.CSUserConflictError{Detail: "客服ID已存在：cs-001"}
-	response = performCSUserUpsert(handler, "Bearer "+token, "/api/v1/cs-users", `{"assignee_id":"cs-001","assignee_name":"客服A","create_only":true}`)
-	if response.Code != http.StatusConflict || !strings.Contains(response.Body.String(), "客服ID已存在") {
+	service.err = workbench.CSUserConflictError{Detail: "消息端ID已存在：cs-001"}
+	response = performCSUserUpsert(handler, "Bearer "+token, "/api/v1/cs-users", `{"assignee_id":"cs-001","assignee_name":"消息端A","create_only":true}`)
+	if response.Code != http.StatusConflict || !strings.Contains(response.Body.String(), "消息端ID已存在") {
 		t.Fatalf("conflict response = %d %s", response.Code, response.Body.String())
 	}
 }
@@ -92,7 +92,7 @@ func TestCSUserWriteHandlerRequiresConfiguredService(t *testing.T) {
 		"jti":  "jwt-cs-user-write-missing",
 	})
 
-	response := performCSUserUpsert(handler, "Bearer "+token, "/api/v1/cs-users", `{"assignee_id":"cs-001","assignee_name":"客服A"}`)
+	response := performCSUserUpsert(handler, "Bearer "+token, "/api/v1/cs-users", `{"assignee_id":"cs-001","assignee_name":"消息端A"}`)
 
 	if response.Code != http.StatusServiceUnavailable || !strings.Contains(response.Body.String(), "workbench cs users write service is not configured") {
 		t.Fatalf("write service missing response = %d %s", response.Code, response.Body.String())

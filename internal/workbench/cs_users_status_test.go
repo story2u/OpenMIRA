@@ -11,8 +11,8 @@ import (
 func TestServiceCSUsersStatusBuildsOnlinePayload(t *testing.T) {
 	service := Service{
 		CSUsers: &fakeCSUserStore{users: []CSUserRecord{
-			{AssigneeID: "cs-001", AssigneeName: "客服A", Role: "admin", Enabled: true, AIEnabled: true, LastSeenAt: time.Date(2026, 6, 29, 9, 58, 0, 0, time.UTC)},
-			{AssigneeID: "cs-002", AssigneeName: "客服B", Role: "cs", Enabled: false, AIEnabled: false, LastSeenAt: "2026-06-29T09:40:00Z"},
+			{AssigneeID: "cs-001", AssigneeName: "消息端A", Role: "admin", Enabled: true, AIEnabled: true, LastSeenAt: time.Date(2026, 6, 29, 9, 58, 0, 0, time.UTC)},
+			{AssigneeID: "cs-002", AssigneeName: "消息端B", Role: "cs", Enabled: false, AIEnabled: false, LastSeenAt: "2026-06-29T09:40:00Z"},
 			{AssigneeID: "", AssigneeName: "跳过", Role: "cs", Enabled: true},
 		}},
 		Now: func() time.Time {

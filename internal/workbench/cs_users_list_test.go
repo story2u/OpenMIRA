@@ -11,8 +11,8 @@ import (
 func TestServiceCSUsersListBuildsAdminPayload(t *testing.T) {
 	service := Service{
 		CSUsers: &fakeCSUserStore{users: []CSUserRecord{
-			{AssigneeID: "cs-001", AssigneeName: "客服A", Role: "cs", Enabled: true, AIEnabled: true, MaxSessions: 10, HasPassword: true, LastSeenAt: "2026-06-29T09:58:00Z", CreatedAt: "2026-06-28T00:00:00Z", UpdatedAt: "2026-06-29T09:59:00Z"},
-			{AssigneeID: "cs-002", AssigneeName: "客服B", Role: "cs", Enabled: false, AIEnabled: false, MaxSessions: 5, LastSeenAt: "2026-06-29T09:40:00Z"},
+			{AssigneeID: "cs-001", AssigneeName: "消息端A", Role: "cs", Enabled: true, AIEnabled: true, MaxSessions: 10, HasPassword: true, LastSeenAt: "2026-06-29T09:58:00Z", CreatedAt: "2026-06-28T00:00:00Z", UpdatedAt: "2026-06-29T09:59:00Z"},
+			{AssigneeID: "cs-002", AssigneeName: "消息端B", Role: "cs", Enabled: false, AIEnabled: false, MaxSessions: 5, LastSeenAt: "2026-06-29T09:40:00Z"},
 		}},
 		Assignments: &fakeAssignmentStore{counts: map[string]int{"cs-001": 3}},
 		Now: func() time.Time {
@@ -20,7 +20,7 @@ func TestServiceCSUsersListBuildsAdminPayload(t *testing.T) {
 		},
 	}
 
-	payload, err := service.CSUsersList(context.Background(), CSUsersListRequest{Session: auth.Session{Role: "admin"}, Keyword: "客服A"})
+	payload, err := service.CSUsersList(context.Background(), CSUsersListRequest{Session: auth.Session{Role: "admin"}, Keyword: "消息端A"})
 	if err != nil {
 		t.Fatalf("CSUsersList returned error: %v", err)
 	}
@@ -42,7 +42,7 @@ func TestServiceCSUsersListUsesRuntimeLoadCounts(t *testing.T) {
 	runtimeState := &fakeAssignmentRuntimeState{loadCounts: map[string]int{"cs-001": 4}}
 	service := Service{
 		CSUsers: &fakeCSUserStore{users: []CSUserRecord{
-			{AssigneeID: "cs-001", AssigneeName: "客服A", Role: "cs", Enabled: true, MaxSessions: 10},
+			{AssigneeID: "cs-001", AssigneeName: "消息端A", Role: "cs", Enabled: true, MaxSessions: 10},
 		}},
 		Assignments:            assignments,
 		AssignmentRuntimeState: runtimeState,

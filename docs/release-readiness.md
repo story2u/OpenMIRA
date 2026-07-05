@@ -54,7 +54,7 @@ go run ./cmd/release-readiness -profile <profile> -strict
 
 ### workbench-read
 
-范围：客服工作台 bootstrap、summary、会话列表、搜索、消息历史、客户资料。
+范围：消息端工作台 bootstrap、summary、会话列表、搜索、消息历史、客户资料。
 
 发布前确认：
 
@@ -90,7 +90,7 @@ go run ./cmd/release-readiness -profile <profile> -strict
 
 ### admin-accounts
 
-范围：账号、客服用户、联系人缓存和分配关系。
+范围：账号、消息端用户、联系人缓存和分配关系。
 
 发布前确认：
 

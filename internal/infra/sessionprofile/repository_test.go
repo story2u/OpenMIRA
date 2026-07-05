@@ -37,14 +37,14 @@ func TestGetProfileHandlesMissingUser(t *testing.T) {
 }
 
 func TestGetUserLoadsLoginFields(t *testing.T) {
-	db := &fakeDB{row: fakeRow{values: []any{"客服一", "supervisor", int64(1), []byte("0"), "hash"}}}
+	db := &fakeDB{row: fakeRow{values: []any{"消息端一", "supervisor", int64(1), []byte("0"), "hash"}}}
 	repository := &Repository{DB: db}
 
 	user, ok, err := repository.GetUser(context.Background(), " cs-001 ")
 	if err != nil {
 		t.Fatalf("GetUser returned error: %v", err)
 	}
-	if !ok || user.AssigneeID != "cs-001" || user.AssigneeName != "客服一" || user.Role != "supervisor" || !user.Enabled || user.AIEnabled || user.PasswordHash != "hash" {
+	if !ok || user.AssigneeID != "cs-001" || user.AssigneeName != "消息端一" || user.Role != "supervisor" || !user.Enabled || user.AIEnabled || user.PasswordHash != "hash" {
 		t.Fatalf("user = %+v ok=%t", user, ok)
 	}
 	if db.query != "SELECT assignee_name, role, enabled, ai_enabled, password_hash FROM cs_users WHERE assignee_id = ?" || db.queryArgs[0] != "cs-001" {

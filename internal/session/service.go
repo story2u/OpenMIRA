@@ -453,7 +453,7 @@ func (service *Service) CSLogin(ctx context.Context, request CSLoginRequest, met
 	if err := service.addAuditLog(ctx, AuditLogEntry{
 		Operator:   assigneeID,
 		ActionType: "login",
-		Detail:     fmt.Sprintf("客服 %s(%s) 密码登录", user.AssigneeName, assigneeID),
+		Detail:     fmt.Sprintf("消息端 %s(%s) 密码登录", user.AssigneeName, assigneeID),
 		IP:         meta.ClientIP,
 	}); err != nil {
 		return LoginResponse{}, err
@@ -516,7 +516,7 @@ func (service *Service) GenerateCSToken(ctx context.Context, authorization strin
 	if err := service.addAuditLog(ctx, AuditLogEntry{
 		Operator:   operator,
 		ActionType: "impersonate",
-		Detail:     fmt.Sprintf("管理员 %s 为客服 %s(%s) 生成工作台 Token", operator, assigneeID, user.AssigneeName),
+		Detail:     fmt.Sprintf("管理员 %s 为消息端 %s(%s) 生成工作台 Token", operator, assigneeID, user.AssigneeName),
 		IP:         meta.ClientIP,
 	}); err != nil {
 		return GenerateCSTokenResponse{}, err

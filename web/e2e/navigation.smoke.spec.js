@@ -2,9 +2,9 @@ import { expect, test } from "@playwright/test";
 
 const shellHeaderText = "IM Console";
 const routeMatrix = [
-  { path: "/", expectText: "客服", selector: "nav" },
+  { path: "/", expectText: "消息端", selector: "nav" },
   { path: "/admin", expectText: "管理", selector: "nav" },
-  { path: "/login", expectText: "客服免密登录", selector: "h1" },
+  { path: "/login", expectText: "消息端免密登录", selector: "h1" },
   { path: "/cs-login", expectText: "消息端登录", selector: "h1" },
   { path: "/admin-login", expectText: "运营端登录", selector: "h1" },
 ];

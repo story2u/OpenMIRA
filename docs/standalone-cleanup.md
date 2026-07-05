@@ -18,7 +18,7 @@
 ## 保留为 Core
 
 - 认证、会话、租户、账号、角色和权限。
-- 客服工作台、管理台、诊断台的基础 API 和 Next.js 页面。
+- 消息端工作台、管理台、诊断台的基础 API 和 Next.js 页面。
 - 联系人、会话、消息、任务、投影、审计和系统日志。
 - outbox、realtime gateway、WebSocket、Redis Stream、任务状态机和 worker runtime。
 - 幂等、重试、DLQ、回滚、可观测和 release readiness profile。

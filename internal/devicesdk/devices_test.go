@@ -26,7 +26,7 @@ func TestServiceListDevicesBuildsManagerCacheRows(t *testing.T) {
 		Config: Config{ManagerCacheFile: cacheFile},
 		LoginSessions: fakeLoginReader{session: LoginSession{
 			Status:           "success",
-			AccountName:      "客服一",
+			AccountName:      "消息端一",
 			WeWorkUserID:     "wm-user",
 			OrganizationName: "测试企业",
 		}},
@@ -45,7 +45,7 @@ func TestServiceListDevicesBuildsManagerCacheRows(t *testing.T) {
 	if row["agent_id"] != "sdk:slot-18" || row["device_id"] != "slot-18" || row["online"] != true || row["sdk_route"] != true {
 		t.Fatalf("row basics = %#v", row)
 	}
-	if row["app_logged_in"] != true || row["app_status"] != "normal" || row["login_account_name"] != "客服一" {
+	if row["app_logged_in"] != true || row["app_status"] != "normal" || row["login_account_name"] != "消息端一" {
 		t.Fatalf("login fields = %#v", row)
 	}
 	if row["wework_logged_in"] != true || row["wework_status"] != "normal" || row["login_channel_user_id"] != "wm-user" || row["login_wework_user_id"] != "wm-user" {

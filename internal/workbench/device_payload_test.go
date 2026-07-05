@@ -103,13 +103,13 @@ func TestBuildAccountSummaryPayloadUsesAccountFacts(t *testing.T) {
 		ChannelUserID: "channel-zimo",
 		WeWorkUserID:  "wx-zimo",
 		AssigneeID:    "cs-1",
-		AssigneeName:  "客服1",
+		AssigneeName:  "消息端1",
 		EnterpriseID:  "ent-a",
 		AIEnabled:     true,
 	}})
 
 	row := accounts[0]
-	if rowText(row, "account_name") != "子墨" || rowText(row, "assignee_name") != "客服1" || row["enterprise_bound"] != true || row["ai_enabled"] != true {
+	if rowText(row, "account_name") != "子墨" || rowText(row, "assignee_name") != "消息端1" || row["enterprise_bound"] != true || row["ai_enabled"] != true {
 		t.Fatalf("unexpected account summary: %+v", row)
 	}
 	if rowText(row, "channel_user_id") != "channel-zimo" || rowText(row, "account_channel_user_id") != "channel-zimo" || rowText(row, "wework_user_id") != "wx-zimo" {

@@ -111,7 +111,7 @@ func (service Service) UpsertCSUser(ctx context.Context, request CSUserUpsertReq
 		if _, ok, err := store.GetCSUser(ctx, command.AssigneeID); err != nil {
 			return nil, err
 		} else if ok {
-			return nil, CSUserConflictError{Detail: fmt.Sprintf("客服ID已存在：%s", command.AssigneeID)}
+			return nil, CSUserConflictError{Detail: fmt.Sprintf("消息端ID已存在：%s", command.AssigneeID)}
 		}
 	}
 	users, err := service.CSUsers.ListCSUsers(ctx)
@@ -120,7 +120,7 @@ func (service Service) UpsertCSUser(ctx context.Context, request CSUserUpsertReq
 	}
 	for _, user := range users {
 		if strings.TrimSpace(user.AssigneeID) != command.AssigneeID && strings.EqualFold(strings.TrimSpace(user.AssigneeName), command.AssigneeName) {
-			return nil, CSUserConflictError{Detail: fmt.Sprintf("客服名称已存在：%s", command.AssigneeName)}
+			return nil, CSUserConflictError{Detail: fmt.Sprintf("消息端名称已存在：%s", command.AssigneeName)}
 		}
 	}
 	user, err := store.UpsertCSUser(ctx, command)
@@ -133,7 +133,7 @@ func (service Service) UpsertCSUser(ctx context.Context, request CSUserUpsertReq
 		}
 	}
 	if service.AuditLogWriter != nil {
-		detail := fmt.Sprintf("创建/更新客服账号: %s(%s), role=%s, enabled=%t, ai_enabled=%t", command.AssigneeName, command.AssigneeID, command.Role, command.Enabled, command.AIEnabled)
+		detail := fmt.Sprintf("创建/更新消息端账号: %s(%s), role=%s, enabled=%t, ai_enabled=%t", command.AssigneeName, command.AssigneeID, command.Role, command.Enabled, command.AIEnabled)
 		if command.Password != "" {
 			detail += " [重置密码]"
 		}
@@ -167,7 +167,7 @@ func (service Service) DeleteCSUser(ctx context.Context, request CSUserDeleteReq
 		}
 	}
 	if deleted && service.AuditLogWriter != nil {
-		if _, err := service.AuditLogWriter.AddAuditLog(ctx, AuditLogEntry{Operator: strings.TrimSpace(request.Session.AssigneeID), ActionType: "cs_user", Detail: fmt.Sprintf("删除客服账号: %s", assigneeID)}); err != nil {
+		if _, err := service.AuditLogWriter.AddAuditLog(ctx, AuditLogEntry{Operator: strings.TrimSpace(request.Session.AssigneeID), ActionType: "cs_user", Detail: fmt.Sprintf("删除消息端账号: %s", assigneeID)}); err != nil {
 			return nil, err
 		}
 	}

@@ -22,12 +22,12 @@ func TestConversationTransferHandlerSerializesServicePayload(t *testing.T) {
 		"jti":         "jwt-conversation-transfer",
 	})
 
-	response := performConversationTransfer(handler, "Bearer "+token, "/api/v1/conversations/conv-1/transfer", "conv-1", `{"target_assignee_id":" cs-002 ","target_assignee_name":" 客服二 ","from_assignee_id":"cs-001","force":true}`)
+	response := performConversationTransfer(handler, "Bearer "+token, "/api/v1/conversations/conv-1/transfer", "conv-1", `{"target_assignee_id":" cs-002 ","target_assignee_name":" 消息端二 ","from_assignee_id":"cs-001","force":true}`)
 
 	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"to_assignee_id":"cs-002"`) {
 		t.Fatalf("response = %d %s", response.Code, response.Body.String())
 	}
-	if service.request.ConversationID != "conv-1" || service.request.TargetAssigneeID != "cs-002" || service.request.TargetAssigneeName != "客服二" || service.request.FromAssigneeID != "cs-001" || !service.request.Force {
+	if service.request.ConversationID != "conv-1" || service.request.TargetAssigneeID != "cs-002" || service.request.TargetAssigneeName != "消息端二" || service.request.FromAssigneeID != "cs-001" || !service.request.Force {
 		t.Fatalf("request = %+v", service.request)
 	}
 }

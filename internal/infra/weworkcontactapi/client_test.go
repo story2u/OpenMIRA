@@ -151,7 +151,7 @@ func TestExternalCorpTagsGetsCreatesAndMarksTags(t *testing.T) {
 			if request.URL.Query().Get("access_token") != "token-1" {
 				t.Fatalf("tag list query = %s", request.URL.RawQuery)
 			}
-			_, _ = writer.Write([]byte(`{"errcode":0,"tag_group":[{"group_id":"group-1","group_name":"客服工作台","tag":[{"id":"tag-1","name":"VIP"}]}]}`))
+			_, _ = writer.Write([]byte(`{"errcode":0,"tag_group":[{"group_id":"group-1","group_name":"消息端工作台","tag":[{"id":"tag-1","name":"VIP"}]}]}`))
 		case "/externalcontact/add_corp_tag":
 			paths = append(paths, request.URL.Path)
 			if request.URL.Query().Get("access_token") != "token-1" {

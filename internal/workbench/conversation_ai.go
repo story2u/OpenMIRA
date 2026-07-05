@@ -10,7 +10,7 @@ import (
 	"im-go/internal/auth"
 )
 
-const aiAssigneeProfileRequiredDetail = "请先在 AI 设置中为该客服或企微账号选择 AI 逻辑，再开启单会话托管"
+const aiAssigneeProfileRequiredDetail = "请先在 AI 设置中为该消息端或企微账号选择 AI 逻辑，再开启单会话托管"
 
 var (
 	ErrConversationAIEnabledRequired    = errors.New("enabled is required")

@@ -84,7 +84,7 @@ func TestClientLogsHandlerSerializesBatch(t *testing.T) {
 	verifier.Now = func() time.Time { return time.Date(2026, 6, 29, 9, 0, 0, 0, time.UTC) }
 	issued, err := verifier.Issue(auth.IssueOptions{
 		AssigneeID:   "cs-001",
-		AssigneeName: "客服一",
+		AssigneeName: "消息端一",
 		Role:         "cs",
 		TTL:          time.Hour,
 		JTI:          "jwt-client-logs",

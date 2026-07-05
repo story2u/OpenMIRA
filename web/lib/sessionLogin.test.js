@@ -82,7 +82,7 @@ test("loginCSWithPassword stores workspace token and legacy assignee id", async 
         success: true,
         token: "jwt-cs",
         assignee_id: "cs-001",
-        assignee_name: "客服一",
+        assignee_name: "消息端一",
         role: "cs",
       });
     },

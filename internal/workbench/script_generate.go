@@ -140,7 +140,7 @@ func (reader aiConfigReader) scriptGenerationConfig() (scriptGenerationConfig, e
 	if err != nil {
 		return scriptGenerationConfig{}, err
 	}
-	systemPrompt, err := reader.setting("ai.system_prompt", "你是企微客服助手，请使用专业、友好、清晰的中文回复客户。先准确理解问题，再给出可执行建议；不夸大、不承诺无法保证的结果，必要时引导转人工跟进。")
+	systemPrompt, err := reader.setting("ai.system_prompt", "你是企微消息端助手，请使用专业、友好、清晰的中文回复客户。先准确理解问题，再给出可执行建议；不夸大、不承诺无法保证的结果，必要时引导转人工跟进。")
 	if err != nil {
 		return scriptGenerationConfig{}, err
 	}
@@ -167,7 +167,7 @@ func (reader aiConfigReader) scriptGenerationConfig() (scriptGenerationConfig, e
 
 func buildScriptGenerationPrompt(prompt string, style string) string {
 	return fmt.Sprintf(
-		"请基于企微客服场景，生成一段可直接发送给客户的客服快捷话术。\n风格要求：%s。\n输出要求：\n1）只输出最终可发给客户的中文话术，不要解释。\n2）控制在80~160字。\n3）避免夸大承诺，必要时引导转人工或进一步沟通。\n用户需求：%s",
+		"请基于企微消息端场景，生成一段可直接发送给客户的消息端快捷话术。\n风格要求：%s。\n输出要求：\n1）只输出最终可发给客户的中文话术，不要解释。\n2）控制在80~160字。\n3）避免夸大承诺，必要时引导转人工或进一步沟通。\n用户需求：%s",
 		strings.TrimSpace(style),
 		strings.TrimSpace(prompt),
 	)

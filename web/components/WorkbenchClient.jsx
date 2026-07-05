@@ -1248,7 +1248,7 @@ export function WorkbenchClient() {
     <div className="mx-auto grid max-w-7xl grid-rows-[auto_1fr] gap-4 px-4 py-4 lg:h-[calc(100vh-49px)] lg:px-6">
       <section className="grid gap-3 border border-[#d8dde8] bg-white p-3 md:grid-cols-[minmax(220px,1fr)_auto_auto_auto_auto]">
         <div className="grid gap-1">
-          <span className="text-xs font-medium text-[#697386]">客服会话</span>
+          <span className="text-xs font-medium text-[#697386]">消息端会话</span>
           <span className="h-9 truncate border border-[#e5e9f2] bg-[#f9fafc] px-2 py-2 text-sm text-[#172033]">
             {loginAssigneeId || "已连接"}
           </span>

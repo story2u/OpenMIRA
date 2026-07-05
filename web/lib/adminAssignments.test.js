@@ -26,7 +26,7 @@ test("normalizeAssignments keeps legacy assignment rows", () => {
         tenant_id: "tenant-a",
         conversation_id: "conv-001",
         assignee_id: "cs-001",
-        assignee_name: "客服一",
+        assignee_name: "消息端一",
         assigned_at: "2026-07-02T01:02:03Z",
         updated_at: "2026-07-02T02:03:04Z",
       },
@@ -36,7 +36,7 @@ test("normalizeAssignments keeps legacy assignment rows", () => {
 
   assert.equal(assignments.length, 1);
   assert.equal(assignments[0].conversationId, "conv-001");
-  assert.equal(assignments[0].assigneeName, "客服一");
+  assert.equal(assignments[0].assigneeName, "消息端一");
   assert.equal(assignments[0].tenantId, "tenant-a");
 });
 
@@ -54,7 +54,7 @@ test("buildAssignmentClaimMutation mirrors legacy claim payload", () => {
   const mutation = buildAssignmentClaimMutation({
     conversationId: " conv-001 ",
     assigneeId: " cs-001 ",
-    assigneeName: " 客服一 ",
+    assigneeName: " 消息端一 ",
     force: true,
   });
 
@@ -64,7 +64,7 @@ test("buildAssignmentClaimMutation mirrors legacy claim payload", () => {
   assert.deepEqual(mutation.body, {
     conversation_id: "conv-001",
     assignee_id: "cs-001",
-    assignee_name: "客服一",
+    assignee_name: "消息端一",
     force: true,
   });
 });
@@ -86,7 +86,7 @@ test("buildAssignmentTransferMutation mirrors legacy conversation transfer paylo
   const mutation = buildAssignmentTransferMutation({
     conversationId: " conv/001 ",
     targetAssigneeId: " cs-002 ",
-    targetAssigneeName: " 客服二 ",
+    targetAssigneeName: " 消息端二 ",
     fromAssigneeId: " cs-001 ",
     force: true,
   });
@@ -96,7 +96,7 @@ test("buildAssignmentTransferMutation mirrors legacy conversation transfer paylo
   assert.equal(mutation.path, `${CONVERSATION_TRANSFER_PATH_PREFIX}/conv%2F001/transfer`);
   assert.deepEqual(mutation.body, {
     target_assignee_id: "cs-002",
-    target_assignee_name: "客服二",
+    target_assignee_name: "消息端二",
     from_assignee_id: "cs-001",
     force: true,
   });
@@ -143,14 +143,14 @@ test("normalizeAssignmentTransferResult keeps legacy transfer fields", () => {
     assignment: {
       conversation_id: "conv-001",
       assignee_id: "cs-002",
-      assignee_name: "客服二",
+      assignee_name: "消息端二",
     },
     transfer: {
       conversation_id: "conv-001",
       from_assignee_id: "cs-001",
-      from_assignee_name: "客服一",
+      from_assignee_name: "消息端一",
       to_assignee_id: "cs-002",
-      to_assignee_name: "客服二",
+      to_assignee_name: "消息端二",
       assigned_at: "2026-07-02T03:04:05Z",
     },
   });
@@ -158,7 +158,7 @@ test("normalizeAssignmentTransferResult keeps legacy transfer fields", () => {
   assert.equal(result.success, true);
   assert.equal(result.assignment.assigneeId, "cs-002");
   assert.equal(result.transfer.conversationId, "conv-001");
-  assert.equal(result.transfer.fromAssigneeName, "客服一");
+  assert.equal(result.transfer.fromAssigneeName, "消息端一");
   assert.equal(result.transfer.toAssigneeId, "cs-002");
   assert.equal(result.transfer.assignedAt, "2026-07-02T03:04:05Z");
 });

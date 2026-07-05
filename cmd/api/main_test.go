@@ -1554,7 +1554,7 @@ func TestBuildHandlerCanMountDeviceRTCControlCandidateWithoutDatabase(t *testing
 	if err != nil {
 		t.Fatalf("Issue admin returned error: %v", err)
 	}
-	cs, err := verifier.Issue(auth.IssueOptions{AssigneeID: "cs-002", AssigneeName: "客服二", Role: "cs", TTL: time.Hour, JTI: "device-rtc-control-cs"})
+	cs, err := verifier.Issue(auth.IssueOptions{AssigneeID: "cs-002", AssigneeName: "消息端二", Role: "cs", TTL: time.Hour, JTI: "device-rtc-control-cs"})
 	if err != nil {
 		t.Fatalf("Issue cs returned error: %v", err)
 	}
@@ -1633,7 +1633,7 @@ func TestBuildHandlerDeviceRTCControlInputUsesBridgeExecutor(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewVerifier returned error: %v", err)
 	}
-	cs, err := verifier.Issue(auth.IssueOptions{AssigneeID: "cs-001", AssigneeName: "客服一", Role: "cs", TTL: time.Hour, JTI: "device-rtc-control-input-cs"})
+	cs, err := verifier.Issue(auth.IssueOptions{AssigneeID: "cs-001", AssigneeName: "消息端一", Role: "cs", TTL: time.Hour, JTI: "device-rtc-control-input-cs"})
 	if err != nil {
 		t.Fatalf("Issue cs returned error: %v", err)
 	}
@@ -1686,7 +1686,7 @@ func TestBuildHandlerCanMountDeviceRTCMediaPrepareCandidateWithoutDatabase(t *te
 	if err != nil {
 		t.Fatalf("NewVerifier returned error: %v", err)
 	}
-	cs, err := verifier.Issue(auth.IssueOptions{AssigneeID: "cs-001", AssigneeName: "客服一", Role: "cs", TTL: time.Hour, JTI: "device-rtc-media-cs"})
+	cs, err := verifier.Issue(auth.IssueOptions{AssigneeID: "cs-001", AssigneeName: "消息端一", Role: "cs", TTL: time.Hour, JTI: "device-rtc-media-cs"})
 	if err != nil {
 		t.Fatalf("Issue cs returned error: %v", err)
 	}

@@ -38,7 +38,7 @@ func TestServiceAssignmentsListBuildsPayload(t *testing.T) {
 		TenantID:       "ent-a",
 		ConversationID: "conv-001",
 		AssigneeID:     "cs-001",
-		AssigneeName:   "客服一",
+		AssigneeName:   "消息端一",
 		AssignedAt:     "2026-06-29T10:00:00Z",
 		UpdatedAt:      "2026-06-29T10:05:00Z",
 	}}}
@@ -53,7 +53,7 @@ func TestServiceAssignmentsListBuildsPayload(t *testing.T) {
 		t.Fatalf("AssignmentsList returned error: %v", err)
 	}
 	rows := payload["assignments"].([]ProjectionRow)
-	if len(rows) != 1 || rowText(rows[0], "conversation_id") != "conv-001" || rowText(rows[0], "assignee_name") != "客服一" {
+	if len(rows) != 1 || rowText(rows[0], "conversation_id") != "conv-001" || rowText(rows[0], "assignee_name") != "消息端一" {
 		t.Fatalf("assignments payload = %+v", rows)
 	}
 	if assignments.listAssigneeID != "cs-001" || assignments.listTenantID != "ent-a" || assignments.listLimit != 50 {
@@ -90,7 +90,7 @@ func TestServiceAssignmentDetailBuildsPayloadAndUsesProjectionTenant(t *testing.
 		TenantID:       "ent-a",
 		ConversationID: "conv-001",
 		AssigneeID:     "cs-001",
-		AssigneeName:   "客服一",
+		AssigneeName:   "消息端一",
 		AssignedAt:     "2026-06-29T10:00:00Z",
 		UpdatedAt:      "2026-06-29T10:05:00Z",
 	}}

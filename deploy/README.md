@@ -65,7 +65,7 @@ Use `-strict` in a release gate so disabled flags or missing settings fail befor
 - `SESSION_JWT_SECRET`
 - `POSTGRES_PASSWORD` and `CLOUD_DB_DSN` only when changing the bundled Postgres password or using an external database.
 
-The receive callback route is enabled by default in compose with `GO_ENABLE_CONNECTOR_NOTIFY_CALLBACK_CANDIDATE=1`. The admin login route is enabled by default with `GO_ENABLE_SESSION_ADMIN_LOGIN_CANDIDATE=1`; it bootstraps `root` / `1234567890` in the database and requires the password to be changed after first login. Browser client log ingestion is enabled by default with `GO_ENABLE_CLIENT_ERRORS_CANDIDATE=1`.
+The receive callback route is enabled by default in compose with `GO_ENABLE_CONNECTOR_NOTIFY_CALLBACK_CANDIDATE=1`. The admin login route is enabled by default with `GO_ENABLE_SESSION_ADMIN_LOGIN_CANDIDATE=1`; it bootstraps `root` / `1234567890` in the database and requires the password to be changed after first login. Browser client log ingestion and the current operations console read APIs are enabled by default for VPS validation.
 
 ## Runtime Roles
 

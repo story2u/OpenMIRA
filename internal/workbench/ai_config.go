@@ -16,11 +16,11 @@ import (
 
 const (
 	defaultCozeProfileID       = "smart-customer-service-coze"
-	defaultCozeProfileName     = "智能客服Coze"
+	defaultCozeProfileName     = "智能消息端Coze"
 	defaultCozeBaseURL         = "https://api.coze.cn/v1/workflow/run"
 	defaultCozeWorkflowID      = "7602085515101618212"
 	defaultCozeV2ProfileID     = "smart-customer-service-coze-main-v2"
-	defaultCozeV2ProfileName   = "智能客服Coze 2.0 main"
+	defaultCozeV2ProfileName   = "智能消息端Coze 2.0 main"
 	defaultCozeV2WorkflowID    = "7640110586689732618"
 	defaultCozeV2SpaceID       = "7594357340615589915"
 	cozeWorkflowSchemaLegacyV1 = "legacy_v1"
@@ -28,7 +28,7 @@ const (
 	defaultTargetAudienceNone  = "__NONE__"
 	cozeV2SeededKey            = "ai.coze_v2_profile_seeded"
 	defaultXiaobeiProfileID    = "xiaobei-default"
-	defaultXiaobeiProfileName  = "小贝客服"
+	defaultXiaobeiProfileName  = "小贝消息端"
 	defaultXiaobeiBaseURL      = "http://47.252.81.104/api/ai/chat"
 	defaultXiaobeiHealthURL    = "http://47.252.81.104/api/ai/health"
 	aiTargetScopeAssignee      = "assignee"
@@ -91,7 +91,7 @@ func (reader aiConfigReader) config() (ProjectionRow, error) {
 	if err != nil {
 		return nil, err
 	}
-	systemPrompt, err := reader.setting("ai.system_prompt", "你是企微客服助手，请使用专业、友好、清晰的中文回复客户。先准确理解问题，再给出可执行建议；不夸大、不承诺无法保证的结果，必要时引导转人工跟进。")
+	systemPrompt, err := reader.setting("ai.system_prompt", "你是企微消息端助手，请使用专业、友好、清晰的中文回复客户。先准确理解问题，再给出可执行建议；不夸大、不承诺无法保证的结果，必要时引导转人工跟进。")
 	if err != nil {
 		return nil, err
 	}

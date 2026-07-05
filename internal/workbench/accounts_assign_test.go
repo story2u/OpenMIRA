@@ -15,7 +15,7 @@ func TestServiceAssignAccountPublishesAndAudits(t *testing.T) {
 		AccountID:    "acc-001",
 		AccountName:  "账号一",
 		AssigneeID:   "cs-002",
-		AssigneeName: "客服二",
+		AssigneeName: "消息端二",
 		WeWorkUserID: "DY-1801",
 		UpdatedAt:    "2026-07-01T09:00:00Z",
 	}}
@@ -24,15 +24,15 @@ func TestServiceAssignAccountPublishesAndAudits(t *testing.T) {
 	invalidator := &fakeReadModelInvalidator{}
 	service := Service{Accounts: store, AccountEvents: events, AuditLogWriter: audit, ReadModelInvalidator: invalidator}
 
-	payload, err := service.AssignAccount(context.Background(), NewAccountAssignRequest(" acc-001 ", AccountAssignBody{AssigneeID: " cs-002 ", AssigneeName: " 客服二 "}, auth.Session{Role: "admin", AssigneeID: "admin-001"}))
+	payload, err := service.AssignAccount(context.Background(), NewAccountAssignRequest(" acc-001 ", AccountAssignBody{AssigneeID: " cs-002 ", AssigneeName: " 消息端二 "}, auth.Session{Role: "admin", AssigneeID: "admin-001"}))
 	if err != nil {
 		t.Fatalf("AssignAccount returned error: %v", err)
 	}
-	if store.assignAccountID != "acc-001" || store.assignAssigneeID != "cs-002" || store.assignAssigneeName != "客服二" {
+	if store.assignAccountID != "acc-001" || store.assignAssigneeID != "cs-002" || store.assignAssigneeName != "消息端二" {
 		t.Fatalf("store = %+v", store)
 	}
 	account := payload["account"].(ProjectionRow)
-	if payload["success"] != true || account["account_id"] != "acc-001" || account["assignee_id"] != "cs-002" || account["assignee_name"] != "客服二" {
+	if payload["success"] != true || account["account_id"] != "acc-001" || account["assignee_id"] != "cs-002" || account["assignee_name"] != "消息端二" {
 		t.Fatalf("payload = %#v", payload)
 	}
 	if len(events.events) != 1 || events.events[0].channel != "devices" || events.events[0].event != "account.assigned" || events.events[0].topic != "account.changed" {

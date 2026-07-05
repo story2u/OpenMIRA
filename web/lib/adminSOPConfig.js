@@ -484,7 +484,7 @@ export function stringifySOPTargetAudience(mode = "none", rawIds = "") {
 
 export function sopTargetAudienceLabel(value = "") {
   const normalized = normalizeSOPTargetAudience(value, false);
-  if (normalized === TARGET_AUDIENCE_ALL) return "全部客服";
+  if (normalized === TARGET_AUDIENCE_ALL) return "全部消息端";
   if (normalized === TARGET_AUDIENCE_NONE) return "未选择";
   return parseSOPTargetAudience(normalized).join(", ");
 }

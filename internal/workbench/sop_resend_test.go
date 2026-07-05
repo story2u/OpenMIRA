@@ -116,7 +116,7 @@ func TestSOPDispatchTaskExecutorBuildsMixedMessageTask(t *testing.T) {
 			"flow_id":             "formal",
 			"flow_name":           "正式 SOP",
 			"assignee_id":         "assignee-1",
-			"assignee_name":       "客服 A",
+			"assignee_name":       "消息端 A",
 			"day_stage":           "day3",
 			"customer_state":      "silent",
 			"customer_stage_tag":  "tag-a",

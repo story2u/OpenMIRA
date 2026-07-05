@@ -1280,7 +1280,7 @@ type fakeCurrentUserService struct{}
 func (service fakeCurrentUserService) CurrentUser(ctx context.Context, authorization string) (session.MeResponse, error) {
 	return session.MeResponse{
 		AssigneeID:   "cs-001",
-		AssigneeName: "客服一",
+		AssigneeName: "消息端一",
 		Role:         "cs",
 		AIEnabled:    true,
 		ExpiresAt:    "2026-06-28T00:00:00+00:00",
@@ -1317,7 +1317,7 @@ func (service fakeCurrentUserService) AssigneeLogin(ctx context.Context, request
 		Success:      true,
 		Token:        "jwt-cs",
 		AssigneeID:   "cs-001",
-		AssigneeName: "客服一",
+		AssigneeName: "消息端一",
 		Role:         "cs",
 		ExpiresAt:    "2026-06-28T00:00:00+00:00",
 	}, nil
@@ -1329,7 +1329,7 @@ func (service fakeCurrentUserService) CSLogin(ctx context.Context, request sessi
 		Success:      true,
 		Token:        "jwt-cs-password",
 		AssigneeID:   "cs-001",
-		AssigneeName: "客服一",
+		AssigneeName: "消息端一",
 		Role:         "cs",
 		ExpiresAt:    "2026-06-28T00:00:00+00:00",
 	}, nil
@@ -1341,7 +1341,7 @@ func (service fakeCurrentUserService) GenerateCSToken(ctx context.Context, autho
 		Success:      true,
 		Token:        "jwt-cs-generated",
 		AssigneeID:   "cs-001",
-		AssigneeName: "客服一",
+		AssigneeName: "消息端一",
 		ExpiresAt:    "2026-06-28T00:00:00+00:00",
 	}, nil
 }
@@ -1352,7 +1352,7 @@ func (service fakeCurrentUserService) Refresh(ctx context.Context, authorization
 		Success:      true,
 		Token:        "jwt-new",
 		AssigneeID:   "cs-001",
-		AssigneeName: "客服一",
+		AssigneeName: "消息端一",
 		Role:         "cs",
 		AIEnabled:    true,
 		ExpiresAt:    "2026-06-28T00:00:00+00:00",

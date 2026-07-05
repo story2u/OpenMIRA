@@ -56,9 +56,9 @@ test("loginConfirmation mirrors legacy password login confirmation", () => {
   });
   assert.deepEqual(loginConfirmation("cs", "cs-001"), {
     required: true,
-    title: "客服登录",
+    title: "消息端登录",
     message: "登录账号：cs-001",
-    text: "客服登录\n登录账号：cs-001",
+    text: "消息端登录\n登录账号：cs-001",
   });
   assert.equal(loginConfirmation("passwordless", "cs-002").required, false);
   assert.equal(loginConfirmation("admin", "").required, false);

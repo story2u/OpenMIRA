@@ -20,7 +20,7 @@ func TestVerifierAcceptsLegacyHS256Token(t *testing.T) {
 	token := signTestToken(t, verifier.Secret, map[string]any{
 		"iss":  "im-cloud",
 		"sub":  "cs-001",
-		"name": "客服一",
+		"name": "消息端一",
 		"role": "cs",
 		"iat":  int64(1000),
 		"exp":  int64(2000),
@@ -31,7 +31,7 @@ func TestVerifierAcceptsLegacyHS256Token(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Verify returned error: %v", err)
 	}
-	if session.AssigneeID != "cs-001" || session.AssigneeName != "客服一" || session.Role != "cs" || session.JTI != "jwt-test" {
+	if session.AssigneeID != "cs-001" || session.AssigneeName != "消息端一" || session.Role != "cs" || session.JTI != "jwt-test" {
 		t.Fatalf("unexpected session: %+v", session)
 	}
 	if !session.ExpiresAt.Equal(time.Unix(2000, 0).UTC()) {
@@ -44,7 +44,7 @@ func TestVerifierIssuesLegacyCompatibleToken(t *testing.T) {
 
 	issued, err := verifier.Issue(IssueOptions{
 		AssigneeID:   "cs-001",
-		AssigneeName: "客服一",
+		AssigneeName: "消息端一",
 		Role:         "cs",
 		TTL:          168 * time.Hour,
 		JTI:          "jwt-issued",
@@ -57,7 +57,7 @@ func TestVerifierIssuesLegacyCompatibleToken(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Verify issued token returned error: %v", err)
 	}
-	if session.AssigneeID != "cs-001" || session.AssigneeName != "客服一" || session.Role != "cs" || session.JTI != "jwt-issued" {
+	if session.AssigneeID != "cs-001" || session.AssigneeName != "消息端一" || session.Role != "cs" || session.JTI != "jwt-issued" {
 		t.Fatalf("unexpected issued session: %+v", session)
 	}
 	if issued.CreatedAt.Unix() != 1000 || issued.ExpiresAt.Unix() != 605800 {

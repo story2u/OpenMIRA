@@ -36,7 +36,7 @@ test("normalizeAdminAccounts keeps account rows and management fields", () => {
         device_id: "device-1",
         wework_user_id: "DY-1",
         enterprise_id: "ent-1",
-        assignee_name: "客服A",
+        assignee_name: "消息端A",
         sop_flow_id: "flow-a",
         sop_enabled: true,
         sop_reply_window_start: "09:00",
@@ -190,7 +190,7 @@ test("buildAccountAIEnabledMutation reports missing fields", () => {
 test("buildAccountAssignMutation builds account assign route", () => {
   const mutation = buildAccountAssignMutation("acc/1", {
     assigneeId: " cs-1 ",
-    assigneeName: " 客服一 ",
+    assigneeName: " 消息端一 ",
   });
 
   assert.equal(mutation.ok, true);
@@ -198,7 +198,7 @@ test("buildAccountAssignMutation builds account assign route", () => {
   assert.equal(mutation.path, `${ACCOUNTS_PATH}/acc%2F1/assign`);
   assert.deepEqual(mutation.body, {
     assignee_id: "cs-1",
-    assignee_name: "客服一",
+    assignee_name: "消息端一",
   });
 });
 

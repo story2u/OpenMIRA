@@ -751,7 +751,7 @@ func validateAIConfigTargetConflicts(enabled bool, localAudience string, localSc
 	for index, current := range entries {
 		for _, previous := range entries[:index] {
 			if conflict := targetAudienceConflictLabel(current.selection, previous.selection); conflict != "" {
-				return AIConfigValidationError{Detail: fmt.Sprintf("一个客服只能分配一个 AI 自动回复逻辑：%s 已配置在 %s，不能再配置到 %s", conflict, previous.name, current.name)}
+				return AIConfigValidationError{Detail: fmt.Sprintf("一个消息端只能分配一个 AI 自动回复逻辑：%s 已配置在 %s，不能再配置到 %s", conflict, previous.name, current.name)}
 			}
 		}
 	}
@@ -871,13 +871,13 @@ func targetAudienceConflictLabel(left audienceSelection, right audienceSelection
 		return ""
 	}
 	if left.mode == "all" || right.mode == "all" {
-		return "全部客服范围"
+		return "全部消息端范围"
 	}
 	overlap := sortedIntersection(left.ids, right.ids)
 	if len(overlap) == 0 {
 		return ""
 	}
-	return "客服 " + strings.Join(overlap, "、")
+	return "消息端 " + strings.Join(overlap, "、")
 }
 
 func accountTargetConflictLabel(left accountSelection, right accountSelection) string {

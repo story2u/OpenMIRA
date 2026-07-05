@@ -29,7 +29,7 @@ func TestServiceAutoAssignUsesRulePoolClaimsPublishesAndCommitsState(t *testing.
 	runtimeState := &fakeAssignmentRuntimeState{claimErr: errors.New("cache unavailable")}
 	invalidator := &fakeReadModelInvalidator{}
 	service := Service{
-		CSUsers:                    &fakeCSUserStore{users: []CSUserRecord{{AssigneeID: "cs-001", AssigneeName: "客服一", Role: "cs", Enabled: true, MaxSessions: 3}, {AssigneeID: "cs-002", AssigneeName: "客服二", Role: "cs", Enabled: true, MaxSessions: 3}}},
+		CSUsers:                    &fakeCSUserStore{users: []CSUserRecord{{AssigneeID: "cs-001", AssigneeName: "消息端一", Role: "cs", Enabled: true, MaxSessions: 3}, {AssigneeID: "cs-002", AssigneeName: "消息端二", Role: "cs", Enabled: true, MaxSessions: 3}}},
 		Assignments:                assignments,
 		Projection:                 candidates,
 		AssignmentCfg:              config,
@@ -87,7 +87,7 @@ func TestServiceAutoAssignUsesPoolRuntimeSelector(t *testing.T) {
 	assignments := &fakeAssignmentAutoStore{counts: map[string]int{"cs-001": 0, "cs-002": 0}}
 	selector := &fakeAssignmentPoolRuntimeSelector{roundRobinSelected: "cs-002", roundRobinOK: true}
 	service := Service{
-		CSUsers:                       &fakeCSUserStore{users: []CSUserRecord{{AssigneeID: "cs-001", AssigneeName: "客服一", Role: "cs", Enabled: true, MaxSessions: 3}, {AssigneeID: "cs-002", AssigneeName: "客服二", Role: "cs", Enabled: true, MaxSessions: 3}}},
+		CSUsers:                       &fakeCSUserStore{users: []CSUserRecord{{AssigneeID: "cs-001", AssigneeName: "消息端一", Role: "cs", Enabled: true, MaxSessions: 3}, {AssigneeID: "cs-002", AssigneeName: "消息端二", Role: "cs", Enabled: true, MaxSessions: 3}}},
 		Assignments:                   assignments,
 		Projection:                    &fakeAssignmentAutoProjection{rows: []ProjectionRow{{"conversation_id": "conv-002", "tenant_id": "tenant-a", "sender_name": "张三", "unread_count": 1}}},
 		AssignmentCfg:                 config,
@@ -119,7 +119,7 @@ func TestServiceAutoAssignUsesRuntimeLoadCountsAndBackfillsMissing(t *testing.T)
 		loadMissing: []string{"cs-002"},
 	}
 	service := Service{
-		CSUsers:                &fakeCSUserStore{users: []CSUserRecord{{AssigneeID: "cs-001", AssigneeName: "客服一", Role: "cs", Enabled: true, MaxSessions: 10}, {AssigneeID: "cs-002", AssigneeName: "客服二", Role: "cs", Enabled: true, MaxSessions: 10}}},
+		CSUsers:                &fakeCSUserStore{users: []CSUserRecord{{AssigneeID: "cs-001", AssigneeName: "消息端一", Role: "cs", Enabled: true, MaxSessions: 10}, {AssigneeID: "cs-002", AssigneeName: "消息端二", Role: "cs", Enabled: true, MaxSessions: 10}}},
 		Assignments:            assignments,
 		Projection:             &fakeAssignmentAutoProjection{rows: []ProjectionRow{{"conversation_id": "conv-002", "tenant_id": "tenant-a", "unread_count": 1}}},
 		AssignmentCfg:          config,
@@ -147,7 +147,7 @@ func TestServiceAutoAssignSkipsWhenNoCapacity(t *testing.T) {
 	assignments := &fakeAssignmentAutoStore{counts: map[string]int{"cs-001": 1, "cs-002": 2}}
 	invalidator := &fakeReadModelInvalidator{}
 	service := Service{
-		CSUsers:              &fakeCSUserStore{users: []CSUserRecord{{AssigneeID: "cs-001", AssigneeName: "客服一", Role: "cs", Enabled: true, MaxSessions: 1}, {AssigneeID: "cs-002", AssigneeName: "客服二", Role: "cs", Enabled: true, MaxSessions: 2}}},
+		CSUsers:              &fakeCSUserStore{users: []CSUserRecord{{AssigneeID: "cs-001", AssigneeName: "消息端一", Role: "cs", Enabled: true, MaxSessions: 1}, {AssigneeID: "cs-002", AssigneeName: "消息端二", Role: "cs", Enabled: true, MaxSessions: 2}}},
 		Assignments:          assignments,
 		Projection:           &fakeAssignmentAutoProjection{rows: []ProjectionRow{{"conversation_id": "conv-001", "tenant_id": "tenant-a"}}},
 		AssignmentCfg:        config,

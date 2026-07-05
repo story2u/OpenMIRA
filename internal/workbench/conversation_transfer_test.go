@@ -15,7 +15,7 @@ func TestServiceTransferConversationReleasesClaimsPublishesAndAudits(t *testing.
 		TenantID:       "tenant-a",
 		ConversationID: "conv-1",
 		AssigneeID:     "cs-old",
-		AssigneeName:   "旧客服",
+		AssigneeName:   "旧消息端",
 		AssignedAt:     "2026-07-02T08:00:00Z",
 		UpdatedAt:      "2026-07-02T08:00:00Z",
 	}}
@@ -34,7 +34,7 @@ func TestServiceTransferConversationReleasesClaimsPublishesAndAudits(t *testing.
 
 	payload, err := service.TransferConversation(context.Background(), NewConversationTransferRequest(" conv-1 ", ConversationTransferBody{
 		TargetAssigneeID:   " cs-new ",
-		TargetAssigneeName: " 新客服 ",
+		TargetAssigneeName: " 新消息端 ",
 		Force:              true,
 	}, auth.Session{Role: "admin", AssigneeID: "admin-1"}))
 	if err != nil {
@@ -43,7 +43,7 @@ func TestServiceTransferConversationReleasesClaimsPublishesAndAudits(t *testing.
 	if store.release.ConversationID != "conv-1" || store.release.AssigneeID != "cs-old" || !store.release.Force || store.release.TenantID != "tenant-a" {
 		t.Fatalf("release = %+v", store.release)
 	}
-	if store.claim.ConversationID != "conv-1" || store.claim.AssigneeID != "cs-new" || store.claim.AssigneeName != "新客服" || !store.claim.Force || store.claim.TenantID != "tenant-a" {
+	if store.claim.ConversationID != "conv-1" || store.claim.AssigneeID != "cs-new" || store.claim.AssigneeName != "新消息端" || !store.claim.Force || store.claim.TenantID != "tenant-a" {
 		t.Fatalf("claim = %+v", store.claim)
 	}
 	transfer := payload["transfer"].(Payload)
@@ -53,7 +53,7 @@ func TestServiceTransferConversationReleasesClaimsPublishesAndAudits(t *testing.
 	if len(events.events) != 1 || events.events[0].event != "conversation.transferred" || events.events[0].topic != "conversation.assignment" {
 		t.Fatalf("events = %+v", events.events)
 	}
-	if events.events[0].payload["tenant_id"] != "tenant-a" || events.events[0].payload["from_assignee_name"] != "旧客服" {
+	if events.events[0].payload["tenant_id"] != "tenant-a" || events.events[0].payload["from_assignee_name"] != "旧消息端" {
 		t.Fatalf("event payload = %#v", events.events[0].payload)
 	}
 	if len(audit.entries) != 1 || audit.entries[0].ActionType != "assign" || !strings.Contains(audit.entries[0].Detail, "from=cs-old to=cs-new") {

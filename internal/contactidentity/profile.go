@@ -566,7 +566,7 @@ func isPlaceholderName(value string) bool {
 		return true
 	}
 	switch text {
-	case "?", "??", "???", "????", "?????", "企微客户", "企微用户", "客户", "未知客户", "unknown_sender", "企微账号", "企微客服":
+	case "?", "??", "???", "????", "?????", "企微客户", "企微用户", "客户", "未知客户", "unknown_sender", "企微账号", "企微消息端":
 		return true
 	default:
 		return placeholderOnlyPattern.MatchString(text)

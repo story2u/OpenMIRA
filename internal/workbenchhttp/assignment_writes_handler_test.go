@@ -28,7 +28,7 @@ func TestAssignmentClaimHandlerSerializesServicePayload(t *testing.T) {
 		"jti":         "jwt-assignment-claim",
 	})
 
-	response := performAssignmentClaim(handler, "Bearer "+token, `{"conversation_id":"conv-001","assignee_id":"cs-001","assignee_name":"客服一","force":true}`)
+	response := performAssignmentClaim(handler, "Bearer "+token, `{"conversation_id":"conv-001","assignee_id":"cs-001","assignee_name":"消息端一","force":true}`)
 
 	if response.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200; body=%s", response.Code, response.Body.String())

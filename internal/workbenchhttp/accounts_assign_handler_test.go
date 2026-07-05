@@ -22,12 +22,12 @@ func TestAccountAssignHandlerSerializesServicePayload(t *testing.T) {
 		"jti":         "jwt-account-assign",
 	})
 
-	response := performAccountAssign(handler, "Bearer "+token, "/api/v1/accounts/acc-001/assign", "acc-001", `{"assignee_id":"cs-002","assignee_name":"客服二"}`)
+	response := performAccountAssign(handler, "Bearer "+token, "/api/v1/accounts/acc-001/assign", "acc-001", `{"assignee_id":"cs-002","assignee_name":"消息端二"}`)
 
 	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"success":true`) {
 		t.Fatalf("response = %d %s", response.Code, response.Body.String())
 	}
-	if service.assignRequest.AccountID != "acc-001" || service.assignRequest.AssigneeID != "cs-002" || service.assignRequest.AssigneeName != "客服二" || service.assignRequest.Session.Role != "admin" {
+	if service.assignRequest.AccountID != "acc-001" || service.assignRequest.AssigneeID != "cs-002" || service.assignRequest.AssigneeName != "消息端二" || service.assignRequest.Session.Role != "admin" {
 		t.Fatalf("request = %+v", service.assignRequest)
 	}
 }

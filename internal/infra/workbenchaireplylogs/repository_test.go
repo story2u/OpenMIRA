@@ -50,7 +50,7 @@ func TestListAIReplyLogsBuildsFilteredPage(t *testing.T) {
 			"会话名",
 			"账号一",
 			"cs-1",
-			"客服一",
+			"消息端一",
 		}}},
 	}}
 	repository := &Repository{DB: db, Dialect: "mysql"}
