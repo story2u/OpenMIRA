@@ -1826,8 +1826,9 @@ function SOPConfigPanel({ snapshot, onRefresh }) {
 
   useEffect(() => {
     setNotice("");
-    void loadPolicies(policyFlowFilter, { silent: true });
-  }, [loadPolicies, policyFlowFilter, snapshot?.rowCount]);
+    setPolicies([]);
+    setPolicyNotice("");
+  }, [snapshot?.rowCount]);
 
   const resetFlowForm = useCallback(() => {
     setFlowForm(defaultSOPFlowForm());
@@ -3655,10 +3656,6 @@ function AuditLogsPanel() {
     }
   }, [filters]);
 
-  useEffect(() => {
-    void loadLogs(defaultAuditLogFilters());
-  }, []);
-
   const handleSubmit = useCallback((event) => {
     event.preventDefault();
     const nextFilters = { ...filters, page: "1" };
@@ -3785,10 +3782,6 @@ function SystemLogsPanel() {
       setLoading(false);
     }
   }, [filters]);
-
-  useEffect(() => {
-    void loadLogs(defaultSystemLogFilters());
-  }, []);
 
   const handleSubmit = useCallback((event) => {
     event.preventDefault();
@@ -3925,10 +3918,6 @@ function ObservabilityDashboardPanel() {
       setLoading(false);
     }
   }, [filters]);
-
-  useEffect(() => {
-    void loadDashboard(defaultObservabilityFilters());
-  }, []);
 
   const handleSubmit = useCallback((event) => {
     event.preventDefault();
