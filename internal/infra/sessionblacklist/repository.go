@@ -68,7 +68,7 @@ func (repository *Repository) Contains(ctx context.Context, jti string) (bool, e
 	var storedJTI string
 	err := repository.DB.QueryRowContext(
 		ctx,
-		"SELECT jti FROM session_blacklist WHERE jti = ?",
+		repository.selectByJTISQL(),
 		jti,
 	).Scan(&storedJTI)
 	if err != nil {
@@ -126,7 +126,7 @@ func (repository *Repository) PruneExpired(ctx context.Context) (int64, error) {
 	}
 	result, err := repository.DB.ExecContext(
 		ctx,
-		"DELETE FROM session_blacklist WHERE expires_at <= ?",
+		repository.pruneExpiredSQL(),
 		repository.dbNowParam(),
 	)
 	if err != nil {
@@ -155,7 +155,21 @@ func (repository *Repository) upsertSQL() string {
 	if strings.EqualFold(repository.Dialect, DialectMySQL) {
 		return `INSERT INTO session_blacklist (jti, expires_at, revoked_at) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE expires_at=VALUES(expires_at), revoked_at=VALUES(revoked_at)`
 	}
-	return `INSERT INTO session_blacklist (jti, expires_at, revoked_at) VALUES (?, ?, ?) ON CONFLICT(jti) DO UPDATE SET expires_at=excluded.expires_at, revoked_at=excluded.revoked_at`
+	return `INSERT INTO session_blacklist (jti, expires_at, revoked_at) VALUES ($1, $2, $3) ON CONFLICT(jti) DO UPDATE SET expires_at=excluded.expires_at, revoked_at=excluded.revoked_at`
+}
+
+func (repository *Repository) selectByJTISQL() string {
+	if strings.EqualFold(repository.Dialect, DialectPostgres) {
+		return `SELECT jti FROM session_blacklist WHERE jti = $1`
+	}
+	return `SELECT jti FROM session_blacklist WHERE jti = ?`
+}
+
+func (repository *Repository) pruneExpiredSQL() string {
+	if strings.EqualFold(repository.Dialect, DialectPostgres) {
+		return `DELETE FROM session_blacklist WHERE expires_at <= $1`
+	}
+	return `DELETE FROM session_blacklist WHERE expires_at <= ?`
 }
 
 func (repository *Repository) clock() time.Time {

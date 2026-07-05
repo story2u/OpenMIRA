@@ -41,6 +41,31 @@ func TestContainsPrunesExpiredRowsAndFindsJTI(t *testing.T) {
 	}
 }
 
+func TestContainsUsesPostgresPlaceholders(t *testing.T) {
+	db := &fakeDB{row: fakeRow{value: "jwt-test"}}
+	repository := &Repository{
+		DB:      db,
+		Dialect: DialectPostgres,
+		Now: func() time.Time {
+			return time.Date(2026, 6, 28, 1, 2, 3, 0, time.UTC)
+		},
+	}
+
+	contains, err := repository.Contains(context.Background(), "jwt-test")
+	if err != nil {
+		t.Fatalf("Contains returned error: %v", err)
+	}
+	if !contains {
+		t.Fatal("contains = false, want true")
+	}
+	if db.exec != "DELETE FROM session_blacklist WHERE expires_at <= $1" {
+		t.Fatalf("unexpected postgres prune query %q", db.exec)
+	}
+	if db.query != "SELECT jti FROM session_blacklist WHERE jti = $1" {
+		t.Fatalf("unexpected postgres contains query %q", db.query)
+	}
+}
+
 // TestAddUpsertsJTIWithBeijingTimes verifies the blacklist write SQL contract.
 func TestAddUpsertsJTIWithBeijingTimes(t *testing.T) {
 	db := &fakeDB{}
@@ -77,6 +102,9 @@ func TestAddUsesPostgresConflictUpsert(t *testing.T) {
 
 	if !strings.Contains(db.exec, "ON CONFLICT(jti) DO UPDATE") {
 		t.Fatalf("unexpected postgres upsert SQL: %s", db.exec)
+	}
+	if !strings.Contains(db.exec, "VALUES ($1, $2, $3)") {
+		t.Fatalf("postgres upsert should use postgres placeholders: %s", db.exec)
 	}
 }
 
