@@ -104,7 +104,6 @@ export function LoginPageClient({ mode = "cs" }) {
           <form className="mx-auto grid w-full max-w-sm gap-4" onSubmit={handlePasswordChange}>
             <div>
               <h1 className="text-lg font-semibold text-[#172033]">修改管理员密码</h1>
-              <p className="mt-1 text-xs text-[#697386]">/api/v1/session/admin/change-password</p>
             </div>
             <label className="grid gap-1">
               <span className="text-xs font-medium text-[#697386]">当前密码</span>
@@ -113,7 +112,7 @@ export function LoginPageClient({ mode = "cs" }) {
                 type="password"
                 value={currentPassword}
                 onChange={(event) => setCurrentPassword(event.target.value)}
-                placeholder="current password"
+                placeholder="请输入当前密码"
                 autoComplete="current-password"
                 autoFocus
               />
@@ -125,7 +124,7 @@ export function LoginPageClient({ mode = "cs" }) {
                 type="password"
                 value={newPassword}
                 onChange={(event) => setNewPassword(event.target.value)}
-                placeholder="new password"
+                placeholder="请输入新密码"
                 autoComplete="new-password"
               />
             </label>
@@ -136,7 +135,7 @@ export function LoginPageClient({ mode = "cs" }) {
                 type="password"
                 value={confirmPassword}
                 onChange={(event) => setConfirmPassword(event.target.value)}
-                placeholder="confirm password"
+                placeholder="请再次输入新密码"
                 autoComplete="new-password"
               />
             </label>
@@ -160,7 +159,6 @@ export function LoginPageClient({ mode = "cs" }) {
         <form className="mx-auto grid w-full max-w-sm gap-4" onSubmit={handleSubmit}>
           <div>
             <h1 className="text-lg font-semibold text-[#172033]">{config.title}</h1>
-            <p className="mt-1 text-xs text-[#697386]">{loginEndpointLabel(config.mode)}</p>
           </div>
           <label className="grid gap-1">
             <span className="text-xs font-medium text-[#697386]">{config.identifierLabel}</span>
@@ -168,7 +166,7 @@ export function LoginPageClient({ mode = "cs" }) {
               className="h-10 border border-[#cfd6e3] px-3 text-sm outline-none focus:border-[#2f6fed]"
               value={identifier}
               onChange={(event) => setIdentifier(event.target.value)}
-              placeholder={config.identifierParam}
+              placeholder={config.identifierPlaceholder || "请输入账号"}
               autoComplete={config.mode === "admin" ? "username" : "off"}
               autoFocus
             />
@@ -181,7 +179,7 @@ export function LoginPageClient({ mode = "cs" }) {
                 type="password"
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
-                placeholder="password"
+                placeholder={config.passwordPlaceholder || "请输入密码"}
                 autoComplete="current-password"
               />
             </label>
@@ -198,10 +196,4 @@ export function LoginPageClient({ mode = "cs" }) {
       </section>
     </div>
   );
-}
-
-function loginEndpointLabel(mode) {
-  if (mode === "admin") return "/api/v1/session/admin-login";
-  if (mode === "passwordless") return "/api/v1/session/login";
-  return "/api/v1/session/cs-login";
 }

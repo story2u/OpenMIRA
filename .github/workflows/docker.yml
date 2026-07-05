@@ -140,6 +140,7 @@ jobs:
         with:
           context: web
           file: web/Dockerfile
+          build-args: IM_API_INTERNAL_BASE_URL=http://go-api:9000
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

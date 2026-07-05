@@ -487,7 +487,6 @@ function AdminLoginPanel({ username, password, loading, error, onUsernameChange,
         <form className="mx-auto grid w-full max-w-sm gap-4" onSubmit={onSubmit}>
           <div>
             <h1 className="text-lg font-semibold text-[#172033]">运营端登录</h1>
-            <p className="mt-1 text-xs text-[#697386]">/api/v1/session/admin-login</p>
           </div>
           <label className="grid gap-1">
             <span className="text-xs font-medium text-[#697386]">用户名</span>
@@ -495,7 +494,7 @@ function AdminLoginPanel({ username, password, loading, error, onUsernameChange,
               className="h-10 border border-[#cfd6e3] px-3 text-sm outline-none focus:border-[#2f6fed]"
               value={username}
               onChange={(event) => onUsernameChange(event.target.value)}
-              placeholder="username"
+              placeholder="请输入用户名"
               autoComplete="username"
               autoFocus
             />
@@ -507,7 +506,7 @@ function AdminLoginPanel({ username, password, loading, error, onUsernameChange,
               type="password"
               value={password}
               onChange={(event) => onPasswordChange(event.target.value)}
-              placeholder="password"
+              placeholder="请输入密码"
               autoComplete="current-password"
             />
           </label>
@@ -588,7 +587,7 @@ function DataTable({ snapshot }) {
           <tr>
             {snapshot.columns.map((column) => (
               <th key={column} className="border-b border-[#d8dde8] px-3 py-2">
-                {column}
+                {adminColumnLabel(column)}
               </th>
             ))}
           </tr>
@@ -607,6 +606,17 @@ function DataTable({ snapshot }) {
       </table>
     </div>
   );
+}
+
+function adminColumnLabel(column) {
+  const labels = {
+    assignee_id: "账号 ID",
+    assignee_name: "账号名称",
+    target_assignee_id: "目标账号 ID",
+    from_assignee_id: "原账号 ID",
+    to_assignee_id: "目标账号 ID",
+  };
+  return labels[column] || column;
 }
 
 function AccountsPanel({ snapshot, workloadSnapshot, onRefresh }) {
@@ -996,14 +1006,14 @@ function AccountsPanel({ snapshot, workloadSnapshot, onRefresh }) {
           </select>
         </label>
         <label className="grid gap-1">
-          <span className="text-xs font-medium text-[#697386]">客服 ID</span>
+          <span className="text-xs font-medium text-[#697386]">账号 ID</span>
           {assignees.length > 0 ? (
             <select
               className="h-9 border border-[#cfd6e3] bg-white px-3 text-sm outline-none focus:border-[#2f6fed]"
               value={assignmentForm.assigneeId}
               onChange={(event) => handlePickAssignee(event.target.value)}
             >
-              <option value="">选择客服</option>
+              <option value="">选择账号</option>
               {assignees.map((assignee) => (
                 <option key={assignee.assigneeId} value={assignee.assigneeId}>
                   {assignee.assigneeName} / {assignee.assigneeId}
@@ -1015,12 +1025,12 @@ function AccountsPanel({ snapshot, workloadSnapshot, onRefresh }) {
               className="h-9 border border-[#cfd6e3] px-3 text-sm outline-none focus:border-[#2f6fed]"
               value={assignmentForm.assigneeId}
               onChange={(event) => setAssignmentForm((current) => ({ ...current, assigneeId: event.target.value }))}
-              placeholder="assignee_id"
+              placeholder="请输入账号 ID"
             />
           )}
         </label>
         <label className="grid gap-1">
-          <span className="text-xs font-medium text-[#697386]">客服名称</span>
+          <span className="text-xs font-medium text-[#697386]">账号名称</span>
           <input
             className="h-9 border border-[#cfd6e3] px-3 text-sm outline-none focus:border-[#2f6fed]"
             value={assignmentForm.assigneeName}
@@ -1210,7 +1220,7 @@ function accountMutationErrorMessage(error) {
   const messages = {
     account_required: "缺少账号 ID",
     account_name_required: "请输入账号名称",
-    assignee_id_required: "请选择客服",
+    assignee_id_required: "请选择账号",
     csv_required: "请选择 CSV 文件",
     enabled_required: "缺少 AI 开关状态",
     file_required: "请选择文件",
@@ -2050,13 +2060,13 @@ function SOPConfigPanel({ snapshot, onRefresh }) {
         </div>
         <div className="grid gap-3 md:grid-cols-[minmax(140px,1fr)_minmax(140px,1fr)_minmax(140px,1fr)_minmax(140px,1fr)]">
           <label className="grid gap-1">
-            <span className="text-xs font-medium text-[#697386]">指定客服 ID</span>
+            <span className="text-xs font-medium text-[#697386]">指定账号 ID</span>
             <textarea
               className="min-h-20 border border-[#cfd6e3] px-3 py-2 text-sm outline-none focus:border-[#2f6fed] disabled:bg-[#f4f6fa] disabled:text-[#697386]"
               value={flowForm.targetAudienceIds}
               disabled={flowForm.targetAudienceMode !== "specific"}
               onChange={(event) => setFlowForm((current) => ({ ...current, targetAudienceIds: event.target.value }))}
-              placeholder="assignee_id，一行一个"
+              placeholder="账号 ID，一行一个"
             />
           </label>
           <label className="grid gap-1">
@@ -5264,14 +5274,14 @@ function DevicesPanel({ snapshot, accountsSnapshot, workloadSnapshot, onRefresh 
                 className="h-9 border border-[#cfd6e3] px-3 text-sm outline-none focus:border-[#2f6fed]"
                 value={bindingForm.assigneeId}
                 onChange={(event) => setBindingForm((current) => ({ ...current, assigneeId: event.target.value }))}
-                placeholder="assignee_id"
+                placeholder="请输入账号 ID"
               />
             )}
           </label>
         </div>
         <div className="grid gap-3 md:grid-cols-[minmax(130px,1fr)_auto_auto_auto_auto_minmax(0,1fr)] md:items-center">
           <label className="grid gap-1">
-            <span className="text-xs font-medium text-[#697386]">客服名称</span>
+            <span className="text-xs font-medium text-[#697386]">账号名称</span>
             <input
               className="h-9 border border-[#cfd6e3] px-3 text-sm outline-none focus:border-[#2f6fed]"
               value={bindingForm.assigneeName}
@@ -6032,7 +6042,7 @@ function CSUsersPanel({ snapshot, onRefresh }) {
 
   const confirmFormDiscard = useCallback(() => {
     if (!formDirty || typeof window === "undefined" || typeof window.confirm !== "function") return true;
-    return window.confirm("客服账号表单有未保存修改，确定放弃？");
+    return window.confirm("消息端账号表单有未保存修改，确定放弃？");
   }, [formDirty]);
 
   const resetForm = useCallback((options = {}) => {
@@ -6065,7 +6075,7 @@ function CSUsersPanel({ snapshot, onRefresh }) {
         method: mutation.method,
         body: mutation.body,
       });
-      setNotice(options.createOnly || options.create_only ? "客服账号已新增" : "客服账号已更新");
+      setNotice(options.createOnly || options.create_only ? "消息端账号已新增" : "消息端账号已更新");
       setSearchedUsers(null);
       setKeyword("");
       resetForm({ force: true });
@@ -6116,7 +6126,7 @@ function CSUsersPanel({ snapshot, onRefresh }) {
     setNotice("");
     try {
       await requestSessionJSON("admin", mutation.path, { method: mutation.method });
-      setNotice("客服账号已删除");
+      setNotice("消息端账号已删除");
       if (form.assigneeId === user.assigneeId) resetForm({ force: true });
       setSearchedUsers(null);
       setKeyword("");
@@ -6139,7 +6149,7 @@ function CSUsersPanel({ snapshot, onRefresh }) {
       });
       const nextUsers = normalizeAdminCSUsers(response);
       setSearchedUsers(nextUsers);
-      setNotice(keyword.trim() ? `匹配 ${nextUsers.length} 个客服账号` : "已恢复全量客服账号");
+      setNotice(keyword.trim() ? `匹配 ${nextUsers.length} 个消息端账号` : "已恢复全量消息端账号");
     } catch (err) {
       setNotice(err.message || String(err));
     } finally {
@@ -6174,7 +6184,7 @@ function CSUsersPanel({ snapshot, onRefresh }) {
       if (typeof window !== "undefined") {
         window.open(url.url, "_blank");
       }
-      setNotice("工作台 Token 已生成");
+      setNotice("消息端 Token 已生成");
     } catch (err) {
       setNotice(err.message || String(err));
     } finally {
@@ -6246,17 +6256,17 @@ function CSUsersPanel({ snapshot, onRefresh }) {
       <form className="grid gap-3 border border-[#d8dde8] bg-white p-3" onSubmit={handleSubmit}>
         <div className="grid gap-3 md:grid-cols-[minmax(120px,1fr)_minmax(140px,1fr)_140px_120px] md:items-end">
           <label className="grid gap-1">
-            <span className="text-xs font-medium text-[#697386]">客服 ID</span>
+            <span className="text-xs font-medium text-[#697386]">账号 ID</span>
             <input
               className="h-9 border border-[#cfd6e3] px-3 text-sm outline-none focus:border-[#2f6fed] disabled:bg-[#f4f6fa] disabled:text-[#697386]"
               value={form.assigneeId}
               disabled={form.editing}
               onChange={(event) => setForm((current) => ({ ...current, assigneeId: event.target.value }))}
-              placeholder="assignee_id"
+              placeholder="请输入账号 ID"
             />
           </label>
           <label className="grid gap-1">
-            <span className="text-xs font-medium text-[#697386]">客服名称</span>
+            <span className="text-xs font-medium text-[#697386]">账号名称</span>
             <input
               className="h-9 border border-[#cfd6e3] px-3 text-sm outline-none focus:border-[#2f6fed]"
               value={form.assigneeName}
@@ -6295,7 +6305,7 @@ function CSUsersPanel({ snapshot, onRefresh }) {
               type="password"
               value={form.password}
               onChange={(event) => setForm((current) => ({ ...current, password: event.target.value }))}
-              placeholder={form.editing ? "password optional" : "password"}
+              placeholder={form.editing ? "不修改请留空" : "请输入密码"}
             />
           </label>
           <label className="inline-flex h-9 items-center gap-2 border border-[#cfd6e3] bg-white px-3 text-sm text-[#172033]">
@@ -6332,7 +6342,7 @@ function CSUsersPanel({ snapshot, onRefresh }) {
       </form>
 
       <div className="grid gap-3 border border-[#d8dde8] bg-white p-3 text-xs md:grid-cols-[minmax(120px,1fr)_auto_auto_minmax(0,1.5fr)] md:items-center">
-        <span className="text-[#697386]">{users.length} 个客服账号</span>
+        <span className="text-[#697386]">{users.length} 个消息端账号</span>
         <button
           className="h-8 border border-[#cfd6e3] bg-white px-3 font-medium text-[#172033] disabled:border-[#c4cad6] disabled:bg-[#f4f6fa] disabled:text-[#697386]"
           type="button"
@@ -6459,7 +6469,7 @@ function CSUsersPanel({ snapshot, onRefresh }) {
             {users.length === 0 && (
               <tr>
                 <td className="px-3 py-12 text-center text-sm text-[#697386]" colSpan={8}>
-                  暂无客服账号
+                  暂无消息端账号
                 </td>
               </tr>
             )}
@@ -6483,11 +6493,11 @@ function CSUserPill({ enabled, label }) {
 
 function csUserErrorMessage(error) {
   const messages = {
-    assignee_id_required: "请输入客服 ID",
-    assignee_name_required: "请输入客服名称",
+    assignee_id_required: "请输入账号 ID",
+    assignee_name_required: "请输入账号名称",
     role_invalid: "角色只能是 admin/supervisor/cs",
     password_short: "密码至少 6 位",
-    token_required: "未返回工作台 Token",
+    token_required: "未返回消息端 Token",
     enabled_required: "请选择 AI 开关状态",
   };
   return messages[error] || "操作失败";
@@ -6731,7 +6741,7 @@ function AssignmentsPanel({ csUsersSnapshot, onRefresh }) {
                 setNotice("");
               }}
             >
-              <option value="">选择客服</option>
+              <option value="">选择账号</option>
               {users.map((user) => (
                 <option key={user.assigneeId} value={user.assigneeId}>
                   {user.assigneeName} / {user.assigneeId}
@@ -6743,7 +6753,7 @@ function AssignmentsPanel({ csUsersSnapshot, onRefresh }) {
               className="h-9 border border-[#cfd6e3] px-3 text-sm outline-none focus:border-[#2f6fed]"
               value={assigneeId}
               onChange={(event) => setAssigneeId(event.target.value)}
-              placeholder="assignee_id"
+              placeholder="请输入账号 ID"
             />
           )}
         </label>
@@ -6802,7 +6812,7 @@ function AssignmentsPanel({ csUsersSnapshot, onRefresh }) {
                 value={form.assigneeId}
                 onChange={(event) => handleTargetAssigneeChange(event.target.value)}
               >
-                <option value="">选择客服</option>
+                <option value="">选择账号</option>
                 {users.map((user) => (
                   <option key={user.assigneeId} value={user.assigneeId}>
                     {user.assigneeName} / {user.assigneeId}
@@ -6814,12 +6824,12 @@ function AssignmentsPanel({ csUsersSnapshot, onRefresh }) {
                 className="h-9 border border-[#cfd6e3] px-3 text-sm outline-none focus:border-[#2f6fed]"
                 value={form.assigneeId}
                 onChange={(event) => setForm((current) => ({ ...current, assigneeId: event.target.value }))}
-                placeholder="assignee_id"
+                placeholder="请输入账号 ID"
               />
             )}
           </label>
           <label className="grid gap-1">
-            <span className="text-xs font-medium text-[#697386]">客服名称</span>
+            <span className="text-xs font-medium text-[#697386]">账号名称</span>
             <input
               className="h-9 border border-[#cfd6e3] px-3 text-sm outline-none focus:border-[#2f6fed]"
               value={form.assigneeName}
@@ -6889,7 +6899,7 @@ function AssignmentsPanel({ csUsersSnapshot, onRefresh }) {
                 value={transferForm.targetAssigneeId}
                 onChange={(event) => handleTransferTargetChange(event.target.value)}
               >
-                <option value="">选择客服</option>
+                <option value="">选择账号</option>
                 {users.map((user) => (
                   <option key={user.assigneeId} value={user.assigneeId}>
                     {user.assigneeName} / {user.assigneeId}
@@ -6901,7 +6911,7 @@ function AssignmentsPanel({ csUsersSnapshot, onRefresh }) {
                 className="h-9 border border-[#cfd6e3] px-3 text-sm outline-none focus:border-[#2f6fed]"
                 value={transferForm.targetAssigneeId}
                 onChange={(event) => setTransferForm((current) => ({ ...current, targetAssigneeId: event.target.value }))}
-                placeholder="target_assignee_id"
+                placeholder="请输入目标账号 ID"
               />
             )}
           </label>
@@ -7025,9 +7035,9 @@ function defaultAssignmentTransferForm() {
 
 function assignmentErrorMessage(error) {
   const messages = {
-    assignee_id_required: "请选择客服",
+    assignee_id_required: "请选择账号",
     conversation_id_required: "请输入会话 ID",
-    target_assignee_id_required: "请选择目标客服",
+    target_assignee_id_required: "请选择目标账号",
   };
   return messages[error] || "操作失败";
 }
@@ -7227,13 +7237,13 @@ function ReplyScriptsPanel({ snapshot, onRefresh }) {
             </select>
           </label>
           <label className="grid gap-1">
-            <span className="text-xs font-medium text-[#697386]">客服 ID</span>
+            <span className="text-xs font-medium text-[#697386]">账号 ID</span>
             <input
               className="h-9 border border-[#cfd6e3] px-3 text-sm outline-none focus:border-[#2f6fed] disabled:bg-[#f4f6fa] disabled:text-[#697386]"
               value={form.targetAudience}
               disabled={form.audienceMode !== "custom"}
               onChange={(event) => setForm((current) => ({ ...current, targetAudience: event.target.value }))}
-              placeholder="assignee_id"
+              placeholder="请输入账号 ID"
             />
           </label>
           {form.scriptId && (
@@ -7824,7 +7834,7 @@ function AIConfigPanel({ snapshot, onRefresh }) {
               className="h-9 border border-[#cfd6e3] px-3 text-sm outline-none focus:border-[#2f6fed]"
               value={form.localTargetAudience}
               onChange={(event) => setForm((current) => ({ ...current, localTargetAudience: event.target.value }))}
-              placeholder="__NONE__ / __ALL__ / assignee_id"
+              placeholder="__NONE__ / __ALL__ / 账号 ID"
             />
           </label>
           <label className="grid gap-1">

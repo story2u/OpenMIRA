@@ -1478,15 +1478,14 @@ function WorkbenchLoginPanel({ assigneeId, password, loading, error, onAssigneeI
         <form className="mx-auto grid w-full max-w-sm gap-4" onSubmit={onSubmit}>
           <div>
             <h1 className="text-lg font-semibold text-[#172033]">消息端登录</h1>
-            <p className="mt-1 text-xs text-[#697386]">/api/v1/session/cs-login</p>
           </div>
           <label className="grid gap-1">
-            <span className="text-xs font-medium text-[#697386]">客服账号</span>
+            <span className="text-xs font-medium text-[#697386]">账号</span>
             <input
               className="h-10 border border-[#cfd6e3] px-3 text-sm outline-none focus:border-[#2f6fed]"
               value={assigneeId}
               onChange={(event) => onAssigneeIdChange(event.target.value)}
-              placeholder="assignee_id"
+              placeholder="请输入账号"
               autoComplete="username"
               autoFocus
             />
@@ -1498,7 +1497,7 @@ function WorkbenchLoginPanel({ assigneeId, password, loading, error, onAssigneeI
               type="password"
               value={password}
               onChange={(event) => onPasswordChange(event.target.value)}
-              placeholder="password"
+              placeholder="请输入密码"
               autoComplete="current-password"
             />
           </label>

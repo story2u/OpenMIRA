@@ -89,7 +89,7 @@ export async function requestJSON(path, {
     try {
       payload = JSON.parse(text);
     } catch {
-      payload = { detail: text };
+      payload = { detail: normalizeNonJSONErrorText(text, response.status) };
     }
   }
   if (!response.ok) {
@@ -298,6 +298,17 @@ function logAPIError(logger, level, path, detail, extra) {
   const target = logger?.[level] || logger?.error;
   if (typeof target !== "function") return;
   target.call(logger, "api", path, detail, extra);
+}
+
+function normalizeNonJSONErrorText(text, status) {
+  const normalized = String(text || "").trim();
+  const statusText = Number(status || 0) > 0 ? `HTTP ${Number(status)}` : "HTTP error";
+  if (!normalized) return statusText;
+  if (/^\s*<!doctype html/i.test(normalized) || /<html[\s>]/i.test(normalized)) {
+    return `服务暂不可用（${statusText}）`;
+  }
+  if (normalized.length > 240) return `${normalized.slice(0, 220)}...(truncated)`;
+  return normalized;
 }
 
 function isAbortError(error) {

@@ -18,7 +18,7 @@ export const adminGroups = [
       },
       {
         key: "workloads",
-        label: "客服负载",
+        label: "消息端负载",
         path: "/assignments/workloads",
         params: { limit: 100 },
         columns: ["assignee_name", "assignee_id", "current_sessions", "max_sessions", "available_capacity"],
@@ -37,7 +37,7 @@ export const adminGroups = [
     sections: [
       {
         key: "cs_users",
-        label: "客服账号",
+        label: "消息端账号",
         path: "/cs-users",
         params: { limit: 100 },
         columns: ["name", "assignee_id", "role", "enabled", "is_online", "current_sessions"],

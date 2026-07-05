@@ -19,7 +19,12 @@ test("loginModeFromPath maps legacy login routes", () => {
 
 test("loginPageConfig exposes stable form metadata", () => {
   assert.equal(loginPageConfig("admin").defaultRedirect, "/admin");
+  assert.equal(loginPageConfig("admin").title, "运营端登录");
   assert.equal(loginPageConfig("admin").identifierLabel, "用户名");
+  assert.equal(loginPageConfig("admin").identifierPlaceholder, "请输入用户名");
+  assert.equal(loginPageConfig("cs").title, "消息端登录");
+  assert.equal(loginPageConfig("cs").identifierLabel, "账号");
+  assert.equal(loginPageConfig("cs").identifierPlaceholder, "请输入账号");
   assert.equal(loginPageConfig("cs").requiresPassword, true);
   assert.equal(loginPageConfig("cs").requiresConfirmation, true);
   assert.equal(loginPageConfig("passwordless").requiresPassword, false);

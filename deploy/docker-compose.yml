@@ -13,6 +13,7 @@ x-go-env: &go-env
   CLOUD_DATA_DIR: "${CLOUD_DATA_DIR:-/app/data}"
   GO_ENABLE_CONNECTOR_NOTIFY_CALLBACK_CANDIDATE: "${GO_ENABLE_CONNECTOR_NOTIFY_CALLBACK_CANDIDATE:-1}"
   GO_ENABLE_SESSION_ADMIN_LOGIN_CANDIDATE: "${GO_ENABLE_SESSION_ADMIN_LOGIN_CANDIDATE:-1}"
+  GO_ENABLE_CLIENT_ERRORS_CANDIDATE: "${GO_ENABLE_CLIENT_ERRORS_CANDIDATE:-1}"
 
 x-go-service: &go-service
   restart: unless-stopped
@@ -91,8 +92,12 @@ services:
     build:
       context: ../web
       dockerfile: Dockerfile
+      args:
+        IM_API_INTERNAL_BASE_URL: "${IM_API_INTERNAL_BASE_URL:-http://go-api:9000}"
     image: "${GO_WEB_IMAGE:-im-go-web:${GO_IMAGE_TAG:-latest}}"
     restart: unless-stopped
+    environment:
+      IM_API_INTERNAL_BASE_URL: "${IM_API_INTERNAL_BASE_URL:-http://go-api:9000}"
     ports:
       - "${GO_WEB_BIND_ADDR:-127.0.0.1}:${GO_WEB_HOST_PORT:-18080}:3000"
     networks:

@@ -251,6 +251,26 @@ test("requestJSON logs API errors before throwing", async () => {
   assert.equal(logs[0].extra.status, 502);
 });
 
+test("requestJSON hides HTML error pages from user-facing errors", async () => {
+  await assert.rejects(
+    () => requestJSON("/session/admin-login", {
+      method: "POST",
+      body: { username: "root", password: "1234567890" },
+      fetchImpl: async () => ({
+        ok: false,
+        status: 404,
+        text: async () => `<!DOCTYPE html><html><body><h1>Not Found</h1><script>large app payload</script></body></html>`,
+      }),
+      logger: {},
+    }),
+    (error) => {
+      assert.equal(error.status, 404);
+      assert.equal(error.message, "服务暂不可用（HTTP 404）");
+      return true;
+    },
+  );
+});
+
 test("requestJSON skips logging abort errors", async () => {
   const logs = [];
   const fetchImpl = async () => {
