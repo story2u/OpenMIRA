@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { changeAdminPassword, loginAdminWithPassword, loginCSWithPassword, loginCSWithoutPassword, sessionLoginErrorMessage } from "../lib/sessionLogin.js";
 import { loginConfirmation, loginPageConfig, loginPageInitialIdentifier, resolvePostLoginRedirect } from "../lib/sessionLoginPage.js";
+import { getSessionToken, parseSessionTokenPayload } from "../lib/sessionToken.js";
 
 export function LoginPageClient({ mode = "cs" }) {
   const config = useMemo(() => loginPageConfig(mode), [mode]);
@@ -18,6 +19,15 @@ export function LoginPageClient({ mode = "cs" }) {
   useEffect(() => {
     if (typeof window === "undefined") return;
     setIdentifier(loginPageInitialIdentifier(config.mode, window.location.search));
+  }, [config.mode]);
+
+  useEffect(() => {
+    if (config.mode !== "admin") {
+      setChangeToken("");
+      return;
+    }
+    const savedToken = getSessionToken("admin");
+    setChangeToken(isAdminPasswordChangeToken(savedToken) ? savedToken : "");
   }, [config.mode]);
 
   const handleSubmit = useCallback(async (event) => {
@@ -196,4 +206,8 @@ export function LoginPageClient({ mode = "cs" }) {
       </section>
     </div>
   );
+}
+
+function isAdminPasswordChangeToken(token) {
+  return String(parseSessionTokenPayload(token)?.role || "").trim() === "admin_password_change";
 }

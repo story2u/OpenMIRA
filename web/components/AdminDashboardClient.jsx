@@ -220,15 +220,12 @@ import {
   normalizeSOPMediaUploadResult,
   sopMediaTypeLabel,
 } from "../lib/adminSOPMedia.js";
-import { getSessionToken, requestSessionJSON } from "../lib/sessionToken.js";
-import { loginAdminWithPassword, logoutSession, sessionLoginErrorMessage } from "../lib/sessionLogin.js";
+import { LoginPageClient } from "./LoginPageClient.jsx";
+import { getSessionToken, parseSessionTokenPayload, requestSessionJSON } from "../lib/sessionToken.js";
+import { logoutSession } from "../lib/sessionLogin.js";
 
 export function AdminDashboardClient() {
   const [token, setToken] = useState("");
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [authLoading, setAuthLoading] = useState(false);
-  const [authError, setAuthError] = useState("");
   const [activeGroupKey, setActiveGroupKey] = useState(adminGroups[0].key);
   const [selectedSectionKey, setSelectedSectionKey] = useState(adminGroups[0].sections[0].key);
   const [snapshots, setSnapshots] = useState({});
@@ -318,26 +315,6 @@ export function AdminDashboardClient() {
     };
   }, [activeGroup, refreshNonce, token]);
 
-  const handleLogin = useCallback(async (event) => {
-    event.preventDefault();
-    if (!username.trim() || !password.trim()) {
-      setAuthError("请输入用户名和密码");
-      return;
-    }
-    setAuthLoading(true);
-    setAuthError("");
-    try {
-      const response = await loginAdminWithPassword(username, password);
-      setToken(response.token);
-      setPassword("");
-      setRefreshNonce((value) => value + 1);
-    } catch (err) {
-      setAuthError(sessionLoginErrorMessage("admin", err));
-    } finally {
-      setAuthLoading(false);
-    }
-  }, [password, username]);
-
   const handleLogout = useCallback(async () => {
     const previousToken = token;
     setToken("");
@@ -359,18 +336,8 @@ export function AdminDashboardClient() {
     setRefreshNonce((value) => value + 1);
   }, []);
 
-  if (!token) {
-    return (
-      <AdminLoginPanel
-        username={username}
-        password={password}
-        loading={authLoading}
-        error={authError}
-        onUsernameChange={setUsername}
-        onPasswordChange={setPassword}
-        onSubmit={handleLogin}
-      />
-    );
+  if (!token || isAdminPasswordChangeToken(token)) {
+    return <LoginPageClient mode="admin" />;
   }
 
   return (
@@ -379,7 +346,7 @@ export function AdminDashboardClient() {
         <div className="grid gap-1">
           <span className="text-xs font-medium text-[#697386]">运营会话</span>
           <span className="h-9 truncate border border-[#e5e9f2] bg-[#f9fafc] px-2 py-2 text-sm text-[#172033]">
-            {username.trim() || "已连接"}
+            已连接
           </span>
         </div>
         <div className="flex items-end gap-2">
@@ -477,48 +444,8 @@ export function AdminDashboardClient() {
   );
 }
 
-function AdminLoginPanel({ username, password, loading, error, onUsernameChange, onPasswordChange, onSubmit }) {
-  return (
-    <div className="mx-auto grid max-w-7xl px-4 py-4 lg:px-6">
-      <section className="grid min-h-[640px] items-center border border-[#d8dde8] bg-white p-4 md:p-8">
-        <form className="mx-auto grid w-full max-w-sm gap-4" onSubmit={onSubmit}>
-          <div>
-            <h1 className="text-lg font-semibold text-[#172033]">运营端登录</h1>
-          </div>
-          <label className="grid gap-1">
-            <span className="text-xs font-medium text-[#697386]">用户名</span>
-            <input
-              className="h-10 border border-[#cfd6e3] px-3 text-sm outline-none focus:border-[#2f6fed]"
-              value={username}
-              onChange={(event) => onUsernameChange(event.target.value)}
-              placeholder="请输入用户名"
-              autoComplete="username"
-              autoFocus
-            />
-          </label>
-          <label className="grid gap-1">
-            <span className="text-xs font-medium text-[#697386]">密码</span>
-            <input
-              className="h-10 border border-[#cfd6e3] px-3 text-sm outline-none focus:border-[#2f6fed]"
-              type="password"
-              value={password}
-              onChange={(event) => onPasswordChange(event.target.value)}
-              placeholder="请输入密码"
-              autoComplete="current-password"
-            />
-          </label>
-          {error && <div className="border border-[#f2b8b5] bg-[#fff4f2] px-3 py-2 text-sm text-[#b42318]">{error}</div>}
-          <button
-            className="h-10 border border-[#172033] bg-[#172033] px-4 text-sm font-medium text-white disabled:border-[#c4cad6] disabled:bg-[#d8dde8] disabled:text-[#697386]"
-            type="submit"
-            disabled={loading}
-          >
-            {loading ? "登录中" : "登录"}
-          </button>
-        </form>
-      </section>
-    </div>
-  );
+function isAdminPasswordChangeToken(token) {
+  return String(parseSessionTokenPayload(token)?.role || "").trim() === "admin_password_change";
 }
 
 function SectionButton({ section, selected, snapshot, status, onSelect }) {
