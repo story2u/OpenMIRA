@@ -23,8 +23,10 @@ func TestNewWithModulesCanMountClientErrorsCandidate(t *testing.T) {
 
 	request := httptest.NewRequest(http.MethodPost, "/api/v1/client-errors", strings.NewReader(`{"message":"页面错误"}`))
 	assertResponse(t, handler, request, "/api/v1/client-errors", http.StatusOK, `"ok":true`)
+	assertStatus(t, handler, "/api/v1/client-errors", http.StatusMethodNotAllowed, `"detail":"method not allowed"`)
 	logs := httptest.NewRequest(http.MethodPost, "/api/v1/client-logs", strings.NewReader(`{"logs":[{"module":"runtime","detail":"boom"}]}`))
 	assertResponse(t, handler, logs, "/api/v1/client-logs", http.StatusOK, `"accepted":1`)
+	assertStatus(t, handler, "/api/v1/client-logs", http.StatusMethodNotAllowed, `"detail":"method not allowed"`)
 
 	routes := RoutesWithModules(Modules{
 		ClientErrors:          &clientErrorsHandler,

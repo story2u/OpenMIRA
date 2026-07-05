@@ -247,7 +247,9 @@ func NewWithModules(cfg config.Config, modules Modules) http.Handler {
 	}
 	if modules.ClientErrors != nil && modules.ClientErrorsCandidate {
 		mux.HandleFunc(http.MethodPost+" "+"/api/v1/client-errors", modules.ClientErrors.ReportHandler)
+		mux.HandleFunc(http.MethodGet+" "+"/api/v1/client-errors", methodNotAllowedJSON(http.MethodPost))
 		mux.HandleFunc(http.MethodPost+" "+"/api/v1/client-logs", modules.ClientErrors.ClientLogsHandler)
+		mux.HandleFunc(http.MethodGet+" "+"/api/v1/client-logs", methodNotAllowedJSON(http.MethodPost))
 	}
 	if modules.Workbench != nil && modules.SensitiveWords {
 		mux.HandleFunc(http.MethodGet+" "+"/api/v1/admin/sensitive-words", modules.Workbench.SensitiveWordsHandler)
