@@ -40,6 +40,7 @@ type Options struct {
 	RequireProfileStore   bool
 	RequireBlacklistStore bool
 	InitializeAdminUsers  bool
+	InitializeAuditLogs   bool
 	Context               context.Context
 }
 
@@ -144,8 +145,10 @@ func New(options Options) (Module, error) {
 		service.LastSeen = profileRepository
 		if service.AuditLogs == nil {
 			auditLogRepository = workbenchauditlogs.NewSQLRepository(options.DB, dialect)
-			if err := auditLogRepository.EnsureSchema(initCtx); err != nil {
-				return Module{}, err
+			if options.InitializeAuditLogs {
+				if err := auditLogRepository.EnsureSchema(initCtx); err != nil {
+					return Module{}, err
+				}
 			}
 			service.AuditLogs = sessionAuditLogWriter{repository: auditLogRepository}
 		}

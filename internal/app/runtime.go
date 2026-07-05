@@ -186,6 +186,7 @@ func NewRuntime(ctx context.Context, cfg config.Config, options Options) (*Runti
 			RequireProfileStore:   options.RequireSessionStores,
 			RequireBlacklistStore: options.RequireSessionStores,
 			InitializeAdminUsers:  cfg.SessionAdminLoginCandidate,
+			InitializeAuditLogs:   cfg.SessionAdminLoginCandidate,
 			Context:               ctx,
 		})
 		if err != nil {
