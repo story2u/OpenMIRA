@@ -14,10 +14,11 @@ docker compose --env-file .env up -d --build \
   go-cache-redis \
   go-api \
   go-web \
-  go-incoming-worker
+  go-incoming-worker \
+  cloudflared
 ```
 
-The compose file intentionally includes only Postgres, Redis, API, Web, and the incoming message worker. Add sending, archive, contact sync, or transcription workers later through explicit compose overlays.
+The compose file intentionally includes only Postgres, Redis, API, Web, the incoming message worker, and Cloudflare Tunnel for public ingress. Add sending, archive, contact sync, or transcription workers later through explicit compose overlays.
 
 ## GitHub Actions VPS Deploy
 
@@ -25,13 +26,25 @@ The `Deploy to VPS` workflow deploys the GHCR images built by `Docker Build & Pu
 
 - Variables or secrets: `VPS_HOST`, `VPS_USER`, optional `VPS_PORT`, optional `VPS_DEPLOY_DIR`, optional `VPS_API_URL`, optional `VPS_WEB_URL`.
 - Secret: `VPS_SSH_KEY`, the private key used by the workflow to SSH into the VPS.
+- Secret: `CLOUDFLARE_TUNNEL_TOKEN`, the token from Cloudflare Tunnel. Required when `cloudflared` is included in `VPS_COMPOSE_SERVICES`.
 - Optional secret: `VPS_ENV_FILE`, the production `.env` content to write to the VPS deploy directory. Use the repository root `.env.example` as the VPS template and replace every `change-me` value before saving the secret.
-- Optional variable: `VPS_COMPOSE_SERVICES`, defaults to `go-postgres go-redis go-cache-redis go-api go-web go-incoming-worker`.
+- Optional variable: `VPS_COMPOSE_SERVICES`, defaults to `go-postgres go-redis go-cache-redis go-api go-web go-incoming-worker cloudflared`.
 - Optional variable/secret: `GHCR_USERNAME` / `GHCR_TOKEN` when the package registry requires a token other than the workflow token.
 
 The SSH user must be able to write `VPS_DEPLOY_DIR` and run `docker compose`. On a fresh Ubuntu VPS, install Docker and add the deploy user to the `docker` group, or use a restricted root login dedicated to deployment.
 
 The workflow copies `deploy/docker-compose.yml` and `deploy/.env.example` to the VPS, preserves an existing `.env`, and overwrites `.env` only when `VPS_ENV_FILE` is set. It exports GHCR image names such as `ghcr.io/story2u/wework-api:main` at deploy time, so the compose file pulls release images instead of building locally.
+
+## Cloudflare Tunnel Routes
+
+Use a remotely managed Cloudflare Tunnel and point public hostnames to services on the Docker network:
+
+- `app.example.com` path `/api/*` -> `http://go-api:9000`
+- `app.example.com` path `/ws/*` -> `http://go-api:9000`
+- `app.example.com` root path -> `http://go-web:3000`
+- `api.example.com` root path -> `http://go-api:9000`
+
+Keep the path-specific `app.example.com` routes ahead of the root Web route. The Web console uses same-origin `/api/v1/...` and `/ws/...` requests, while `api.example.com` is convenient for external callbacks such as `https://api.example.com/api/v1/notify/event/{enterprise_id}`.
 
 ## Release Readiness
 
@@ -62,6 +75,7 @@ Core roles:
 - `go-api`: stateless HTTP API and connector callback endpoint.
 - `go-web`: Next.js web console.
 - `go-incoming-worker`: inbound connector event consumer.
+- `cloudflared`: outbound-only Cloudflare Tunnel connector for public API and Web hostnames.
 - `go-redis` / `go-cache-redis`: eventbus, realtime, locks, pending queues and cache.
 
 Other workers are intentionally out of this baseline until their product surfaces are enabled.
