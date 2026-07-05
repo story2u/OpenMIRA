@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"im-go/internal/config"
 	"im-go/internal/contracts"
@@ -26,15 +27,19 @@ func NewWithModules(cfg config.Config, modules Modules) http.Handler {
 	}
 	if modules.Session != nil && modules.SessionAdminLogin {
 		mux.HandleFunc(http.MethodPost+" "+"/api/v1/session/admin-login", modules.Session.AdminLogin)
+		mux.HandleFunc(http.MethodGet+" "+"/api/v1/session/admin-login", methodNotAllowedJSON(http.MethodPost))
 	}
 	if modules.Session != nil && (modules.SessionAdminLogin || modules.SessionAdminPasswordChange) {
 		mux.HandleFunc(http.MethodPost+" "+"/api/v1/session/admin/change-password", modules.Session.AdminChangePassword)
+		mux.HandleFunc(http.MethodGet+" "+"/api/v1/session/admin/change-password", methodNotAllowedJSON(http.MethodPost))
 	}
 	if modules.Session != nil && modules.SessionLogin {
 		mux.HandleFunc(http.MethodPost+" "+"/api/v1/session/login", modules.Session.Login)
+		mux.HandleFunc(http.MethodGet+" "+"/api/v1/session/login", methodNotAllowedJSON(http.MethodPost))
 	}
 	if modules.Session != nil && modules.SessionCSLogin {
 		mux.HandleFunc(http.MethodPost+" "+"/api/v1/session/cs-login", modules.Session.CSLogin)
+		mux.HandleFunc(http.MethodGet+" "+"/api/v1/session/cs-login", methodNotAllowedJSON(http.MethodPost))
 	}
 	if modules.Session != nil && modules.SessionGenerateCSToken {
 		mux.HandleFunc(http.MethodPost+" "+"/api/v1/session/admin/generate-cs-token", modules.Session.GenerateCSToken)
@@ -636,6 +641,13 @@ func withCommonHeaders(next http.Handler) http.Handler {
 		w.Header().Set("Cache-Control", "no-store")
 		next.ServeHTTP(w, r)
 	})
+}
+
+func methodNotAllowedJSON(allowedMethods ...string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Allow", strings.Join(allowedMethods, ", "))
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"detail": "method not allowed"})
+	}
 }
 
 func writeJSON(w http.ResponseWriter, status int, payload any) {

@@ -885,6 +885,8 @@ func TestNewWithModulesCanMountSessionAdminLoginCandidate(t *testing.T) {
 	handler := NewWithModules(config.Config{ContractRoot: projectContractRoot(t)}, Modules{Session: &sessionHandler, SessionAdminLogin: true})
 
 	assertPostBodyStatus(t, handler, "/api/v1/session/admin-login", `{"username":"admin","password":"secret"}`, http.StatusOK, `"token":"jwt-admin"`)
+	assertStatus(t, handler, "/api/v1/session/admin-login", http.StatusMethodNotAllowed, `"detail":"method not allowed"`)
+	assertStatus(t, handler, "/api/v1/session/admin/change-password", http.StatusMethodNotAllowed, `"detail":"method not allowed"`)
 
 	routes := RoutesWithModules(Modules{Session: &sessionHandler, SessionAdminLogin: true})
 	if len(routes) != 6 {
@@ -901,6 +903,7 @@ func TestNewWithModulesCanMountSessionLoginCandidate(t *testing.T) {
 	handler := NewWithModules(config.Config{ContractRoot: projectContractRoot(t)}, Modules{Session: &sessionHandler, SessionLogin: true})
 
 	assertPostBodyStatus(t, handler, "/api/v1/session/login", `{"assignee_id":"cs-001"}`, http.StatusOK, `"token":"jwt-cs"`)
+	assertStatus(t, handler, "/api/v1/session/login", http.StatusMethodNotAllowed, `"detail":"method not allowed"`)
 
 	routes := RoutesWithModules(Modules{Session: &sessionHandler, SessionLogin: true})
 	if len(routes) != 5 {
@@ -918,6 +921,7 @@ func TestNewWithModulesCanMountSessionCSLoginCandidate(t *testing.T) {
 	handler := NewWithModules(config.Config{ContractRoot: projectContractRoot(t)}, Modules{Session: &sessionHandler, SessionCSLogin: true})
 
 	assertPostBodyStatus(t, handler, "/api/v1/session/cs-login", `{"assignee_id":"cs-001","password":"secret"}`, http.StatusOK, `"token":"jwt-cs-password"`)
+	assertStatus(t, handler, "/api/v1/session/cs-login", http.StatusMethodNotAllowed, `"detail":"method not allowed"`)
 
 	routes := RoutesWithModules(Modules{Session: &sessionHandler, SessionCSLogin: true})
 	if len(routes) != 5 {
