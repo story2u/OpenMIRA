@@ -6,6 +6,7 @@
 import "./globals.css";
 import { ClientTelemetry } from "../components/ClientTelemetry.jsx";
 import { getAppVersionInfo } from "../lib/appVersion.js";
+import { Providers } from "./providers";
 
 export const metadata = {
   title: "IM Console",
@@ -23,7 +24,7 @@ export default function RootLayout({ children }) {
         data-build-time={version.buildTime}
       >
         <ClientTelemetry />
-        {children}
+        <Providers>{children}</Providers>
       </body>
     </html>
   );

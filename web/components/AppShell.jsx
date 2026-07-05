@@ -14,13 +14,13 @@ export function AppShell({ active, children }) {
   const version = getAppVersionInfo();
 
   return (
-    <main className="min-h-screen bg-[#f6f7f9]">
-      <header className="border-b border-[#dfe3ec] bg-[#172033] text-white">
+    <main className="min-h-screen bg-slate-50">
+      <header className="border-b border-slate-800 bg-slate-950 text-white">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-3">
           <div className="text-sm font-semibold tracking-normal">IM Console</div>
           <div className="flex min-w-0 items-center gap-3">
             <span
-              className="hidden max-w-[11rem] truncate text-xs text-[#9fb0c9] sm:inline"
+              className="hidden max-w-[11rem] truncate text-xs text-slate-300 sm:inline"
               title={`${version.version} ${version.commit} ${version.buildTime}`}
             >
               {buildVersionLabel(version)}
@@ -34,9 +34,13 @@ export function AppShell({ active, children }) {
                     href={item.href}
                     className={
                       selected
-                        ? "rounded bg-white px-3 py-1.5 text-sm font-medium text-[#172033]"
-                        : "rounded px-3 py-1.5 text-sm font-medium text-[#d7deea] hover:bg-[#26324a]"
+                        ? "rounded bg-white px-3 py-1.5 text-sm font-medium text-slate-950"
+                        : "rounded px-3 py-1.5 text-sm font-medium text-slate-300 hover:bg-slate-800"
                     }
+                    style={{
+                      color: selected ? "#020617" : "#cbd5e1",
+                      backgroundColor: selected ? "#ffffff" : undefined,
+                    }}
                   >
                     {item.label}
                   </a>

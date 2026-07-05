@@ -223,6 +223,8 @@ import {
 import { LoginPageClient } from "./LoginPageClient.jsx";
 import { getSessionToken, parseSessionTokenPayload, requestSessionJSON } from "../lib/sessionToken.js";
 import { logoutSession } from "../lib/sessionLogin.js";
+import { OperationDashboardShell } from "./operations/operation-dashboard-shell";
+import { ChannelAccountPage } from "./operations/channel-account-page";
 
 export function AdminDashboardClient() {
   const [token, setToken] = useState("");
@@ -383,106 +385,65 @@ export function AdminDashboardClient() {
   }
 
   return (
-    <div className="mx-auto grid max-w-7xl gap-4 px-4 py-4 lg:grid-rows-[auto_1fr] lg:px-6">
-      <section className="grid gap-3 border border-[#d8dde8] bg-white p-3 md:grid-cols-[minmax(220px,1fr)_auto]">
-        <div className="grid gap-1">
-          <span className="text-xs font-medium text-[#697386]">运营会话</span>
-          <span className="h-9 truncate border border-[#e5e9f2] bg-[#f9fafc] px-2 py-2 text-sm text-[#172033]">
-            已连接
-          </span>
-        </div>
-        <div className="flex items-end gap-2">
-          <button className="h-9 border border-[#cfd6e3] bg-white px-3 text-sm font-medium text-[#172033]" type="button" onClick={() => setRefreshNonce((value) => value + 1)}>
-            刷新
-          </button>
-          <button className="h-9 border border-[#172033] bg-[#172033] px-3 text-sm font-medium text-white" type="button" onClick={() => void handleLogout()}>
-            退出
-          </button>
-        </div>
-      </section>
-
-      <section className="grid min-h-[640px] gap-4 lg:grid-cols-[280px_minmax(0,1fr)]">
-        <aside className="grid min-h-0 grid-rows-[auto_1fr] border border-[#d8dde8] bg-white">
-          <div className="border-b border-[#e5e9f2] p-3">
-            <div className="grid grid-cols-4 gap-1">
-              {adminGroups.map((group) => (
-                <button
-                  key={group.key}
-                  className={group.key === activeGroup.key ? "h-8 bg-[#172033] px-2 text-xs font-medium text-white" : "h-8 border border-[#d8dde8] bg-white px-2 text-xs font-medium text-[#4b5563]"}
-                  type="button"
-                  onClick={() => switchGroup(group.key)}
-                >
-                  {group.label}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="min-h-0 overflow-y-auto">
-            {activeGroup.sections.map((section) => (
-              <SectionButton
-                key={section.key}
-                section={section}
-                selected={section.key === selectedSection.key}
-                snapshot={snapshots[section.key]}
-                status={statuses[section.key]}
-                onSelect={() => setSelectedSectionKey(section.key)}
-              />
-            ))}
-          </div>
-        </aside>
-
-        <main className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)] border border-[#d8dde8] bg-white">
-          <SectionHeader section={selectedSection} status={selectedStatus} snapshot={selectedSnapshot} />
-          <div className="min-h-0 overflow-auto bg-[#f9fafc] p-4">
-            {selectedStatus.state === "loading" && <LoadingRows />}
-            {selectedStatus.state === "error" && <ErrorPanel message={selectedStatus.message} />}
-            {!token && <EmptyPanel label="等待登录" />}
-            {token && selectedStatus.state !== "loading" && selectedStatus.state !== "error" && !selectedSnapshot && <EmptyPanel label="暂无数据" />}
-            {selectedSnapshot && selectedStatus.state !== "loading" && selectedStatus.state !== "error" && (
-              selectedSection.key === "accounts"
-                ? <AccountsPanel snapshot={selectedSnapshot} workloadSnapshot={snapshots.workloads} onRefresh={refreshActiveGroup} />
-                : selectedSection.key === "devices"
-                  ? <DevicesPanel snapshot={selectedSnapshot} accountsSnapshot={snapshots.accounts} workloadSnapshot={snapshots.workloads} onRefresh={refreshActiveGroup} />
-                  : selectedSection.key === "scripts"
-                    ? <ReplyScriptsPanel snapshot={selectedSnapshot} onRefresh={refreshActiveGroup} />
-                    : selectedSection.key === "cs_users"
-                      ? <CSUsersPanel snapshot={selectedSnapshot} onRefresh={refreshActiveGroup} />
-                      : selectedSection.key === "sensitive_words"
-                        ? <SensitiveWordsPanel snapshot={selectedSnapshot} onRefresh={refreshActiveGroup} />
-                        : selectedSection.key === "assignments"
-                          ? <AssignmentsPanel snapshot={selectedSnapshot} csUsersSnapshot={snapshots.cs_users} onRefresh={refreshActiveGroup} />
-                        : selectedSection.key === "knowledge_docs"
-                          ? <KnowledgeDocumentsPanel snapshot={selectedSnapshot} onRefresh={refreshActiveGroup} />
-                        : selectedSection.key === "sop_media"
-                          ? <SOPMediaPanel onRefresh={refreshActiveGroup} />
-                        : selectedSection.key === "sop_config"
-                          ? <SOPConfigPanel snapshot={selectedSnapshot} onRefresh={refreshActiveGroup} />
-                        : selectedSection.key === "sop_operations"
-                          ? <SOPOperationsPanel />
-                        : selectedSection.key === "observability_dashboard"
-                          ? <ObservabilityDashboardPanel />
-                        : selectedSection.key === "audit_logs"
-                          ? <AuditLogsPanel />
-                        : selectedSection.key === "system_logs"
-                          ? <SystemLogsPanel />
-                        : selectedSection.key === "ai_replies"
-                          ? <AIReplyObservabilityPanel />
-                        : selectedSection.key === "archive_operations"
-                          ? <ArchiveOperationsPanel />
-                        : selectedSection.key === "ai_config"
-                          ? <AIConfigPanel snapshot={selectedSnapshot} onRefresh={refreshActiveGroup} />
-                        : selectedSection.key === "assignment_config"
-                          ? <AssignmentConfigPanel snapshot={selectedSnapshot} onRefresh={refreshActiveGroup} />
-                        : selectedSection.key === "enterprises"
-                          ? <EnterprisesPanel snapshot={selectedSnapshot} onRefresh={refreshActiveGroup} />
-                        : selectedSection.key === "contact_sync"
-                          ? <ContactSyncPanel enterprisesSnapshot={snapshots.enterprises} />
-                        : <SnapshotView snapshot={selectedSnapshot} />
-            )}
-          </div>
-        </main>
-      </section>
-    </div>
+    <OperationDashboardShell
+      groups={adminGroups}
+      activeGroup={activeGroup}
+      selectedSection={selectedSection}
+      snapshots={snapshots}
+      statuses={statuses}
+      selectedStatus={selectedStatus}
+      selectedSnapshot={selectedSnapshot}
+      onGroupChange={switchGroup}
+      onSectionChange={setSelectedSectionKey}
+      onRefresh={refreshActiveGroup}
+      onLogout={() => void handleLogout()}
+    >
+      {selectedStatus.state === "loading" && <LoadingRows />}
+      {selectedStatus.state === "error" && <ErrorPanel message={selectedStatus.message} />}
+      {!token && <EmptyPanel label="等待登录" />}
+      {token && selectedStatus.state !== "loading" && selectedStatus.state !== "error" && !selectedSnapshot && <EmptyPanel label="暂无数据" />}
+      {selectedSnapshot && selectedStatus.state !== "loading" && selectedStatus.state !== "error" && (
+        selectedSection.key === "accounts"
+          ? <ChannelAccountPage snapshot={selectedSnapshot} workloadSnapshot={snapshots.workloads} />
+          : selectedSection.key === "devices"
+            ? <DevicesPanel snapshot={selectedSnapshot} accountsSnapshot={snapshots.accounts} workloadSnapshot={snapshots.workloads} onRefresh={refreshActiveGroup} />
+            : selectedSection.key === "scripts"
+              ? <ReplyScriptsPanel snapshot={selectedSnapshot} onRefresh={refreshActiveGroup} />
+              : selectedSection.key === "cs_users"
+                ? <CSUsersPanel snapshot={selectedSnapshot} onRefresh={refreshActiveGroup} />
+                : selectedSection.key === "sensitive_words"
+                  ? <SensitiveWordsPanel snapshot={selectedSnapshot} onRefresh={refreshActiveGroup} />
+                : selectedSection.key === "assignments"
+                  ? <AssignmentsPanel snapshot={selectedSnapshot} csUsersSnapshot={snapshots.cs_users} onRefresh={refreshActiveGroup} />
+                : selectedSection.key === "knowledge_docs"
+                  ? <KnowledgeDocumentsPanel snapshot={selectedSnapshot} onRefresh={refreshActiveGroup} />
+                : selectedSection.key === "sop_media"
+                  ? <SOPMediaPanel onRefresh={refreshActiveGroup} />
+                : selectedSection.key === "sop_config"
+                  ? <SOPConfigPanel snapshot={selectedSnapshot} onRefresh={refreshActiveGroup} />
+                : selectedSection.key === "sop_operations"
+                  ? <SOPOperationsPanel />
+                : selectedSection.key === "observability_dashboard"
+                  ? <ObservabilityDashboardPanel />
+                : selectedSection.key === "audit_logs"
+                  ? <AuditLogsPanel />
+                : selectedSection.key === "system_logs"
+                  ? <SystemLogsPanel />
+                : selectedSection.key === "ai_replies"
+                  ? <AIReplyObservabilityPanel />
+                : selectedSection.key === "archive_operations"
+                  ? <ArchiveOperationsPanel />
+                : selectedSection.key === "ai_config"
+                  ? <AIConfigPanel snapshot={selectedSnapshot} onRefresh={refreshActiveGroup} />
+                : selectedSection.key === "assignment_config"
+                  ? <AssignmentConfigPanel snapshot={selectedSnapshot} onRefresh={refreshActiveGroup} />
+                : selectedSection.key === "enterprises"
+                  ? <EnterprisesPanel snapshot={selectedSnapshot} onRefresh={refreshActiveGroup} />
+                : selectedSection.key === "contact_sync"
+                  ? <ContactSyncPanel enterprisesSnapshot={snapshots.enterprises} />
+                : <SnapshotView snapshot={selectedSnapshot} />
+      )}
+    </OperationDashboardShell>
   );
 }
 
