@@ -14,11 +14,12 @@ import (
 func TestMeSerializesCurrentUser(t *testing.T) {
 	handler := New(fakeCurrentUserService{
 		response: session.MeResponse{
-			AssigneeID:   "cs-001",
-			AssigneeName: "消息端一",
-			Role:         "cs",
-			AIEnabled:    true,
-			ExpiresAt:    "2026-06-28T00:00:00+00:00",
+			AssigneeID:             "cs-001",
+			AssigneeName:           "消息端一",
+			Role:                   "cs",
+			AIEnabled:              true,
+			ExpiresAt:              "2026-06-28T00:00:00+00:00",
+			PasswordChangeRequired: true,
 		},
 	})
 
@@ -27,7 +28,7 @@ func TestMeSerializesCurrentUser(t *testing.T) {
 	if response.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200; body=%s", response.Code, response.Body.String())
 	}
-	for _, want := range []string{`"assignee_id":"cs-001"`, `"ai_enabled":true`, `"expires_at":"2026-06-28T00:00:00+00:00"`} {
+	for _, want := range []string{`"assignee_id":"cs-001"`, `"ai_enabled":true`, `"expires_at":"2026-06-28T00:00:00+00:00"`, `"password_change_required":true`} {
 		if !strings.Contains(response.Body.String(), want) {
 			t.Fatalf("body missing %q: %s", want, response.Body.String())
 		}

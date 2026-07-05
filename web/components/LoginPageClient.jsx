@@ -3,9 +3,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { changeAdminPassword, loginAdminWithPassword, loginCSWithPassword, loginCSWithoutPassword, sessionLoginErrorMessage } from "../lib/sessionLogin.js";
 import { loginConfirmation, loginPageConfig, loginPageInitialIdentifier, resolvePostLoginRedirect } from "../lib/sessionLoginPage.js";
-import { getSessionToken, parseSessionTokenPayload } from "../lib/sessionToken.js";
+import { getSessionToken, parseSessionTokenPayload, requestSessionJSON } from "../lib/sessionToken.js";
 
-export function LoginPageClient({ mode = "cs" }) {
+export function LoginPageClient({ mode = "cs", forcePasswordChange = false }) {
   const config = useMemo(() => loginPageConfig(mode), [mode]);
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
@@ -27,8 +27,29 @@ export function LoginPageClient({ mode = "cs" }) {
       return;
     }
     const savedToken = getSessionToken("admin");
-    setChangeToken(isAdminPasswordChangeToken(savedToken) ? savedToken : "");
-  }, [config.mode]);
+    if (forcePasswordChange && savedToken) {
+      setChangeToken(savedToken);
+      return;
+    }
+    if (isAdminPasswordChangeToken(savedToken)) {
+      setChangeToken(savedToken);
+      return;
+    }
+    if (!savedToken) {
+      setChangeToken("");
+      return;
+    }
+    let cancelled = false;
+    setChangeToken("");
+    requestSessionJSON("admin", "/session/me", { retryUnauthorized: false })
+      .then((payload) => {
+        if (!cancelled && adminSessionNeedsPasswordChange(payload)) setChangeToken(savedToken);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [config.mode, forcePasswordChange]);
 
   const handleSubmit = useCallback(async (event) => {
     event.preventDefault();
@@ -210,4 +231,9 @@ export function LoginPageClient({ mode = "cs" }) {
 
 function isAdminPasswordChangeToken(token) {
   return String(parseSessionTokenPayload(token)?.role || "").trim() === "admin_password_change";
+}
+
+function adminSessionNeedsPasswordChange(payload) {
+  return Boolean(payload?.password_change_required)
+    || String(payload?.role || "").trim() === "admin_password_change";
 }

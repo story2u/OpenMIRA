@@ -189,22 +189,24 @@ type GenerateCSTokenResponse struct {
 
 // MeResponse is the JSON shape returned by the legacy /api/v1/session/me.
 type MeResponse struct {
-	AssigneeID   string `json:"assignee_id"`
-	AssigneeName string `json:"assignee_name"`
-	Role         string `json:"role"`
-	AIEnabled    bool   `json:"ai_enabled"`
-	ExpiresAt    string `json:"expires_at"`
+	AssigneeID             string `json:"assignee_id"`
+	AssigneeName           string `json:"assignee_name"`
+	Role                   string `json:"role"`
+	AIEnabled              bool   `json:"ai_enabled"`
+	ExpiresAt              string `json:"expires_at"`
+	PasswordChangeRequired bool   `json:"password_change_required,omitempty"`
 }
 
 // RefreshResponse is the JSON shape returned by legacy /api/v1/session/refresh.
 type RefreshResponse struct {
-	Success      bool   `json:"success"`
-	Token        string `json:"token"`
-	AssigneeID   string `json:"assignee_id"`
-	AssigneeName string `json:"assignee_name"`
-	Role         string `json:"role"`
-	AIEnabled    bool   `json:"ai_enabled"`
-	ExpiresAt    string `json:"expires_at"`
+	Success                bool   `json:"success"`
+	Token                  string `json:"token"`
+	AssigneeID             string `json:"assignee_id"`
+	AssigneeName           string `json:"assignee_name"`
+	Role                   string `json:"role"`
+	AIEnabled              bool   `json:"ai_enabled"`
+	ExpiresAt              string `json:"expires_at"`
+	PasswordChangeRequired bool   `json:"password_change_required,omitempty"`
 }
 
 // LogoutResponse is the JSON shape returned by legacy /api/v1/session/logout.
@@ -546,16 +548,25 @@ func (service *Service) CurrentUser(ctx context.Context, authorization string) (
 	if service.shouldUpdateLastSeen(verified.AssigneeID) && service.LastSeen != nil {
 		_ = service.LastSeen.UpdateLastSeen(ctx, verified.AssigneeID)
 	}
+	passwordChangeRequired, err := service.adminPasswordChangeRequired(ctx, verified)
+	if err != nil {
+		return MeResponse{}, err
+	}
+	role := verified.Role
+	if passwordChangeRequired {
+		role = AdminPasswordChangeRole
+	}
 	aiEnabled, err := service.aiEnabled(ctx, verified.AssigneeID)
 	if err != nil {
 		return MeResponse{}, err
 	}
 	return MeResponse{
-		AssigneeID:   verified.AssigneeID,
-		AssigneeName: verified.AssigneeName,
-		Role:         verified.Role,
-		AIEnabled:    aiEnabled,
-		ExpiresAt:    formatLegacyISOTime(verified.ExpiresAt),
+		AssigneeID:             verified.AssigneeID,
+		AssigneeName:           verified.AssigneeName,
+		Role:                   role,
+		AIEnabled:              aiEnabled,
+		ExpiresAt:              formatLegacyISOTime(verified.ExpiresAt),
+		PasswordChangeRequired: passwordChangeRequired,
 	}, nil
 }
 
@@ -578,6 +589,14 @@ func (service *Service) Refresh(ctx context.Context, authorization string) (Refr
 	if err := service.Revoker.Add(ctx, verified.JTI, verified.ExpiresAt); err != nil {
 		return RefreshResponse{}, fmt.Errorf("revoke old session: %w", err)
 	}
+	passwordChangeRequired, err := service.adminPasswordChangeRequired(ctx, verified)
+	if err != nil {
+		return RefreshResponse{}, err
+	}
+	role := verified.Role
+	if passwordChangeRequired {
+		role = AdminPasswordChangeRole
+	}
 	ttl := service.RefreshTTL
 	if ttl <= 0 {
 		ttl = 168 * time.Hour
@@ -585,7 +604,7 @@ func (service *Service) Refresh(ctx context.Context, authorization string) (Refr
 	issued, err := service.Verifier.Issue(auth.IssueOptions{
 		AssigneeID:   verified.AssigneeID,
 		AssigneeName: verified.AssigneeName,
-		Role:         verified.Role,
+		Role:         role,
 		TTL:          ttl,
 	})
 	if err != nil {
@@ -596,14 +615,33 @@ func (service *Service) Refresh(ctx context.Context, authorization string) (Refr
 		return RefreshResponse{}, err
 	}
 	return RefreshResponse{
-		Success:      true,
-		Token:        issued.Token,
-		AssigneeID:   issued.AssigneeID,
-		AssigneeName: issued.AssigneeName,
-		Role:         issued.Role,
-		AIEnabled:    aiEnabled,
-		ExpiresAt:    formatLegacyISOTime(issued.ExpiresAt),
+		Success:                true,
+		Token:                  issued.Token,
+		AssigneeID:             issued.AssigneeID,
+		AssigneeName:           issued.AssigneeName,
+		Role:                   issued.Role,
+		AIEnabled:              aiEnabled,
+		ExpiresAt:              formatLegacyISOTime(issued.ExpiresAt),
+		PasswordChangeRequired: passwordChangeRequired,
 	}, nil
+}
+
+func (service *Service) adminPasswordChangeRequired(ctx context.Context, verified auth.Session) (bool, error) {
+	if !verified.HasRole("admin", AdminPasswordChangeRole) || service.AdminUsers == nil {
+		return verified.HasRole(AdminPasswordChangeRole), nil
+	}
+	username := strings.TrimSpace(verified.AssigneeID)
+	if username == "" {
+		return false, nil
+	}
+	adminUser, ok, err := service.AdminUsers.GetAdminUser(ctx, username)
+	if err != nil {
+		return false, err
+	}
+	if !ok {
+		return false, nil
+	}
+	return adminUser.PasswordChangeRequired, nil
 }
 
 // Logout revokes the signed JWT when it contains a revocable jti/exp pair.

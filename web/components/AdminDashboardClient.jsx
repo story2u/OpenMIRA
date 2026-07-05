@@ -226,6 +226,8 @@ import { logoutSession } from "../lib/sessionLogin.js";
 
 export function AdminDashboardClient() {
   const [token, setToken] = useState("");
+  const [forcePasswordChange, setForcePasswordChange] = useState(false);
+  const [sessionCheckPending, setSessionCheckPending] = useState(false);
   const [activeGroupKey, setActiveGroupKey] = useState(adminGroups[0].key);
   const [selectedSectionKey, setSelectedSectionKey] = useState(adminGroups[0].sections[0].key);
   const [snapshots, setSnapshots] = useState({});
@@ -242,7 +244,41 @@ export function AdminDashboardClient() {
   useEffect(() => {
     const savedToken = getSessionToken("admin");
     setToken(savedToken);
+    setForcePasswordChange(isAdminPasswordChangeToken(savedToken));
+    setSessionCheckPending(Boolean(savedToken && !isAdminPasswordChangeToken(savedToken)));
   }, []);
+
+  useEffect(() => {
+    if (!token) {
+      setForcePasswordChange(false);
+      setSessionCheckPending(false);
+      return undefined;
+    }
+    if (isAdminPasswordChangeToken(token)) {
+      setForcePasswordChange(true);
+      setSessionCheckPending(false);
+      return undefined;
+    }
+    let cancelled = false;
+    setSessionCheckPending(true);
+    requestSessionJSON("admin", "/session/me", { retryUnauthorized: false })
+      .then((payload) => {
+        if (!cancelled) setForcePasswordChange(adminSessionNeedsPasswordChange(payload));
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        if ([401, 403].includes(Number(err?.status || 0))) {
+          setToken("");
+          setForcePasswordChange(false);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setSessionCheckPending(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
 
   useEffect(() => {
     if (!activeGroup.sections.some((section) => section.key === selectedSectionKey)) {
@@ -251,7 +287,7 @@ export function AdminDashboardClient() {
   }, [activeGroup, selectedSectionKey]);
 
   useEffect(() => {
-    if (!token) {
+    if (!token || sessionCheckPending || forcePasswordChange || isAdminPasswordChangeToken(token)) {
       setStatuses({});
       setSnapshots({});
       return undefined;
@@ -313,7 +349,7 @@ export function AdminDashboardClient() {
     return () => {
       controllers.forEach((controller) => controller.abort());
     };
-  }, [activeGroup, refreshNonce, token]);
+  }, [activeGroup, forcePasswordChange, refreshNonce, sessionCheckPending, token]);
 
   const handleLogout = useCallback(async () => {
     const previousToken = token;
@@ -336,8 +372,14 @@ export function AdminDashboardClient() {
     setRefreshNonce((value) => value + 1);
   }, []);
 
-  if (!token || isAdminPasswordChangeToken(token)) {
-    return <LoginPageClient mode="admin" />;
+  const passwordChangeRequired = forcePasswordChange || isAdminPasswordChangeToken(token);
+
+  if (!token || passwordChangeRequired) {
+    return <LoginPageClient mode="admin" forcePasswordChange={passwordChangeRequired} />;
+  }
+
+  if (sessionCheckPending) {
+    return <AdminSessionChecking />;
   }
 
   return (
@@ -446,6 +488,21 @@ export function AdminDashboardClient() {
 
 function isAdminPasswordChangeToken(token) {
   return String(parseSessionTokenPayload(token)?.role || "").trim() === "admin_password_change";
+}
+
+function adminSessionNeedsPasswordChange(payload) {
+  return Boolean(payload?.password_change_required)
+    || String(payload?.role || "").trim() === "admin_password_change";
+}
+
+function AdminSessionChecking() {
+  return (
+    <div className="mx-auto grid max-w-7xl px-4 py-4 lg:px-6">
+      <section className="grid min-h-[640px] items-center border border-[#d8dde8] bg-white p-4 md:p-8">
+        <div className="mx-auto text-sm font-medium text-[#697386]">正在检查运营会话</div>
+      </section>
+    </div>
+  );
 }
 
 function SectionButton({ section, selected, snapshot, status, onSelect }) {

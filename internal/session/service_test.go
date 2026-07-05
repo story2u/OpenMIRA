@@ -481,6 +481,27 @@ func TestCurrentUserReturnsLegacyMeResponse(t *testing.T) {
 	}
 }
 
+func TestCurrentUserReportsAdminPasswordChangeRequired(t *testing.T) {
+	service := testService(t)
+	service.AdminUsers = newAdminUserStore(t, "root", "1234567890", true)
+	token := signSessionToken(t, service.Verifier.Secret, map[string]any{
+		"iss":  "im-cloud",
+		"sub":  "root",
+		"name": "管理员",
+		"role": "admin",
+		"exp":  int64(2000),
+		"jti":  "jwt-admin",
+	})
+
+	response, err := service.CurrentUser(context.Background(), "Bearer "+token)
+	if err != nil {
+		t.Fatalf("CurrentUser returned error: %v", err)
+	}
+	if !response.PasswordChangeRequired || response.Role != AdminPasswordChangeRole || response.AssigneeID != "root" {
+		t.Fatalf("unexpected admin me response: %+v", response)
+	}
+}
+
 func TestCurrentUserMapsAuthFailuresToLegacyErrors(t *testing.T) {
 	service := testService(t)
 	if _, err := service.CurrentUser(context.Background(), ""); !errors.Is(err, ErrMissingBearerToken) {
@@ -567,6 +588,35 @@ func TestRefreshRevokesOldTokenAndReturnsLegacyResponse(t *testing.T) {
 	}
 	if refreshed.JTI == "jwt-old" || refreshed.AssigneeID != "cs-001" || refreshed.Role != "cs" {
 		t.Fatalf("unexpected refreshed claims: %+v", refreshed)
+	}
+}
+
+func TestRefreshDowngradesAdminTokenWhenPasswordChangeRequired(t *testing.T) {
+	service := testService(t)
+	service.AdminUsers = newAdminUserStore(t, "root", "1234567890", true)
+	service.Revoker = &revokerRecorder{}
+	oldToken := signSessionToken(t, service.Verifier.Secret, map[string]any{
+		"iss":  "im-cloud",
+		"sub":  "root",
+		"name": "管理员",
+		"role": "admin",
+		"exp":  int64(2000),
+		"jti":  "jwt-old-admin",
+	})
+
+	response, err := service.Refresh(context.Background(), "Bearer "+oldToken)
+	if err != nil {
+		t.Fatalf("Refresh returned error: %v", err)
+	}
+	if !response.PasswordChangeRequired || response.Role != AdminPasswordChangeRole || response.AssigneeID != "root" {
+		t.Fatalf("unexpected refresh response: %+v", response)
+	}
+	refreshed, err := service.Verifier.Verify(response.Token)
+	if err != nil {
+		t.Fatalf("Verify refreshed token returned error: %v", err)
+	}
+	if refreshed.Role != AdminPasswordChangeRole {
+		t.Fatalf("refreshed role = %q", refreshed.Role)
 	}
 }
 
