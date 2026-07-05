@@ -41,6 +41,15 @@ func NewSQLRepository(db *sql.DB, dialect string) *Repository {
 	return &Repository{DB: sqlQueryer{db: db}, Dialect: dialect}
 }
 
+// EnsureSchema creates the audit log table needed by standalone deployments.
+func (repository *Repository) EnsureSchema(ctx context.Context) error {
+	if repository.DB == nil {
+		return fmt.Errorf("workbench audit log database is not configured")
+	}
+	_, err := repository.DB.ExecContext(ctx, repository.createTableSQL())
+	return err
+}
+
 // ListAuditLogs returns one counted audit log page ordered by newest first.
 func (repository *Repository) ListAuditLogs(ctx context.Context, query workbench.AuditLogQuery) (workbench.AuditLogPage, error) {
 	if repository.DB == nil {
@@ -63,7 +72,9 @@ func (repository *Repository) ListAuditLogs(ctx context.Context, query workbench
 	pageSize := maxInt(1, query.PageSize)
 	offset := (page - 1) * pageSize
 	dataArgs := append(append([]any{}, args...), pageSize, offset)
-	dataSQL := "SELECT log_id, operator, action_type, detail, ip, created_at FROM audit_logs WHERE " + whereSQL + " ORDER BY created_at DESC, log_id DESC LIMIT ? OFFSET ?"
+	limitPlaceholder := repository.placeholder(len(args) + 1)
+	offsetPlaceholder := repository.placeholder(len(args) + 2)
+	dataSQL := "SELECT log_id, operator, action_type, detail, ip, created_at FROM audit_logs WHERE " + whereSQL + " ORDER BY created_at DESC, log_id DESC LIMIT " + limitPlaceholder + " OFFSET " + offsetPlaceholder
 	rows, err := repository.DB.QueryContext(ctx, dataSQL, dataArgs...)
 	if err != nil {
 		return workbench.AuditLogPage{}, err
@@ -104,7 +115,7 @@ func (repository *Repository) AddAuditLog(ctx context.Context, entry workbench.A
 	createdAt := repository.dbNow()
 	_, err := repository.DB.ExecContext(
 		ctx,
-		"INSERT INTO audit_logs (log_id, operator, action_type, detail, ip, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+		repository.insertSQL(),
 		logID,
 		strings.TrimSpace(entry.Operator),
 		strings.TrimSpace(entry.ActionType),
@@ -129,20 +140,22 @@ func (repository *Repository) whereClause(query workbench.AuditLogQuery) (string
 	conditions := make([]string, 0, 4)
 	args := make([]any, 0, 4)
 	if operator := strings.TrimSpace(query.Operator); operator != "" {
-		conditions = append(conditions, "operator = ?")
 		args = append(args, operator)
+		conditions = append(conditions, "operator = "+repository.placeholder(len(args)))
 	}
 	if actionType := strings.TrimSpace(query.ActionType); actionType != "" {
-		conditions = append(conditions, "action_type = ?")
 		args = append(args, actionType)
+		conditions = append(conditions, "action_type = "+repository.placeholder(len(args)))
 	}
 	if dateText := strings.TrimSpace(query.Date); dateText != "" {
 		start, end, err := repository.beijingDayBounds(dateText)
 		if err != nil {
 			return "", nil, err
 		}
-		conditions = append(conditions, "created_at >= ? AND created_at < ?")
 		args = append(args, start, end)
+		startPlaceholder := repository.placeholder(len(args) - 1)
+		endPlaceholder := repository.placeholder(len(args))
+		conditions = append(conditions, "created_at >= "+startPlaceholder+" AND created_at < "+endPlaceholder)
 	}
 	if len(conditions) == 0 {
 		return "1=1", args, nil
@@ -150,12 +163,51 @@ func (repository *Repository) whereClause(query workbench.AuditLogQuery) (string
 	return strings.Join(conditions, " AND "), args, nil
 }
 
+func (repository *Repository) createTableSQL() string {
+	if repository.isPostgres() {
+		return `CREATE TABLE IF NOT EXISTS audit_logs (
+    log_id TEXT PRIMARY KEY,
+    operator TEXT NOT NULL DEFAULT '',
+    action_type TEXT NOT NULL DEFAULT '',
+    detail TEXT NOT NULL DEFAULT '',
+    ip TEXT NOT NULL DEFAULT '',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+)`
+	}
+	return `CREATE TABLE IF NOT EXISTS audit_logs (
+    log_id VARCHAR(191) PRIMARY KEY,
+    operator VARCHAR(191) NOT NULL DEFAULT '',
+    action_type VARCHAR(191) NOT NULL DEFAULT '',
+    detail TEXT NOT NULL,
+    ip VARCHAR(64) NOT NULL DEFAULT '',
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+)`
+}
+
+func (repository *Repository) insertSQL() string {
+	if repository.isPostgres() {
+		return "INSERT INTO audit_logs (log_id, operator, action_type, detail, ip, created_at) VALUES ($1, $2, $3, $4, $5, $6)"
+	}
+	return "INSERT INTO audit_logs (log_id, operator, action_type, detail, ip, created_at) VALUES (?, ?, ?, ?, ?, ?)"
+}
+
+func (repository *Repository) placeholder(index int) string {
+	if repository.isPostgres() {
+		return fmt.Sprintf("$%d", index)
+	}
+	return "?"
+}
+
 func (repository *Repository) dbNow() any {
 	now := time.Now().In(beijingLocation)
-	if strings.EqualFold(strings.TrimSpace(repository.Dialect), "postgres") {
+	if repository.isPostgres() {
 		return now.Format(time.RFC3339)
 	}
 	return now.Format("2006-01-02 15:04:05")
+}
+
+func (repository *Repository) isPostgres() bool {
+	return strings.EqualFold(strings.TrimSpace(repository.Dialect), "postgres")
 }
 
 func randomHex(size int) string {

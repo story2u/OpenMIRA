@@ -144,6 +144,9 @@ func New(options Options) (Module, error) {
 		service.LastSeen = profileRepository
 		if service.AuditLogs == nil {
 			auditLogRepository = workbenchauditlogs.NewSQLRepository(options.DB, dialect)
+			if err := auditLogRepository.EnsureSchema(initCtx); err != nil {
+				return Module{}, err
+			}
 			service.AuditLogs = sessionAuditLogWriter{repository: auditLogRepository}
 		}
 	} else if options.RequireProfileStore {

@@ -66,6 +66,24 @@ func TestListAuditLogsUsesPostgresDateBounds(t *testing.T) {
 	if db.args[0][0] != "2026-06-29T00:00:00+08:00" || db.args[0][1] != "2026-06-30T00:00:00+08:00" {
 		t.Fatalf("postgres date args = %#v", db.args[0])
 	}
+	if db.queries[0] != "SELECT COUNT(1) AS total FROM audit_logs WHERE created_at >= $1 AND created_at < $2" {
+		t.Fatalf("postgres count query = %q", db.queries[0])
+	}
+	if !strings.Contains(db.queries[1], "LIMIT $3 OFFSET $4") {
+		t.Fatalf("postgres data query = %q", db.queries[1])
+	}
+}
+
+func TestEnsureSchemaCreatesAuditLogTable(t *testing.T) {
+	db := &fakeDB{result: fakeResult{affected: 1}}
+	repository := &Repository{DB: db, Dialect: "postgres"}
+
+	if err := repository.EnsureSchema(context.Background()); err != nil {
+		t.Fatalf("EnsureSchema returned error: %v", err)
+	}
+	if len(db.execs) != 1 || !strings.Contains(db.execs[0], "CREATE TABLE IF NOT EXISTS audit_logs") || !strings.Contains(db.execs[0], "TIMESTAMPTZ") {
+		t.Fatalf("execs = %#v", db.execs)
+	}
 }
 
 func TestAddAuditLogInsertsLegacyRow(t *testing.T) {
@@ -89,6 +107,18 @@ func TestAddAuditLogInsertsLegacyRow(t *testing.T) {
 	}
 	if db.execArgs[0][1] != "admin" || db.execArgs[0][2] != "config" || db.execArgs[0][3] != "新增/更新敏感词: 风险词" || db.execArgs[0][4] != "127.0.0.1" {
 		t.Fatalf("exec args = %#v", db.execArgs[0])
+	}
+}
+
+func TestAddAuditLogUsesPostgresPlaceholders(t *testing.T) {
+	db := &fakeDB{result: fakeResult{affected: 1}}
+	repository := &Repository{DB: db, Dialect: "postgres"}
+
+	if _, err := repository.AddAuditLog(context.Background(), workbench.AuditLogEntry{Operator: "root", ActionType: "login"}); err != nil {
+		t.Fatalf("AddAuditLog returned error: %v", err)
+	}
+	if len(db.execs) != 1 || !strings.Contains(db.execs[0], "VALUES ($1, $2, $3, $4, $5, $6)") {
+		t.Fatalf("execs = %#v", db.execs)
 	}
 }
 

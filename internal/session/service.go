@@ -330,14 +330,12 @@ func (service *Service) issueAdminToken(ctx context.Context, username string, pa
 	if err != nil {
 		return LoginResponse{}, err
 	}
-	if err := service.addAuditLog(ctx, AuditLogEntry{
+	_ = service.addAuditLog(ctx, AuditLogEntry{
 		Operator:   issued.AssigneeID,
 		ActionType: auditAction,
 		Detail:     auditDetail,
 		IP:         meta.ClientIP,
-	}); err != nil {
-		return LoginResponse{}, err
-	}
+	})
 	return LoginResponse{
 		Success:                true,
 		Token:                  issued.Token,

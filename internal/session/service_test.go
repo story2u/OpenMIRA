@@ -80,6 +80,20 @@ func TestAdminLoginAuditsSuccessAndRecordsAttempts(t *testing.T) {
 	}
 }
 
+func TestAdminLoginIgnoresAuditLogFailures(t *testing.T) {
+	service := testService(t)
+	service.AdminUsers = newAdminUserStore(t, "root", "secret", false)
+	service.AuditLogs = &auditRecorder{err: errors.New("audit log table missing")}
+
+	response, err := service.AdminLogin(context.Background(), "root", "secret")
+	if err != nil {
+		t.Fatalf("AdminLogin returned error: %v", err)
+	}
+	if !response.Success || response.Token == "" {
+		t.Fatalf("unexpected response: %+v", response)
+	}
+}
+
 func TestAdminLoginWithStoredDefaultRequiresPasswordChange(t *testing.T) {
 	service := testService(t)
 	store := newAdminUserStore(t, "root", "1234567890", true)
@@ -691,11 +705,12 @@ func (recorder *lastSeenRecorder) UpdateLastSeen(ctx context.Context, assigneeID
 
 type auditRecorder struct {
 	entries []AuditLogEntry
+	err     error
 }
 
 func (recorder *auditRecorder) AddAuditLog(ctx context.Context, entry AuditLogEntry) error {
 	recorder.entries = append(recorder.entries, entry)
-	return nil
+	return recorder.err
 }
 
 type revokerRecorder struct {
