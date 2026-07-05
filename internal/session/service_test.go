@@ -484,6 +484,7 @@ func TestCurrentUserReturnsLegacyMeResponse(t *testing.T) {
 func TestCurrentUserReportsAdminPasswordChangeRequired(t *testing.T) {
 	service := testService(t)
 	service.AdminUsers = newAdminUserStore(t, "root", "1234567890", true)
+	service.Profiles = failingProfileResolver{err: errors.New("admin should not load cs profile")}
 	token := signSessionToken(t, service.Verifier.Secret, map[string]any{
 		"iss":  "im-cloud",
 		"sub":  "root",
@@ -594,6 +595,7 @@ func TestRefreshRevokesOldTokenAndReturnsLegacyResponse(t *testing.T) {
 func TestRefreshDowngradesAdminTokenWhenPasswordChangeRequired(t *testing.T) {
 	service := testService(t)
 	service.AdminUsers = newAdminUserStore(t, "root", "1234567890", true)
+	service.Profiles = failingProfileResolver{err: errors.New("admin should not load cs profile")}
 	service.Revoker = &revokerRecorder{}
 	oldToken := signSessionToken(t, service.Verifier.Secret, map[string]any{
 		"iss":  "im-cloud",
@@ -735,6 +737,14 @@ type profileMap map[string]Profile
 func (profiles profileMap) GetProfile(ctx context.Context, assigneeID string) (Profile, bool, error) {
 	profile, ok := profiles[assigneeID]
 	return profile, ok, nil
+}
+
+type failingProfileResolver struct {
+	err error
+}
+
+func (resolver failingProfileResolver) GetProfile(ctx context.Context, assigneeID string) (Profile, bool, error) {
+	return Profile{}, false, resolver.err
 }
 
 type userMap map[string]User

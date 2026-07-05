@@ -545,7 +545,7 @@ func (service *Service) CurrentUser(ctx context.Context, authorization string) (
 		}
 		return MeResponse{}, ErrInvalidOrExpiredSession
 	}
-	if service.shouldUpdateLastSeen(verified.AssigneeID) && service.LastSeen != nil {
+	if service.shouldUpdateLastSeen(verified) && service.LastSeen != nil {
 		_ = service.LastSeen.UpdateLastSeen(ctx, verified.AssigneeID)
 	}
 	passwordChangeRequired, err := service.adminPasswordChangeRequired(ctx, verified)
@@ -556,7 +556,7 @@ func (service *Service) CurrentUser(ctx context.Context, authorization string) (
 	if passwordChangeRequired {
 		role = AdminPasswordChangeRole
 	}
-	aiEnabled, err := service.aiEnabled(ctx, verified.AssigneeID)
+	aiEnabled, err := service.aiEnabled(ctx, verified)
 	if err != nil {
 		return MeResponse{}, err
 	}
@@ -610,7 +610,7 @@ func (service *Service) Refresh(ctx context.Context, authorization string) (Refr
 	if err != nil {
 		return RefreshResponse{}, err
 	}
-	aiEnabled, err := service.aiEnabled(ctx, verified.AssigneeID)
+	aiEnabled, err := service.aiEnabled(ctx, verified)
 	if err != nil {
 		return RefreshResponse{}, err
 	}
@@ -676,11 +676,14 @@ func (service *Service) Logout(ctx context.Context, authorization string, metada
 	return LogoutResponse{Success: true}, nil
 }
 
-func (service *Service) aiEnabled(ctx context.Context, assigneeID string) (bool, error) {
+func (service *Service) aiEnabled(ctx context.Context, verified auth.Session) (bool, error) {
+	if verified.HasRole("admin", AdminPasswordChangeRole) {
+		return false, nil
+	}
 	if service.Profiles == nil {
 		return false, nil
 	}
-	profile, ok, err := service.Profiles.GetProfile(ctx, assigneeID)
+	profile, ok, err := service.Profiles.GetProfile(ctx, verified.AssigneeID)
 	if err != nil {
 		return false, err
 	}
@@ -747,8 +750,11 @@ func textClaim(claims map[string]any, key string) string {
 	return strings.TrimSpace(fmt.Sprint(value))
 }
 
-func (service *Service) shouldUpdateLastSeen(assigneeID string) bool {
-	assigneeID = strings.TrimSpace(assigneeID)
+func (service *Service) shouldUpdateLastSeen(verified auth.Session) bool {
+	if verified.HasRole("admin", AdminPasswordChangeRole) {
+		return false
+	}
+	assigneeID := strings.TrimSpace(verified.AssigneeID)
 	if assigneeID == "" || assigneeID == "admin" {
 		return false
 	}
