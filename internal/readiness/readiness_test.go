@@ -27,8 +27,6 @@ func TestEvaluateSessionAccessProfile(t *testing.T) {
 			"GO_ENABLE_SESSION_LOGOUT_CANDIDATE":                  "1",
 			"CLOUD_DB_DSN":                                        "postgres://db",
 			"SESSION_JWT_SECRET":                                  "secret",
-			"ADMIN_USERNAME":                                      "admin",
-			"ADMIN_PASSWORD":                                      "secret",
 		},
 		Services: []string{"go-api"},
 		GoldenSuites: []string{

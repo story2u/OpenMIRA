@@ -49,7 +49,7 @@ test("detectRealtimeGap tracks per-scope cursors", () => {
   assert.equal(largeGap.needsResync, true);
 });
 
-test("fetchRealtime helpers call Python-compatible paths", async () => {
+test("fetchRealtime helpers call stable API paths", async () => {
   const calls = [];
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (url, options) => {

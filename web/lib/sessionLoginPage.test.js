@@ -37,6 +37,7 @@ test("resolvePostLoginRedirect keeps safe internal targets only", () => {
 
 test("loginPageInitialIdentifier reads legacy query params", () => {
   assert.equal(loginPageInitialIdentifier("admin", "?username=admin"), "admin");
+  assert.equal(loginPageInitialIdentifier("admin", ""), "root");
   assert.equal(loginPageInitialIdentifier("cs", "?cs_id=cs-001"), "cs-001");
   assert.equal(loginPageInitialIdentifier("passwordless", "?assignee_id=cs-002"), "cs-002");
 });

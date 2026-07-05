@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   assigneeIdStorageKey,
   assigneeIdTabStorageKey,
+  changeAdminPassword,
   consumeCSURLSession,
   getStoredCSAssigneeID,
   loginAdminWithPassword,
@@ -27,6 +28,7 @@ test("loginAdminWithPassword posts legacy payload and stores admin token", async
         assignee_id: "admin",
         assignee_name: "管理员",
         role: "admin",
+        password_change_required: true,
       });
     },
   });
@@ -36,7 +38,36 @@ test("loginAdminWithPassword posts legacy payload and stores admin token", async
   assert.equal(calls[0].init.body, `{"username":"admin","password":"secret"}`);
   assert.equal(response.token, "jwt-admin");
   assert.equal(response.role, "admin");
+  assert.equal(response.password_change_required, true);
   assert.equal(getSessionToken("admin", { storage }), "jwt-admin");
+});
+
+test("changeAdminPassword posts current and new password then stores final token", async () => {
+  const storage = new MemoryStorage();
+  const calls = [];
+  setSessionToken("admin", "jwt-change", { storage });
+
+  const response = await changeAdminPassword(" 1234567890 ", " new-password-123 ", {
+    storage,
+    fetchImpl: async (url, init) => {
+      calls.push({ url, init });
+      return jsonResponse({
+        success: true,
+        token: "jwt-admin-final",
+        assignee_id: "root",
+        role: "admin",
+        password_change_required: false,
+      });
+    },
+  });
+
+  assert.equal(calls[0].url, "/api/v1/session/admin/change-password");
+  assert.equal(calls[0].init.method, "POST");
+  assert.equal(calls[0].init.headers.Authorization, "Bearer jwt-change");
+  assert.equal(calls[0].init.body, `{"current_password":"1234567890","new_password":"new-password-123"}`);
+  assert.equal(response.assignee_id, "root");
+  assert.equal(response.password_change_required, false);
+  assert.equal(getSessionToken("admin", { storage }), "jwt-admin-final");
 });
 
 test("loginCSWithPassword stores workspace token and legacy assignee id", async () => {

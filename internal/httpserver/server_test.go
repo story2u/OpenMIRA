@@ -887,12 +887,11 @@ func TestNewWithModulesCanMountSessionAdminLoginCandidate(t *testing.T) {
 	assertPostBodyStatus(t, handler, "/api/v1/session/admin-login", `{"username":"admin","password":"secret"}`, http.StatusOK, `"token":"jwt-admin"`)
 
 	routes := RoutesWithModules(Modules{Session: &sessionHandler, SessionAdminLogin: true})
-	if len(routes) != 5 {
-		t.Fatalf("len(RoutesWithModules()) = %d, want 5", len(routes))
+	if len(routes) != 6 {
+		t.Fatalf("len(RoutesWithModules()) = %d, want 6", len(routes))
 	}
-	last := routes[len(routes)-1]
-	if last.Path != "/api/v1/session/admin-login" || last.Method != http.MethodPost || last.Phase != "phase2-session-candidate" {
-		t.Fatalf("unexpected admin login route metadata: %+v", last)
+	if routes[len(routes)-2].Path != "/api/v1/session/admin-login" || routes[len(routes)-1].Path != "/api/v1/session/admin/change-password" {
+		t.Fatalf("unexpected admin login route metadata: %+v", routes[len(routes)-2:])
 	}
 }
 
@@ -1290,6 +1289,18 @@ func (service fakeCurrentUserService) AdminLogin(ctx context.Context, username s
 		Success:      true,
 		Token:        "jwt-admin",
 		AssigneeID:   "admin",
+		AssigneeName: "管理员",
+		Role:         "admin",
+		ExpiresAt:    "2026-06-28T00:00:00+00:00",
+	}, nil
+}
+
+// ChangeAdminPassword implements sessionhttp.AdminPasswordChangeService for mux tests.
+func (service fakeCurrentUserService) ChangeAdminPassword(ctx context.Context, authorization string, request session.AdminPasswordChangeRequest, metadata ...session.LoginMetadata) (session.LoginResponse, error) {
+	return session.LoginResponse{
+		Success:      true,
+		Token:        "jwt-admin-new",
+		AssigneeID:   "root",
 		AssigneeName: "管理员",
 		Role:         "admin",
 		ExpiresAt:    "2026-06-28T00:00:00+00:00",

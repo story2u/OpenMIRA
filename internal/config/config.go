@@ -78,8 +78,6 @@ type Config struct {
 	P1WebRTCUDPPort                              int
 	AllowLegacyAgentAuth                         bool
 	AllowLegacyWSAuth                            bool
-	AdminUsername                                string
-	AdminPassword                                string
 	AuthRateLimitWindowSec                       float64
 	AuthRateLimitMaxAttempts                     int
 	AuthRateLimitBurst                           int
@@ -430,8 +428,6 @@ func Load() Config {
 		P1WebRTCUDPPort:                              envIntMin("P1_WEBRTC_UDP_PORT", 0, 0),
 		AllowLegacyAgentAuth:                         envBool("ALLOW_LEGACY_AGENT_AUTH"),
 		AllowLegacyWSAuth:                            envBool("ALLOW_LEGACY_WS_AUTH"),
-		AdminUsername:                                envString("ADMIN_USERNAME", ""),
-		AdminPassword:                                envString("ADMIN_PASSWORD", ""),
 		AuthRateLimitWindowSec:                       envFloatMin("AUTH_RATE_LIMIT_WINDOW_SEC", 300, 1),
 		AuthRateLimitMaxAttempts:                     envIntMin("AUTH_RATE_LIMIT_MAX_ATTEMPTS", 20, 1),
 		AuthRateLimitBurst:                           envIntMin("AUTH_RATE_LIMIT_BURST", 5, 1),

@@ -27,6 +27,9 @@ func NewWithModules(cfg config.Config, modules Modules) http.Handler {
 	if modules.Session != nil && modules.SessionAdminLogin {
 		mux.HandleFunc(http.MethodPost+" "+"/api/v1/session/admin-login", modules.Session.AdminLogin)
 	}
+	if modules.Session != nil && (modules.SessionAdminLogin || modules.SessionAdminPasswordChange) {
+		mux.HandleFunc(http.MethodPost+" "+"/api/v1/session/admin/change-password", modules.Session.AdminChangePassword)
+	}
 	if modules.Session != nil && modules.SessionLogin {
 		mux.HandleFunc(http.MethodPost+" "+"/api/v1/session/login", modules.Session.Login)
 	}

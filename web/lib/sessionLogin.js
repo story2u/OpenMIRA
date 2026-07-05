@@ -17,6 +17,21 @@ export async function loginAdminWithPassword(username, password, options = {}) {
   return persistLoginResponse("admin", payload, options);
 }
 
+export async function changeAdminPassword(currentPassword, newPassword, options = {}) {
+  const token = String(options.token || getSessionToken("admin", options)).trim();
+  const payload = await requestJSON("/session/admin/change-password", {
+    method: "POST",
+    token,
+    body: {
+      current_password: String(currentPassword || "").trim(),
+      new_password: String(newPassword || "").trim(),
+    },
+    fetchImpl: options.fetchImpl,
+    logger: options.logger,
+  });
+  return persistLoginResponse("admin", payload, options);
+}
+
 export async function loginCSWithPassword(assigneeID, password, options = {}) {
   const payload = await requestJSON("/session/cs-login", {
     method: "POST",
@@ -129,6 +144,7 @@ function persistLoginResponse(kind, payload, options) {
     assignee_name: String(payload?.assignee_name || (kind === "admin" ? "管理员" : "")).trim(),
     role: String(payload?.role || kind).trim(),
     expires_at: String(payload?.expires_at || "").trim(),
+    password_change_required: Boolean(payload?.password_change_required),
   };
 }
 

@@ -63,7 +63,7 @@ export function resolvePostLoginRedirect(mode = "cs", search = "") {
 export function loginPageInitialIdentifier(mode = "cs", search = "") {
   const config = loginPageConfig(mode);
   const params = new URLSearchParams(String(search || "").startsWith("?") ? String(search || "") : `?${search || ""}`);
-  return String(params.get(config.identifierParam) || params.get("assignee_id") || "").trim();
+  return String(params.get(config.identifierParam) || params.get("assignee_id") || (config.mode === "admin" ? "root" : "")).trim();
 }
 
 export function loginConfirmation(mode = "cs", identifier = "") {

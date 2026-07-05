@@ -29,6 +29,12 @@ var (
 	ErrAdminLoginMissingCredentials = errors.New("admin login username and password are required")
 	// ErrAdminLoginInvalidCredentials matches the legacy auth failure detail.
 	ErrAdminLoginInvalidCredentials = errors.New("admin login credentials are invalid")
+	// ErrAdminPasswordChangeMissingCredentials means the change-password body is incomplete.
+	ErrAdminPasswordChangeMissingCredentials = errors.New("admin password change current and new password are required")
+	// ErrAdminPasswordChangeInvalidNewPassword means the replacement password is unsafe.
+	ErrAdminPasswordChangeInvalidNewPassword = errors.New("admin password change new password is invalid")
+	// ErrAdminPasswordChangeInvalidCurrent means the current password did not verify.
+	ErrAdminPasswordChangeInvalidCurrent = errors.New("admin password change current password is invalid")
 	// ErrPasswordlessLoginDisabled matches legacy /session/login when disabled.
 	ErrPasswordlessLoginDisabled = errors.New("passwordless login disabled")
 	// ErrAssigneeIDRequired matches legacy /session/login validation.
@@ -49,6 +55,12 @@ var (
 	ErrCSUserNotFoundOrDisabled = errors.New("cs user not found or disabled")
 	// ErrLoginRateLimited matches legacy auth source-IP throttling.
 	ErrLoginRateLimited = errors.New("login rate limited")
+)
+
+const (
+	// AdminPasswordChangeRole can only complete the mandatory password change flow.
+	AdminPasswordChangeRole = "admin_password_change"
+	adminDisplayName        = "管理员"
 )
 
 // Profile is the cs_users-backed subset needed by /api/v1/session/me.
@@ -121,10 +133,18 @@ func (err LoginRateLimitError) Is(target error) bool {
 	return target == ErrLoginRateLimited
 }
 
-// AdminCredentials are the legacy ADMIN_USERNAME/ADMIN_PASSWORD pair.
-type AdminCredentials struct {
-	Username string
-	Password string
+// AdminUser is the stored management credential used by /admin-login.
+type AdminUser struct {
+	Username               string
+	PasswordHash           string
+	PasswordChangeRequired bool
+}
+
+// AdminUserStore loads and mutates stored management credentials.
+type AdminUserStore interface {
+	GetAdminUser(ctx context.Context, username string) (AdminUser, bool, error)
+	UpdateAdminPassword(ctx context.Context, username string, passwordHash string, passwordChangeRequired bool) error
+	RecordAdminLogin(ctx context.Context, username string) error
 }
 
 // Service builds session endpoint responses from verified JWT identities.
@@ -136,7 +156,7 @@ type Service struct {
 	LastSeen          LastSeenUpdater
 	LastSeenThrottle  time.Duration
 	RefreshTTL        time.Duration
-	AdminCredentials  AdminCredentials
+	AdminUsers        AdminUserStore
 	AdminLoginTTL     time.Duration
 	PasswordlessLogin bool
 	LoginLimiter      LoginAttemptLimiter
@@ -149,12 +169,13 @@ type Service struct {
 
 // LoginResponse is the JSON shape returned by legacy login endpoints.
 type LoginResponse struct {
-	Success      bool   `json:"success"`
-	Token        string `json:"token"`
-	AssigneeID   string `json:"assignee_id"`
-	AssigneeName string `json:"assignee_name"`
-	Role         string `json:"role"`
-	ExpiresAt    string `json:"expires_at"`
+	Success                bool   `json:"success"`
+	Token                  string `json:"token"`
+	AssigneeID             string `json:"assignee_id"`
+	AssigneeName           string `json:"assignee_name"`
+	Role                   string `json:"role"`
+	ExpiresAt              string `json:"expires_at"`
+	PasswordChangeRequired bool   `json:"password_change_required"`
 }
 
 // GenerateCSTokenResponse is returned by legacy admin/generate-cs-token.
@@ -204,16 +225,17 @@ type CSLoginRequest struct {
 	Password   string
 }
 
-// AdminLogin verifies env-backed admin credentials and issues a 7-day token.
+// AdminPasswordChangeRequest describes the mandatory admin password reset body.
+type AdminPasswordChangeRequest struct {
+	CurrentPassword string
+	NewPassword     string
+}
+
+// AdminLogin verifies stored admin credentials and issues a session token.
 func (service *Service) AdminLogin(ctx context.Context, username string, password string, metadata ...LoginMetadata) (LoginResponse, error) {
 	meta := firstLoginMetadata(metadata)
 	if err := service.checkLoginRateLimit(meta.ClientIP); err != nil {
 		return LoginResponse{}, err
-	}
-	expectedUsername := strings.TrimSpace(service.AdminCredentials.Username)
-	expectedPassword := strings.TrimSpace(service.AdminCredentials.Password)
-	if expectedUsername == "" || expectedPassword == "" {
-		return LoginResponse{}, ErrAdminLoginNotConfigured
 	}
 	username = strings.TrimSpace(username)
 	password = strings.TrimSpace(password)
@@ -221,39 +243,109 @@ func (service *Service) AdminLogin(ctx context.Context, username string, passwor
 		service.recordLoginAttempt(meta.ClientIP)
 		return LoginResponse{}, ErrAdminLoginMissingCredentials
 	}
-	if username != expectedUsername || password != expectedPassword {
+	if service.AdminUsers != nil {
+		adminUser, ok, err := service.AdminUsers.GetAdminUser(ctx, username)
+		if err != nil {
+			return LoginResponse{}, err
+		}
+		if !ok || !auth.VerifyPasswordHash(adminUser.PasswordHash, password) {
+			service.recordLoginAttempt(meta.ClientIP)
+			return LoginResponse{}, ErrAdminLoginInvalidCredentials
+		}
+		if strings.TrimSpace(adminUser.Username) == "" {
+			adminUser.Username = username
+		}
+		if err := service.AdminUsers.RecordAdminLogin(ctx, adminUser.Username); err != nil {
+			return LoginResponse{}, err
+		}
+		response, err := service.issueAdminToken(ctx, adminUser.Username, adminUser.PasswordChangeRequired, meta, "login", "管理员账密登录")
 		service.recordLoginAttempt(meta.ClientIP)
-		return LoginResponse{}, ErrAdminLoginInvalidCredentials
+		return response, err
 	}
+
+	return LoginResponse{}, ErrAdminLoginNotConfigured
+}
+
+// ChangeAdminPassword completes the forced first-login password change.
+func (service *Service) ChangeAdminPassword(ctx context.Context, authorization string, request AdminPasswordChangeRequest, metadata ...LoginMetadata) (LoginResponse, error) {
+	meta := firstLoginMetadata(metadata)
+	if service.AdminUsers == nil {
+		return LoginResponse{}, ErrAdminLoginNotConfigured
+	}
+	token := auth.ParseBearerToken(authorization)
+	if token == "" {
+		return LoginResponse{}, ErrMissingBearerToken
+	}
+	verified, err := service.Verifier.VerifyContext(ctx, token)
+	if err != nil {
+		if errors.Is(err, auth.ErrBlacklistUnavailable) {
+			return LoginResponse{}, err
+		}
+		return LoginResponse{}, ErrInvalidOrExpiredSession
+	}
+	if !verified.HasRole("admin", AdminPasswordChangeRole) {
+		return LoginResponse{}, ErrPermissionDenied
+	}
+	username := strings.TrimSpace(verified.AssigneeID)
+	currentPassword := strings.TrimSpace(request.CurrentPassword)
+	newPassword := strings.TrimSpace(request.NewPassword)
+	if username == "" || currentPassword == "" || newPassword == "" {
+		return LoginResponse{}, ErrAdminPasswordChangeMissingCredentials
+	}
+	if len([]rune(newPassword)) < 10 || newPassword == currentPassword {
+		return LoginResponse{}, ErrAdminPasswordChangeInvalidNewPassword
+	}
+	adminUser, ok, err := service.AdminUsers.GetAdminUser(ctx, username)
+	if err != nil {
+		return LoginResponse{}, err
+	}
+	if !ok || !auth.VerifyPasswordHash(adminUser.PasswordHash, currentPassword) {
+		return LoginResponse{}, ErrAdminPasswordChangeInvalidCurrent
+	}
+	passwordHash, err := auth.HashPassword(newPassword)
+	if err != nil {
+		return LoginResponse{}, err
+	}
+	if err := service.AdminUsers.UpdateAdminPassword(ctx, username, passwordHash, false); err != nil {
+		return LoginResponse{}, err
+	}
+	return service.issueAdminToken(ctx, username, false, meta, "password_change", "管理员首次登录修改密码")
+}
+
+func (service *Service) issueAdminToken(ctx context.Context, username string, passwordChangeRequired bool, meta LoginMetadata, auditAction string, auditDetail string) (LoginResponse, error) {
 	ttl := service.AdminLoginTTL
 	if ttl <= 0 {
 		ttl = 168 * time.Hour
 	}
+	role := "admin"
+	if passwordChangeRequired {
+		role = AdminPasswordChangeRole
+	}
 	issued, err := service.Verifier.Issue(auth.IssueOptions{
-		AssigneeID:   "admin",
-		AssigneeName: "管理员",
-		Role:         "admin",
+		AssigneeID:   strings.TrimSpace(username),
+		AssigneeName: adminDisplayName,
+		Role:         role,
 		TTL:          ttl,
 	})
 	if err != nil {
 		return LoginResponse{}, err
 	}
 	if err := service.addAuditLog(ctx, AuditLogEntry{
-		Operator:   "admin",
-		ActionType: "login",
-		Detail:     "管理员账密登录",
+		Operator:   issued.AssigneeID,
+		ActionType: auditAction,
+		Detail:     auditDetail,
 		IP:         meta.ClientIP,
 	}); err != nil {
 		return LoginResponse{}, err
 	}
-	service.recordLoginAttempt(meta.ClientIP)
 	return LoginResponse{
-		Success:      true,
-		Token:        issued.Token,
-		AssigneeID:   issued.AssigneeID,
-		AssigneeName: issued.AssigneeName,
-		Role:         issued.Role,
-		ExpiresAt:    formatLegacyISOTime(issued.ExpiresAt),
+		Success:                true,
+		Token:                  issued.Token,
+		AssigneeID:             issued.AssigneeID,
+		AssigneeName:           issued.AssigneeName,
+		Role:                   issued.Role,
+		ExpiresAt:              formatLegacyISOTime(issued.ExpiresAt),
+		PasswordChangeRequired: passwordChangeRequired,
 	}, nil
 }
 

@@ -17,8 +17,6 @@ func TestLoadReadsSessionMeCandidateFlag(t *testing.T) {
 	t.Setenv("GO_ENABLE_SESSION_ME_CANDIDATE", "1")
 	t.Setenv("GO_ENABLE_SESSION_REFRESH_CANDIDATE", "true")
 	t.Setenv("GO_ENABLE_SESSION_LOGOUT_CANDIDATE", "yes")
-	t.Setenv("ADMIN_USERNAME", "admin-user")
-	t.Setenv("ADMIN_PASSWORD", "admin-pass")
 	t.Setenv("AUTH_RATE_LIMIT_WINDOW_SEC", "120.5")
 	t.Setenv("AUTH_RATE_LIMIT_MAX_ATTEMPTS", "9")
 	t.Setenv("AUTH_RATE_LIMIT_BURST", "3")
@@ -224,9 +222,6 @@ func TestLoadReadsSessionMeCandidateFlag(t *testing.T) {
 	}
 	if !cfg.SessionAdminLoginCandidate {
 		t.Fatal("SessionAdminLoginCandidate = false, want true")
-	}
-	if cfg.AdminUsername != "admin-user" || cfg.AdminPassword != "admin-pass" {
-		t.Fatalf("admin credentials = %q/%q", cfg.AdminUsername, cfg.AdminPassword)
 	}
 	if cfg.AuthRateLimitWindowSec != 120.5 || cfg.AuthRateLimitMaxAttempts != 9 || cfg.AuthRateLimitBurst != 3 || cfg.AuthRateLimitBurstWindowSec != 15.5 {
 		t.Fatalf("auth rate limit config = window %.1f attempts %d burst %d burst_window %.1f", cfg.AuthRateLimitWindowSec, cfg.AuthRateLimitMaxAttempts, cfg.AuthRateLimitBurst, cfg.AuthRateLimitBurstWindowSec)
@@ -793,8 +788,6 @@ func TestLoadKeepsSessionMeCandidateDisabledByDefault(t *testing.T) {
 	t.Setenv("GO_ENABLE_SESSION_ME_CANDIDATE", "")
 	t.Setenv("GO_ENABLE_SESSION_REFRESH_CANDIDATE", "")
 	t.Setenv("GO_ENABLE_SESSION_LOGOUT_CANDIDATE", "")
-	t.Setenv("ADMIN_USERNAME", "")
-	t.Setenv("ADMIN_PASSWORD", "")
 	t.Setenv("AUTH_RATE_LIMIT_WINDOW_SEC", "")
 	t.Setenv("AUTH_RATE_LIMIT_MAX_ATTEMPTS", "")
 	t.Setenv("AUTH_RATE_LIMIT_BURST", "")
@@ -964,9 +957,6 @@ func TestLoadKeepsSessionMeCandidateDisabledByDefault(t *testing.T) {
 	}
 	if cfg.SessionAdminLoginCandidate {
 		t.Fatal("SessionAdminLoginCandidate = true, want false")
-	}
-	if cfg.AdminUsername != "" || cfg.AdminPassword != "" {
-		t.Fatalf("admin credentials = %q/%q, want empty", cfg.AdminUsername, cfg.AdminPassword)
 	}
 	if cfg.AuthRateLimitWindowSec != 300 || cfg.AuthRateLimitMaxAttempts != 20 || cfg.AuthRateLimitBurst != 5 || cfg.AuthRateLimitBurstWindowSec != 60 {
 		t.Fatalf("auth rate limit defaults = window %.1f attempts %d burst %d burst_window %.1f", cfg.AuthRateLimitWindowSec, cfg.AuthRateLimitMaxAttempts, cfg.AuthRateLimitBurst, cfg.AuthRateLimitBurstWindowSec)

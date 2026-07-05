@@ -1,13 +1,17 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { loginAdminWithPassword, loginCSWithPassword, loginCSWithoutPassword, sessionLoginErrorMessage } from "../lib/sessionLogin.js";
+import { changeAdminPassword, loginAdminWithPassword, loginCSWithPassword, loginCSWithoutPassword, sessionLoginErrorMessage } from "../lib/sessionLogin.js";
 import { loginConfirmation, loginPageConfig, loginPageInitialIdentifier, resolvePostLoginRedirect } from "../lib/sessionLoginPage.js";
 
 export function LoginPageClient({ mode = "cs" }) {
   const config = useMemo(() => loginPageConfig(mode), [mode]);
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
+  const [changeToken, setChangeToken] = useState("");
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -38,8 +42,16 @@ export function LoginPageClient({ mode = "cs" }) {
     setLoading(true);
     setError("");
     try {
+      let response;
       if (config.mode === "admin") {
-        await loginAdminWithPassword(identifier, password);
+        response = await loginAdminWithPassword(identifier, password);
+        if (response.password_change_required) {
+          setChangeToken(response.token);
+          setCurrentPassword("");
+          setNewPassword("");
+          setConfirmPassword("");
+          return;
+        }
       } else if (config.mode === "passwordless") {
         await loginCSWithoutPassword(identifier);
       } else {
@@ -55,6 +67,92 @@ export function LoginPageClient({ mode = "cs" }) {
       setLoading(false);
     }
   }, [config, identifier, password]);
+
+  const handlePasswordChange = useCallback(async (event) => {
+    event.preventDefault();
+    if (!currentPassword.trim()) {
+      setError("请输入当前密码");
+      return;
+    }
+    if (newPassword.trim().length < 10) {
+      setError("新密码至少 10 位");
+      return;
+    }
+    if (newPassword.trim() !== confirmPassword.trim()) {
+      setError("两次输入的新密码不一致");
+      return;
+    }
+    setLoading(true);
+    setError("");
+    try {
+      await changeAdminPassword(currentPassword, newPassword, { token: changeToken });
+      const target = typeof window === "undefined"
+        ? config.defaultRedirect
+        : resolvePostLoginRedirect(config.mode, window.location.search);
+      window.location.assign(target);
+    } catch (err) {
+      setError(sessionLoginErrorMessage(config.kind, err));
+    } finally {
+      setLoading(false);
+    }
+  }, [changeToken, config, currentPassword, newPassword, confirmPassword]);
+
+  if (config.mode === "admin" && changeToken) {
+    return (
+      <div className="mx-auto grid max-w-7xl px-4 py-4 lg:px-6">
+        <section className="grid min-h-[640px] items-center border border-[#d8dde8] bg-white p-4 md:p-8">
+          <form className="mx-auto grid w-full max-w-sm gap-4" onSubmit={handlePasswordChange}>
+            <div>
+              <h1 className="text-lg font-semibold text-[#172033]">修改管理员密码</h1>
+              <p className="mt-1 text-xs text-[#697386]">/api/v1/session/admin/change-password</p>
+            </div>
+            <label className="grid gap-1">
+              <span className="text-xs font-medium text-[#697386]">当前密码</span>
+              <input
+                className="h-10 border border-[#cfd6e3] px-3 text-sm outline-none focus:border-[#2f6fed]"
+                type="password"
+                value={currentPassword}
+                onChange={(event) => setCurrentPassword(event.target.value)}
+                placeholder="current password"
+                autoComplete="current-password"
+                autoFocus
+              />
+            </label>
+            <label className="grid gap-1">
+              <span className="text-xs font-medium text-[#697386]">新密码</span>
+              <input
+                className="h-10 border border-[#cfd6e3] px-3 text-sm outline-none focus:border-[#2f6fed]"
+                type="password"
+                value={newPassword}
+                onChange={(event) => setNewPassword(event.target.value)}
+                placeholder="new password"
+                autoComplete="new-password"
+              />
+            </label>
+            <label className="grid gap-1">
+              <span className="text-xs font-medium text-[#697386]">确认新密码</span>
+              <input
+                className="h-10 border border-[#cfd6e3] px-3 text-sm outline-none focus:border-[#2f6fed]"
+                type="password"
+                value={confirmPassword}
+                onChange={(event) => setConfirmPassword(event.target.value)}
+                placeholder="confirm password"
+                autoComplete="new-password"
+              />
+            </label>
+            {error && <div className="border border-[#f2b8b5] bg-[#fff4f2] px-3 py-2 text-sm text-[#b42318]">{error}</div>}
+            <button
+              className="h-10 border border-[#172033] bg-[#172033] px-4 text-sm font-medium text-white disabled:border-[#c4cad6] disabled:bg-[#d8dde8] disabled:text-[#697386]"
+              type="submit"
+              disabled={loading}
+            >
+              {loading ? "更新中" : "更新密码"}
+            </button>
+          </form>
+        </section>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto grid max-w-7xl px-4 py-4 lg:px-6">

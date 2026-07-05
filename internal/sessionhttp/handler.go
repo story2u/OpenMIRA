@@ -24,6 +24,11 @@ type AdminLoginService interface {
 	AdminLogin(ctx context.Context, username string, password string, metadata ...session.LoginMetadata) (session.LoginResponse, error)
 }
 
+// AdminPasswordChangeService is needed by the forced admin password reset flow.
+type AdminPasswordChangeService interface {
+	ChangeAdminPassword(ctx context.Context, authorization string, request session.AdminPasswordChangeRequest, metadata ...session.LoginMetadata) (session.LoginResponse, error)
+}
+
 // AssigneeLoginService is the service contract needed by the /login handler.
 type AssigneeLoginService interface {
 	AssigneeLogin(ctx context.Context, request session.AssigneeLoginRequest, metadata ...session.LoginMetadata) (session.LoginResponse, error)
@@ -51,13 +56,14 @@ type LogoutService interface {
 
 // Handler contains session endpoint HTTP adapters.
 type Handler struct {
-	currentUser CurrentUserService
-	adminLogin  AdminLoginService
-	login       AssigneeLoginService
-	csLogin     CSLoginService
-	generateCS  GenerateCSTokenService
-	refresh     RefreshService
-	logout      LogoutService
+	currentUser         CurrentUserService
+	adminLogin          AdminLoginService
+	adminPasswordChange AdminPasswordChangeService
+	login               AssigneeLoginService
+	csLogin             CSLoginService
+	generateCS          GenerateCSTokenService
+	refresh             RefreshService
+	logout              LogoutService
 }
 
 // New builds a session HTTP adapter.
@@ -65,6 +71,9 @@ func New(currentUser CurrentUserService) Handler {
 	handler := Handler{currentUser: currentUser}
 	if adminLogin, ok := currentUser.(AdminLoginService); ok {
 		handler.adminLogin = adminLogin
+	}
+	if adminPasswordChange, ok := currentUser.(AdminPasswordChangeService); ok {
+		handler.adminPasswordChange = adminPasswordChange
 	}
 	if login, ok := currentUser.(AssigneeLoginService); ok {
 		handler.login = login
@@ -113,6 +122,31 @@ func (handler Handler) AdminLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	response, err := handler.adminLogin.AdminLogin(r.Context(), body.Username, body.Password, loginMetadataFromRequest(r))
+	if err != nil {
+		writeSessionError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, response)
+}
+
+// AdminChangePassword serializes the mandatory admin password reset endpoint.
+func (handler Handler) AdminChangePassword(w http.ResponseWriter, r *http.Request) {
+	if handler.adminPasswordChange == nil {
+		writeError(w, http.StatusServiceUnavailable, "session admin password change service is not configured")
+		return
+	}
+	var body struct {
+		CurrentPassword string `json:"current_password"`
+		NewPassword     string `json:"new_password"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid json")
+		return
+	}
+	response, err := handler.adminPasswordChange.ChangeAdminPassword(r.Context(), r.Header.Get("Authorization"), session.AdminPasswordChangeRequest{
+		CurrentPassword: body.CurrentPassword,
+		NewPassword:     body.NewPassword,
+	}, loginMetadataFromRequest(r))
 	if err != nil {
 		writeSessionError(w, err)
 		return
@@ -233,6 +267,12 @@ func writeSessionError(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusUnprocessableEntity, "用户名和密码不能为空")
 	case errors.Is(err, session.ErrAdminLoginInvalidCredentials):
 		writeError(w, http.StatusUnauthorized, "用户名或密码错误")
+	case errors.Is(err, session.ErrAdminPasswordChangeMissingCredentials):
+		writeError(w, http.StatusUnprocessableEntity, "当前密码和新密码不能为空")
+	case errors.Is(err, session.ErrAdminPasswordChangeInvalidCurrent):
+		writeError(w, http.StatusUnauthorized, "当前密码错误")
+	case errors.Is(err, session.ErrAdminPasswordChangeInvalidNewPassword):
+		writeError(w, http.StatusUnprocessableEntity, "新密码至少 10 位且不能和当前密码相同")
 	case errors.Is(err, session.ErrPasswordlessLoginDisabled):
 		writeError(w, http.StatusForbidden, "passwordless login disabled")
 	case errors.Is(err, session.ErrAssigneeIDRequired):

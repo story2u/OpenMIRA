@@ -679,28 +679,18 @@ func TestBuildHandlerRequiresDatabaseForSessionCandidate(t *testing.T) {
 	}
 }
 
-// TestBuildHandlerMountsSessionAdminLoginWithoutDatabase keeps admin auth light.
-func TestBuildHandlerMountsSessionAdminLoginWithoutDatabase(t *testing.T) {
+// TestBuildHandlerRequiresDatabaseForSessionAdminLogin keeps admin credentials stored.
+func TestBuildHandlerRequiresDatabaseForSessionAdminLogin(t *testing.T) {
 	handler, cleanup, err := buildHandler(context.Background(), config.Config{
 		SessionAdminLoginCandidate: true,
 		SessionJWTSecret:           "session-secret",
-		AdminUsername:              "admin",
-		AdminPassword:              "secret",
 	})
-	if err != nil {
-		t.Fatalf("buildHandler returned error: %v", err)
-	}
-	defer cleanupHandler(t, cleanup)
 
-	response := httptest.NewRecorder()
-	request := httptest.NewRequest(http.MethodPost, "/api/v1/session/admin-login", strings.NewReader(`{"username":"admin","password":"secret"}`))
-	handler.ServeHTTP(response, request)
-
-	if response.Code != http.StatusOK {
-		t.Fatalf("status = %d, want 200; body=%s", response.Code, response.Body.String())
+	if !errors.Is(err, sqldb.ErrMissingDSN) {
+		t.Fatalf("error = %v, want %v", err, sqldb.ErrMissingDSN)
 	}
-	if !strings.Contains(response.Body.String(), `"role":"admin"`) || !strings.Contains(response.Body.String(), `"token":"`) {
-		t.Fatalf("unexpected admin login body: %s", response.Body.String())
+	if handler != nil || cleanup != nil {
+		t.Fatalf("handler/cleanup should be nil on startup failure: handler_nil=%t cleanup_nil=%t", handler == nil, cleanup == nil)
 	}
 }
 

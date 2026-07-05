@@ -1,6 +1,6 @@
-// Package sessionmodule assembles the Go session components for phase two.
-// It keeps route registration outside this package so /api/v1/session/me can
-// be wired, tested, and golden-compared before Python traffic is cut over.
+// Package sessionmodule assembles the Go session components.
+// It keeps route registration outside this package so session routes can be
+// wired and tested as part of the standalone API surface.
 package sessionmodule
 
 import (
@@ -11,6 +11,7 @@ import (
 
 	"im-go/internal/auth"
 	"im-go/internal/config"
+	"im-go/internal/infra/adminusers"
 	"im-go/internal/infra/sessionblacklist"
 	"im-go/internal/infra/sessionprofile"
 	"im-go/internal/infra/workbenchauditlogs"
@@ -38,6 +39,8 @@ type Options struct {
 	LastSeenThrottle      time.Duration
 	RequireProfileStore   bool
 	RequireBlacklistStore bool
+	InitializeAdminUsers  bool
+	Context               context.Context
 }
 
 // Module groups the unmounted session service and HTTP adapter.
@@ -47,6 +50,7 @@ type Module struct {
 	ProfileRepository   *sessionprofile.Repository
 	BlacklistRepository *sessionblacklist.Repository
 	AuditLogRepository  *workbenchauditlogs.Repository
+	AdminUserRepository *adminusers.Repository
 }
 
 // New wires JWT verification, optional cs_users profile access, and HTTP glue.
@@ -83,6 +87,30 @@ func New(options Options) (Module, error) {
 		}
 	}
 
+	initCtx := options.Context
+	if initCtx == nil {
+		initCtx = context.Background()
+	}
+	var adminUserRepository *adminusers.Repository
+	if options.DB != nil && options.InitializeAdminUsers {
+		dialect := options.DBDialect
+		if dialect == "" {
+			dialect = adminusers.DialectMySQL
+		}
+		adminUserRepository = adminusers.NewSQLRepository(options.DB, dialect)
+		adminUserRepository.Now = options.Now
+		if err := adminUserRepository.EnsureSchema(initCtx); err != nil {
+			return Module{}, err
+		}
+		if err := adminUserRepository.EnsureDefaultAdmin(initCtx); err != nil {
+			return Module{}, err
+		}
+	}
+
+	var adminUserStore session.AdminUserStore
+	if adminUserRepository != nil {
+		adminUserStore = adminUserRepository
+	}
 	service := &session.Service{
 		Verifier:          verifier,
 		Revoker:           revoker,
@@ -90,10 +118,7 @@ func New(options Options) (Module, error) {
 		PasswordlessLogin: options.Config.AllowPasswordlessLogin,
 		LoginLimiter:      options.LoginLimiter,
 		AuditLogs:         options.AuditLogs,
-		AdminCredentials: session.AdminCredentials{
-			Username: options.Config.AdminUsername,
-			Password: options.Config.AdminPassword,
-		},
+		AdminUsers:        adminUserStore,
 	}
 	if service.LoginLimiter == nil {
 		service.LoginLimiter = session.NewLoginRateLimiter(session.LoginRateLimiterOptions{
@@ -131,6 +156,7 @@ func New(options Options) (Module, error) {
 		ProfileRepository:   profileRepository,
 		BlacklistRepository: blacklistRepository,
 		AuditLogRepository:  auditLogRepository,
+		AdminUserRepository: adminUserRepository,
 	}, nil
 }
 

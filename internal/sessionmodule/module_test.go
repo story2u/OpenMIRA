@@ -1,6 +1,5 @@
 // Package sessionmodule tests keep assembly behavior deterministic without a
-// database driver. They verify wiring and route-readiness checks while the
-// actual /api/v1/session/me route is still owned by Python.
+// database driver. They verify wiring and route-readiness checks for the Go API.
 package sessionmodule
 
 import (
@@ -92,13 +91,11 @@ func TestNewBuildsUnmountedSessionHandler(t *testing.T) {
 	}
 }
 
-// TestNewWiresAdminLoginCredentials verifies env-backed admin auth assembly.
-func TestNewWiresAdminLoginCredentials(t *testing.T) {
+// TestNewLeavesAdminLoginUnconfiguredWithoutDatabase keeps admin credentials in DB.
+func TestNewLeavesAdminLoginUnconfiguredWithoutDatabase(t *testing.T) {
 	module, err := New(Options{
 		Config: config.Config{
 			SessionJWTSecret: "session-secret",
-			AdminUsername:    "admin",
-			AdminPassword:    "secret",
 		},
 		Now: func() time.Time {
 			return time.Unix(1000, 0).UTC()
@@ -112,13 +109,8 @@ func TestNewWiresAdminLoginCredentials(t *testing.T) {
 	response := httptest.NewRecorder()
 	module.Handler.AdminLogin(response, request)
 
-	if response.Code != http.StatusOK {
-		t.Fatalf("status = %d, want 200; body=%s", response.Code, response.Body.String())
-	}
-	for _, want := range []string{`"success":true`, `"assignee_id":"admin"`, `"role":"admin"`} {
-		if !strings.Contains(response.Body.String(), want) {
-			t.Fatalf("body missing %q: %s", want, response.Body.String())
-		}
+	if response.Code != http.StatusServiceUnavailable || !strings.Contains(response.Body.String(), "admin login is not configured") {
+		t.Fatalf("status = %d body=%s, want admin login not configured", response.Code, response.Body.String())
 	}
 }
 

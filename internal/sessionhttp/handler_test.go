@@ -117,6 +117,9 @@ func TestAdminLoginMapsLegacyErrors(t *testing.T) {
 		{name: "not configured", err: session.ErrAdminLoginNotConfigured, status: http.StatusServiceUnavailable, detail: "admin login is not configured"},
 		{name: "missing credentials", err: session.ErrAdminLoginMissingCredentials, status: http.StatusUnprocessableEntity, detail: "用户名和密码不能为空"},
 		{name: "invalid credentials", err: session.ErrAdminLoginInvalidCredentials, status: http.StatusUnauthorized, detail: "用户名或密码错误"},
+		{name: "missing password change", err: session.ErrAdminPasswordChangeMissingCredentials, status: http.StatusUnprocessableEntity, detail: "当前密码和新密码不能为空"},
+		{name: "bad current password", err: session.ErrAdminPasswordChangeInvalidCurrent, status: http.StatusUnauthorized, detail: "当前密码错误"},
+		{name: "bad new password", err: session.ErrAdminPasswordChangeInvalidNewPassword, status: http.StatusUnprocessableEntity, detail: "新密码至少 10 位且不能和当前密码相同"},
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
@@ -142,6 +145,30 @@ func TestAdminLoginRequiresConfiguredService(t *testing.T) {
 	}
 	if !strings.Contains(response.Body.String(), "session admin login service is not configured") {
 		t.Fatalf("unexpected body: %s", response.Body.String())
+	}
+}
+
+func TestAdminChangePasswordSerializesResponse(t *testing.T) {
+	handler := New(fakeSessionService{
+		adminPasswordChangeResponse: session.LoginResponse{
+			Success:      true,
+			Token:        "jwt-admin-new",
+			AssigneeID:   "root",
+			AssigneeName: "管理员",
+			Role:         "admin",
+			ExpiresAt:    "2026-06-28T00:00:00+00:00",
+		},
+	})
+
+	response := performAdminChangePassword(handler, "Bearer jwt-change", `{"current_password":"1234567890","new_password":"new-password-123"}`)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body=%s", response.Code, response.Body.String())
+	}
+	for _, want := range []string{`"success":true`, `"token":"jwt-admin-new"`, `"assignee_id":"root"`, `"password_change_required":false`} {
+		if !strings.Contains(response.Body.String(), want) {
+			t.Fatalf("body missing %q: %s", want, response.Body.String())
+		}
 	}
 }
 
@@ -457,20 +484,22 @@ func (service fakeCurrentUserService) CurrentUser(ctx context.Context, authoriza
 }
 
 type fakeSessionService struct {
-	meResponse         session.MeResponse
-	meErr              error
-	adminLoginResponse session.LoginResponse
-	adminLoginErr      error
-	loginResponse      session.LoginResponse
-	loginErr           error
-	csLoginResponse    session.LoginResponse
-	csLoginErr         error
-	generateCSResponse session.GenerateCSTokenResponse
-	generateCSErr      error
-	refreshResponse    session.RefreshResponse
-	refreshErr         error
-	logoutResponse     session.LogoutResponse
-	logoutErr          error
+	meResponse                  session.MeResponse
+	meErr                       error
+	adminLoginResponse          session.LoginResponse
+	adminLoginErr               error
+	adminPasswordChangeResponse session.LoginResponse
+	adminPasswordChangeErr      error
+	loginResponse               session.LoginResponse
+	loginErr                    error
+	csLoginResponse             session.LoginResponse
+	csLoginErr                  error
+	generateCSResponse          session.GenerateCSTokenResponse
+	generateCSErr               error
+	refreshResponse             session.RefreshResponse
+	refreshErr                  error
+	logoutResponse              session.LogoutResponse
+	logoutErr                   error
 }
 
 func (service fakeSessionService) CurrentUser(ctx context.Context, authorization string) (session.MeResponse, error) {
@@ -479,6 +508,10 @@ func (service fakeSessionService) CurrentUser(ctx context.Context, authorization
 
 func (service fakeSessionService) AdminLogin(ctx context.Context, username string, password string, metadata ...session.LoginMetadata) (session.LoginResponse, error) {
 	return service.adminLoginResponse, service.adminLoginErr
+}
+
+func (service fakeSessionService) ChangeAdminPassword(ctx context.Context, authorization string, request session.AdminPasswordChangeRequest, metadata ...session.LoginMetadata) (session.LoginResponse, error) {
+	return service.adminPasswordChangeResponse, service.adminPasswordChangeErr
 }
 
 func (service fakeSessionService) AssigneeLogin(ctx context.Context, request session.AssigneeLoginRequest, metadata ...session.LoginMetadata) (session.LoginResponse, error) {
@@ -532,6 +565,16 @@ func performAdminLogin(handler Handler, body string) *httptest.ResponseRecorder 
 	request := httptest.NewRequest(http.MethodPost, "/api/v1/session/admin-login", strings.NewReader(body))
 	response := httptest.NewRecorder()
 	handler.AdminLogin(response, request)
+	return response
+}
+
+func performAdminChangePassword(handler Handler, authorization string, body string) *httptest.ResponseRecorder {
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/session/admin/change-password", strings.NewReader(body))
+	if authorization != "" {
+		request.Header.Set("Authorization", authorization)
+	}
+	response := httptest.NewRecorder()
+	handler.AdminChangePassword(response, request)
 	return response
 }
 

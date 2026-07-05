@@ -82,6 +82,7 @@ func DefaultProfiles() []Profile {
 			Description: "Session login, impersonation, refresh, logout, and current-user access for Next.js release.",
 			Routes: []RouteRequirement{
 				{Method: "POST", Path: "/api/v1/session/admin-login"},
+				{Method: "POST", Path: "/api/v1/session/admin/change-password"},
 				{Method: "POST", Path: "/api/v1/session/login"},
 				{Method: "POST", Path: "/api/v1/session/cs-login"},
 				{Method: "POST", Path: "/api/v1/session/admin/generate-cs-token"},
@@ -98,7 +99,7 @@ func DefaultProfiles() []Profile {
 				"GO_ENABLE_SESSION_REFRESH_CANDIDATE",
 				"GO_ENABLE_SESSION_LOGOUT_CANDIDATE",
 			},
-			RequiredEnv: []string{"CLOUD_DB_DSN", "SESSION_JWT_SECRET", "ADMIN_USERNAME", "ADMIN_PASSWORD"},
+			RequiredEnv: []string{"CLOUD_DB_DSN", "SESSION_JWT_SECRET"},
 			Services:    []string{"go-api"},
 			GoldenSuites: []string{
 				"phase2-session-admin-login.json",

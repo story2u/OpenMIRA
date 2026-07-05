@@ -17,13 +17,13 @@ import (
 
 func TestAdminLoginIssuesLegacyAdminToken(t *testing.T) {
 	service := testService(t)
-	service.AdminCredentials = AdminCredentials{Username: "root", Password: "secret"}
+	service.AdminUsers = newAdminUserStore(t, "root", "secret", false)
 
 	response, err := service.AdminLogin(context.Background(), " root ", "secret")
 	if err != nil {
 		t.Fatalf("AdminLogin returned error: %v", err)
 	}
-	if !response.Success || response.Token == "" || response.AssigneeID != "admin" || response.AssigneeName != "管理员" || response.Role != "admin" {
+	if !response.Success || response.Token == "" || response.AssigneeID != "root" || response.AssigneeName != "管理员" || response.Role != "admin" {
 		t.Fatalf("unexpected admin login response: %+v", response)
 	}
 	if response.ExpiresAt != "1970-01-08T00:16:40+00:00" {
@@ -33,7 +33,7 @@ func TestAdminLoginIssuesLegacyAdminToken(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Verify admin token returned error: %v", err)
 	}
-	if verified.AssigneeID != "admin" || verified.AssigneeName != "管理员" || verified.Role != "admin" || verified.JTI == "" {
+	if verified.AssigneeID != "root" || verified.AssigneeName != "管理员" || verified.Role != "admin" || verified.JTI == "" {
 		t.Fatalf("unexpected admin token claims: %+v", verified)
 	}
 }
@@ -44,7 +44,7 @@ func TestAdminLoginMapsLegacyFailures(t *testing.T) {
 		t.Fatalf("missing config error = %v", err)
 	}
 
-	service.AdminCredentials = AdminCredentials{Username: "admin", Password: "secret"}
+	service.AdminUsers = newAdminUserStore(t, "admin", "secret", false)
 	if _, err := service.AdminLogin(context.Background(), "", "secret"); !errors.Is(err, ErrAdminLoginMissingCredentials) {
 		t.Fatalf("missing username error = %v", err)
 	}
@@ -55,7 +55,7 @@ func TestAdminLoginMapsLegacyFailures(t *testing.T) {
 
 func TestAdminLoginAuditsSuccessAndRecordsAttempts(t *testing.T) {
 	service := testService(t)
-	service.AdminCredentials = AdminCredentials{Username: "root", Password: "secret"}
+	service.AdminUsers = newAdminUserStore(t, "root", "secret", false)
 	audit := &auditRecorder{}
 	service.AuditLogs = audit
 	service.LoginLimiter = NewLoginRateLimiter(LoginRateLimiterOptions{
@@ -72,7 +72,7 @@ func TestAdminLoginAuditsSuccessAndRecordsAttempts(t *testing.T) {
 	if err != nil {
 		t.Fatalf("AdminLogin returned error: %v", err)
 	}
-	if len(audit.entries) != 1 || audit.entries[0].Operator != "admin" || audit.entries[0].ActionType != "login" || audit.entries[0].Detail != "管理员账密登录" || audit.entries[0].IP != "127.0.0.1" {
+	if len(audit.entries) != 1 || audit.entries[0].Operator != "root" || audit.entries[0].ActionType != "login" || audit.entries[0].Detail != "管理员账密登录" || audit.entries[0].IP != "127.0.0.1" {
 		t.Fatalf("audit entries = %+v", audit.entries)
 	}
 	if _, err := service.AdminLogin(context.Background(), "root", "secret", LoginMetadata{ClientIP: "127.0.0.1"}); !errors.Is(err, ErrLoginRateLimited) {
@@ -80,9 +80,85 @@ func TestAdminLoginAuditsSuccessAndRecordsAttempts(t *testing.T) {
 	}
 }
 
+func TestAdminLoginWithStoredDefaultRequiresPasswordChange(t *testing.T) {
+	service := testService(t)
+	store := newAdminUserStore(t, "root", "1234567890", true)
+	store.loggedIn = map[string]bool{}
+	service.AdminUsers = store
+
+	response, err := service.AdminLogin(context.Background(), "root", "1234567890")
+	if err != nil {
+		t.Fatalf("AdminLogin returned error: %v", err)
+	}
+	if !response.PasswordChangeRequired || response.Role != AdminPasswordChangeRole || response.AssigneeID != "root" {
+		t.Fatalf("unexpected response: %+v", response)
+	}
+	verified, err := service.Verifier.Verify(response.Token)
+	if err != nil {
+		t.Fatalf("Verify returned error: %v", err)
+	}
+	if verified.Role != AdminPasswordChangeRole {
+		t.Fatalf("token role = %q", verified.Role)
+	}
+	if !store.loggedIn["root"] {
+		t.Fatalf("login was not recorded: %+v", store.loggedIn)
+	}
+}
+
+func TestChangeAdminPasswordClearsRequiredFlagAndIssuesAdminToken(t *testing.T) {
+	service := testService(t)
+	store := newAdminUserStore(t, "root", "1234567890", true)
+	service.AdminUsers = store
+	changeToken, err := service.Verifier.Issue(auth.IssueOptions{
+		AssigneeID:   "root",
+		AssigneeName: "管理员",
+		Role:         AdminPasswordChangeRole,
+		TTL:          time.Hour,
+	})
+	if err != nil {
+		t.Fatalf("Issue returned error: %v", err)
+	}
+
+	response, err := service.ChangeAdminPassword(context.Background(), "Bearer "+changeToken.Token, AdminPasswordChangeRequest{
+		CurrentPassword: "1234567890",
+		NewPassword:     "new-password-123",
+	})
+	if err != nil {
+		t.Fatalf("ChangeAdminPassword returned error: %v", err)
+	}
+	if response.PasswordChangeRequired || response.Role != "admin" || response.AssigneeID != "root" {
+		t.Fatalf("unexpected response: %+v", response)
+	}
+	updated := store.users["root"]
+	if updated.PasswordChangeRequired || !auth.VerifyPasswordHash(updated.PasswordHash, "new-password-123") {
+		t.Fatalf("updated admin = %+v", updated)
+	}
+}
+
+func TestChangeAdminPasswordValidatesCurrentAndNewPasswords(t *testing.T) {
+	service := testService(t)
+	service.AdminUsers = newAdminUserStore(t, "root", "1234567890", true)
+	changeToken, err := service.Verifier.Issue(auth.IssueOptions{
+		AssigneeID:   "root",
+		AssigneeName: "管理员",
+		Role:         AdminPasswordChangeRole,
+		TTL:          time.Hour,
+	})
+	if err != nil {
+		t.Fatalf("Issue returned error: %v", err)
+	}
+
+	if _, err := service.ChangeAdminPassword(context.Background(), "Bearer "+changeToken.Token, AdminPasswordChangeRequest{CurrentPassword: "bad", NewPassword: "new-password-123"}); !errors.Is(err, ErrAdminPasswordChangeInvalidCurrent) {
+		t.Fatalf("bad current error = %v", err)
+	}
+	if _, err := service.ChangeAdminPassword(context.Background(), "Bearer "+changeToken.Token, AdminPasswordChangeRequest{CurrentPassword: "1234567890", NewPassword: "1234567890"}); !errors.Is(err, ErrAdminPasswordChangeInvalidNewPassword) {
+		t.Fatalf("same password error = %v", err)
+	}
+}
+
 func TestAdminLoginRecordsFailedAttemptsWithoutAudit(t *testing.T) {
 	service := testService(t)
-	service.AdminCredentials = AdminCredentials{Username: "root", Password: "secret"}
+	service.AdminUsers = newAdminUserStore(t, "root", "secret", false)
 	audit := &auditRecorder{}
 	service.AuditLogs = audit
 	service.LoginLimiter = NewLoginRateLimiter(LoginRateLimiterOptions{
@@ -647,6 +723,47 @@ type failingBlacklist struct {
 
 func (blacklist failingBlacklist) Contains(ctx context.Context, jti string) (bool, error) {
 	return false, blacklist.err
+}
+
+type adminUserStore struct {
+	users    map[string]AdminUser
+	loggedIn map[string]bool
+}
+
+func newAdminUserStore(t *testing.T, username string, password string, passwordChangeRequired bool) *adminUserStore {
+	t.Helper()
+	passwordHash, err := auth.HashPassword(password)
+	if err != nil {
+		t.Fatalf("HashPassword returned error: %v", err)
+	}
+	username = strings.TrimSpace(username)
+	return &adminUserStore{users: map[string]AdminUser{username: {
+		Username:               username,
+		PasswordHash:           passwordHash,
+		PasswordChangeRequired: passwordChangeRequired,
+	}}}
+}
+
+func (store *adminUserStore) GetAdminUser(ctx context.Context, username string) (AdminUser, bool, error) {
+	user, ok := store.users[strings.TrimSpace(username)]
+	return user, ok, nil
+}
+
+func (store *adminUserStore) UpdateAdminPassword(ctx context.Context, username string, passwordHash string, passwordChangeRequired bool) error {
+	username = strings.TrimSpace(username)
+	user := store.users[username]
+	user.Username = username
+	user.PasswordHash = strings.TrimSpace(passwordHash)
+	user.PasswordChangeRequired = passwordChangeRequired
+	store.users[username] = user
+	return nil
+}
+
+func (store *adminUserStore) RecordAdminLogin(ctx context.Context, username string) error {
+	if store.loggedIn != nil {
+		store.loggedIn[strings.TrimSpace(username)] = true
+	}
+	return nil
 }
 
 func testService(t *testing.T) *Service {

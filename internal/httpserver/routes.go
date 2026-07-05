@@ -61,6 +61,7 @@ type routeRegistration struct {
 type Modules struct {
 	Session                             *sessionhttp.Handler
 	SessionAdminLogin                   bool
+	SessionAdminPasswordChange          bool
 	SessionLogin                        bool
 	SessionCSLogin                      bool
 	SessionGenerateCSToken              bool
@@ -275,6 +276,7 @@ var phaseOneRoutes = []routeRegistration{
 
 var sessionAdminLoginRoutes = []Route{
 	{Method: http.MethodPost, Path: "/api/v1/session/admin-login", Owner: "go", Phase: "phase2-session-candidate"},
+	{Method: http.MethodPost, Path: "/api/v1/session/admin/change-password", Owner: "go", Phase: "phase2-session-candidate"},
 }
 
 var sessionLoginRoutes = []Route{

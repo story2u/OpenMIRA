@@ -1,6 +1,5 @@
-// Package app assembles optional phase-two runtime dependencies.
-// The phase-one HTTP server does not call this package by default; it exists
-// so later route cutovers can share one DB/Redis/session construction path.
+// Package app assembles optional runtime dependencies for the standalone API.
+// Feature candidates share this DB, Redis, and session construction path.
 package app
 
 import (
@@ -186,6 +185,8 @@ func NewRuntime(ctx context.Context, cfg config.Config, options Options) (*Runti
 			DBDialect:             runtime.Dialect,
 			RequireProfileStore:   options.RequireSessionStores,
 			RequireBlacklistStore: options.RequireSessionStores,
+			InitializeAdminUsers:  cfg.SessionAdminLoginCandidate,
+			Context:               ctx,
 		})
 		if err != nil {
 			_ = runtime.Close()
@@ -912,7 +913,7 @@ func (runtime *Runtime) realtimeHub() (*taskstatuspublisher.RedisHub, error) {
 	return runtime.Realtime, nil
 }
 
-// RealtimeHub returns the shared Python-compatible realtime broker.
+// RealtimeHub returns the shared realtime broker.
 func (runtime *Runtime) RealtimeHub() (*taskstatuspublisher.RedisHub, error) {
 	return runtime.realtimeHub()
 }
