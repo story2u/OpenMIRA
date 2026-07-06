@@ -1,59 +1,10 @@
 name: im-go
 
-x-go-env: &go-env
-  SESSION_JWT_SECRET: "${SESSION_JWT_SECRET:-change-me-in-production}"
-  SESSION_JWT_ISSUER: "${SESSION_JWT_ISSUER:-im-cloud}"
-  IM_DATABASE_URL: "${IM_DATABASE_URL:-postgres://im:im-dev-password@go-postgres:5432/im?sslmode=disable}"
+x-api-env: &api-env
+  IM_API_ADDR: ":9000"
+  IM_DATABASE_URL: "${IM_DATABASE_URL:-postgres://im:${POSTGRES_PASSWORD:-im-dev-password}@go-postgres:5432/im?sslmode=disable}"
   IM_AUTO_MIGRATE: "${IM_AUTO_MIGRATE:-true}"
   IM_SEED_DATA: "${IM_SEED_DATA:-true}"
-  CLOUD_DB_DSN: "${CLOUD_DB_DSN:-postgres://im:im-dev-password@go-postgres:5432/im?sslmode=disable}"
-  CLOUD_WS_REDIS_URL: "${CLOUD_WS_REDIS_URL:-redis://go-redis:6379/0}"
-  CLOUD_LOCK_REDIS_URL: "${CLOUD_LOCK_REDIS_URL:-redis://go-redis:6379/1}"
-  CLOUD_EVENTBUS_REDIS_URL: "${CLOUD_EVENTBUS_REDIS_URL:-redis://go-redis:6379/2}"
-  CLOUD_CACHE_REDIS_URL: "${CLOUD_CACHE_REDIS_URL:-redis://go-cache-redis:6379/0}"
-  CLOUD_INGEST_STREAM_NAME: "${CLOUD_INGEST_STREAM_NAME:-im:ingest:incoming}"
-  CLOUD_INGEST_STREAM_GROUP: "${CLOUD_INGEST_STREAM_GROUP:-im-ingest-workers}"
-  CLOUD_DATA_DIR: "${CLOUD_DATA_DIR:-/app/data}"
-  GO_ENABLE_CONNECTOR_NOTIFY_CALLBACK_CANDIDATE: "${GO_ENABLE_CONNECTOR_NOTIFY_CALLBACK_CANDIDATE:-1}"
-  GO_ENABLE_SESSION_ADMIN_LOGIN_CANDIDATE: "${GO_ENABLE_SESSION_ADMIN_LOGIN_CANDIDATE:-1}"
-  GO_ENABLE_SESSION_ME_CANDIDATE: "${GO_ENABLE_SESSION_ME_CANDIDATE:-1}"
-  GO_ENABLE_SESSION_REFRESH_CANDIDATE: "${GO_ENABLE_SESSION_REFRESH_CANDIDATE:-1}"
-  GO_ENABLE_SESSION_LOGOUT_CANDIDATE: "${GO_ENABLE_SESSION_LOGOUT_CANDIDATE:-1}"
-  GO_ENABLE_CLIENT_ERRORS_CANDIDATE: "${GO_ENABLE_CLIENT_ERRORS_CANDIDATE:-1}"
-  GO_ENABLE_ACCOUNTS_LIST_CANDIDATE: "${GO_ENABLE_ACCOUNTS_LIST_CANDIDATE:-1}"
-  GO_ENABLE_DEVICES_LIST_CANDIDATE: "${GO_ENABLE_DEVICES_LIST_CANDIDATE:-1}"
-  GO_ENABLE_ASSIGNMENT_WORKLOADS_CANDIDATE: "${GO_ENABLE_ASSIGNMENT_WORKLOADS_CANDIDATE:-1}"
-  GO_ENABLE_ASSIGNMENT_CONFIG_CANDIDATE: "${GO_ENABLE_ASSIGNMENT_CONFIG_CANDIDATE:-1}"
-  GO_ENABLE_CS_USERS_LIST_CANDIDATE: "${GO_ENABLE_CS_USERS_LIST_CANDIDATE:-1}"
-  GO_ENABLE_ADMIN_SCRIPTS_CANDIDATE: "${GO_ENABLE_ADMIN_SCRIPTS_CANDIDATE:-1}"
-  GO_ENABLE_SENSITIVE_WORDS_CANDIDATE: "${GO_ENABLE_SENSITIVE_WORDS_CANDIDATE:-1}"
-  GO_ENABLE_AI_CONFIG_CANDIDATE: "${GO_ENABLE_AI_CONFIG_CANDIDATE:-1}"
-  GO_ENABLE_SOP_FLOWS_CANDIDATE: "${GO_ENABLE_SOP_FLOWS_CANDIDATE:-1}"
-  GO_ENABLE_SOP_POLICIES_CANDIDATE: "${GO_ENABLE_SOP_POLICIES_CANDIDATE:-1}"
-  GO_ENABLE_KNOWLEDGE_DOCS_CANDIDATE: "${GO_ENABLE_KNOWLEDGE_DOCS_CANDIDATE:-1}"
-  GO_ENABLE_ENTERPRISES_CANDIDATE: "${GO_ENABLE_ENTERPRISES_CANDIDATE:-1}"
-  GO_ENABLE_STATS_OVERVIEW_CANDIDATE: "${GO_ENABLE_STATS_OVERVIEW_CANDIDATE:-1}"
-  GO_ENABLE_STATS_AGENTS_CANDIDATE: "${GO_ENABLE_STATS_AGENTS_CANDIDATE:-1}"
-  GO_ENABLE_OBSERVABILITY_DASHBOARD_CANDIDATE: "${GO_ENABLE_OBSERVABILITY_DASHBOARD_CANDIDATE:-1}"
-  GO_ENABLE_AUDIT_LOGS_CANDIDATE: "${GO_ENABLE_AUDIT_LOGS_CANDIDATE:-1}"
-  GO_ENABLE_SYSTEM_LOGS_CANDIDATE: "${GO_ENABLE_SYSTEM_LOGS_CANDIDATE:-1}"
-  GO_ENABLE_ARCHIVE_STATUS_CANDIDATE: "${GO_ENABLE_ARCHIVE_STATUS_CANDIDATE:-1}"
-
-x-go-service: &go-service
-  restart: unless-stopped
-  depends_on:
-    go-postgres:
-      condition: service_healthy
-    go-redis:
-      condition: service_healthy
-    go-cache-redis:
-      condition: service_healthy
-  environment:
-    <<: *go-env
-  volumes:
-    - go-data:/app/data
-  networks:
-    - im-go-net
 
 services:
   go-postgres:
@@ -73,44 +24,23 @@ services:
     networks:
       - im-go-net
 
-  go-redis:
-    image: "${REDIS_IMAGE:-redis:7-alpine}"
-    restart: unless-stopped
-    command: ["redis-server", "--save", "", "--appendonly", "no", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru"]
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-    networks:
-      - im-go-net
-
-  go-cache-redis:
-    image: "${REDIS_IMAGE:-redis:7-alpine}"
-    restart: unless-stopped
-    command: ["redis-server", "--save", "", "--appendonly", "no", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru"]
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-    networks:
-      - im-go-net
-
   go-api:
-    <<: *go-service
     build:
       context: ..
       dockerfile: Dockerfile
       args:
         TARGET_CMD: api
-    image: "${GO_API_IMAGE:-im-go-api:${GO_IMAGE_TAG:-latest}}"
-    ports:
-      - "${GO_BACKEND_BIND_ADDR:-127.0.0.1}:${GO_BACKEND_HOST_PORT:-19000}:9000"
+    image: "${GO_API_IMAGE:-im-api:${GO_IMAGE_TAG:-latest}}"
+    restart: unless-stopped
+    depends_on:
+      go-postgres:
+        condition: service_healthy
     environment:
-      <<: *go-env
-      CLOUD_RUNTIME_ROLE: api
-      GO_BACKEND_ADDR: ":9000"
+      <<: *api-env
+    ports:
+      - "${GO_API_BIND_ADDR:-127.0.0.1}:${GO_API_HOST_PORT:-19000}:9000"
+    networks:
+      - im-go-net
 
   go-web:
     build:
@@ -118,26 +48,16 @@ services:
       dockerfile: Dockerfile
       args:
         IM_API_INTERNAL_BASE_URL: "${IM_API_INTERNAL_BASE_URL:-http://go-api:9000}"
-    image: "${GO_WEB_IMAGE:-im-go-web:${GO_IMAGE_TAG:-latest}}"
+    image: "${GO_WEB_IMAGE:-im-web:${GO_IMAGE_TAG:-latest}}"
     restart: unless-stopped
+    depends_on:
+      - go-api
     environment:
       IM_API_INTERNAL_BASE_URL: "${IM_API_INTERNAL_BASE_URL:-http://go-api:9000}"
     ports:
       - "${GO_WEB_BIND_ADDR:-127.0.0.1}:${GO_WEB_HOST_PORT:-18080}:3000"
     networks:
       - im-go-net
-
-  go-incoming-worker:
-    <<: *go-service
-    build:
-      context: ..
-      dockerfile: Dockerfile
-      args:
-        TARGET_CMD: incoming-worker
-    image: "${GO_INCOMING_WORKER_IMAGE:-im-go-incoming-worker:${GO_IMAGE_TAG:-latest}}"
-    environment:
-      <<: *go-env
-      CLOUD_RUNTIME_ROLE: incoming_worker
 
   cloudflared:
     image: "${CLOUDFLARED_IMAGE:-cloudflare/cloudflared:latest}"
@@ -150,7 +70,6 @@ services:
       - im-go-net
 
 volumes:
-  go-data:
   go-postgres-data:
 
 networks:

@@ -38,11 +38,6 @@ jobs:
             file: Dockerfile
             build_args: |
               TARGET_CMD=api
-          - image: im-incoming-worker
-            context: .
-            file: Dockerfile
-            build_args: |
-              TARGET_CMD=incoming-worker
           - image: im-web
             context: web
             file: web/Dockerfile

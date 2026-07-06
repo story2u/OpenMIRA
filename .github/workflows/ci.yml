@@ -41,9 +41,6 @@ jobs:
       - name: Build API
         run: CGO_ENABLED=0 go build -trimpath -o bin/api ./cmd/api
 
-      - name: Build incoming worker
-        run: CGO_ENABLED=0 go build -trimpath -o bin/incoming-worker ./cmd/incoming-worker
-
   web:
     name: Web Build
     runs-on: ubuntu-latest
