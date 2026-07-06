@@ -42,6 +42,7 @@ tmp/
 web/node_modules/
 web/.next/
 web/out/
+web/package-lock.json
 web/.env.local
 web/.env.*.local
 
