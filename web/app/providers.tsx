@@ -1,17 +1,26 @@
 "use client";
 
-import { QueryClientProvider } from "@tanstack/react-query";
-import { useState, type ReactNode } from "react";
+import * as React from "react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "sonner";
-import { createQueryClient } from "../lib/query-client";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
-export function Providers({ children }: { children: ReactNode }) {
-  const [queryClient] = useState(() => createQueryClient());
+export function Providers({ children }: { children: React.ReactNode }) {
+  const [client] = React.useState(
+    () =>
+      new QueryClient({
+        defaultOptions: {
+          queries: { staleTime: 30_000, refetchOnWindowFocus: false, retry: 1 },
+        },
+      })
+  );
 
   return (
-    <QueryClientProvider client={queryClient}>
-      {children}
-      <Toaster richColors closeButton position="top-right" />
+    <QueryClientProvider client={client}>
+      <TooltipProvider delayDuration={200}>
+        {children}
+        <Toaster position="bottom-right" toastOptions={{ style: { fontSize: "13px" } }} />
+      </TooltipProvider>
     </QueryClientProvider>
   );
 }
