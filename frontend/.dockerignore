@@ -1,0 +1,10 @@
+.next/
+node_modules/
+.pnpm-store/
+dist/
+coverage/
+npm-debug.log*
+pnpm-debug.log*
+.env
+.env.*
+!.env.example

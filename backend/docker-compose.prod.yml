@@ -1,0 +1,110 @@
+x-app-env: &app-env
+  APP_ENV: ${APP_ENV:-prod}
+  APP_NAME: ${APP_NAME:-Opportunity IM Assistant API}
+  DEBUG: ${DEBUG:-false}
+  DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://im_user:im_password@postgres:5432/im_assistant}
+  REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+  CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/1}
+  CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://redis:6379/2}
+  ADMIN_API_TOKEN: ${ADMIN_API_TOKEN:-change-me}
+  CORS_ORIGINS: ${CORS_ORIGINS:-["http://localhost:3000"]}
+  DEFAULT_TIMEZONE: ${DEFAULT_TIMEZONE:-Asia/Shanghai}
+  DEFAULT_WORKDAYS: ${DEFAULT_WORKDAYS:-[1,2,3,4,5]}
+  DEFAULT_WORK_START: ${DEFAULT_WORK_START:-09:00}
+  DEFAULT_WORK_END: ${DEFAULT_WORK_END:-18:30}
+  PENDING_HUMAN_SLA_MINUTES: ${PENDING_HUMAN_SLA_MINUTES:-30}
+  IM_SEND_ENABLED: ${IM_SEND_ENABLED:-false}
+  TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-change-me}
+  TELEGRAM_WEBHOOK_SECRET: ${TELEGRAM_WEBHOOK_SECRET:-change-me}
+  WECOM_CORP_ID: ${WECOM_CORP_ID:-change-me}
+  WECOM_AGENT_ID: ${WECOM_AGENT_ID:-1000001}
+  WECOM_SECRET: ${WECOM_SECRET:-change-me}
+  WECOM_TOKEN: ${WECOM_TOKEN:-change-me}
+  WECOM_AES_KEY: ${WECOM_AES_KEY:-change-me}
+  AI_ENABLED: ${AI_ENABLED:-false}
+  LITELLM_MODEL: ${LITELLM_MODEL:-openai/gpt-4o-mini}
+  OPENAI_API_KEY: ${OPENAI_API_KEY:-change-me}
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-im_assistant}
+      POSTGRES_USER: ${POSTGRES_USER:-im_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-im_password}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-im_user} -d ${POSTGRES_DB:-im_assistant}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  migrate:
+    image: ${BACKEND_IMAGE:-ghcr.io/story2u/im-backend:latest}
+    restart: "no"
+    command: alembic upgrade head
+    environment: *app-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  api:
+    image: ${BACKEND_IMAGE:-ghcr.io/story2u/im-backend:latest}
+    restart: unless-stopped
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+    environment: *app-env
+    ports:
+      - "${API_PORT:-8000}:8000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  celery_worker:
+    image: ${BACKEND_IMAGE:-ghcr.io/story2u/im-backend:latest}
+    restart: unless-stopped
+    command: celery -A app.worker.celery_app:celery_app worker -l INFO -Q default,im,ai
+    environment: *app-env
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  celery_beat:
+    image: ${BACKEND_IMAGE:-ghcr.io/story2u/im-backend:latest}
+    restart: unless-stopped
+    command: celery -A app.worker.celery_app:celery_app beat -l INFO
+    environment: *app-env
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  frontend:
+    image: ${FRONTEND_IMAGE:-ghcr.io/story2u/im-frontend:latest}
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      NEXT_TELEMETRY_DISABLED: "1"
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    depends_on:
+      api:
+        condition: service_started
+
+volumes:
+  postgres_data:
+  redis_data:

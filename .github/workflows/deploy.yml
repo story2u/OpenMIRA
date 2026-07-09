@@ -1,0 +1,183 @@
+name: Deploy to VPS
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Deployment environment
+        required: true
+        default: production
+        type: choice
+        options:
+          - production
+          - staging
+      version:
+        description: Version to deploy, such as main, v1.0.0, latest, or sha-xxxx
+        required: false
+        default: ""
+  workflow_run:
+    workflows: ["Build Images"]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+  packages: read
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAMESPACE: ${{ github.repository_owner }}
+
+concurrency:
+  group: deploy-vps-${{ inputs.environment || 'production' }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
+    environment: ${{ inputs.environment || 'production' }}
+    env:
+      VPS_HOST: ${{ vars.VPS_HOST || secrets.VPS_HOST }}
+      VPS_USER: ${{ vars.VPS_USER || secrets.VPS_USER }}
+      VPS_PORT: ${{ vars.VPS_PORT || secrets.VPS_PORT || '22' }}
+      VPS_DEPLOY_DIR: ${{ vars.VPS_DEPLOY_DIR || secrets.VPS_DEPLOY_DIR || '/opt/im' }}
+      VPS_COMPOSE_SERVICES: ${{ vars.VPS_COMPOSE_SERVICES || 'postgres redis migrate api celery_worker celery_beat frontend' }}
+      DEPLOY_VERSION: ${{ inputs.version || github.event.workflow_run.head_branch || github.ref_name || 'main' }}
+      DEPLOY_ENVIRONMENT: ${{ inputs.environment || 'production' }}
+      GHCR_USERNAME: ${{ vars.GHCR_USERNAME || github.actor }}
+      GHCR_TOKEN: ${{ secrets.GHCR_TOKEN || github.token }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate deploy configuration
+        env:
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$VPS_HOST" || { echo "VPS_HOST is required"; exit 1; }
+          test -n "$VPS_USER" || { echo "VPS_USER is required"; exit 1; }
+          test -n "$VPS_SSH_KEY" || { echo "VPS_SSH_KEY secret is required"; exit 1; }
+          case "$VPS_DEPLOY_DIR" in
+            *"'"*) echo "VPS_DEPLOY_DIR must not contain single quotes"; exit 1 ;;
+          esac
+
+      - name: Prepare SSH key
+        env:
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/vps_deploy_key
+          chmod 600 ~/.ssh/vps_deploy_key
+          ssh-keyscan -p "$VPS_PORT" "$VPS_HOST" >> ~/.ssh/known_hosts
+
+      - name: Sync compose files
+        env:
+          VPS_ENV_FILE: ${{ secrets.VPS_ENV_FILE }}
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/vps_deploy_key -p "$VPS_PORT" "$VPS_USER@$VPS_HOST" "mkdir -p '$VPS_DEPLOY_DIR'"
+          scp -i ~/.ssh/vps_deploy_key -P "$VPS_PORT" \
+            backend/docker-compose.prod.yml \
+            backend/.env.example \
+            "$VPS_USER@$VPS_HOST:$VPS_DEPLOY_DIR/"
+          ssh -i ~/.ssh/vps_deploy_key -p "$VPS_PORT" "$VPS_USER@$VPS_HOST" \
+            "cd '$VPS_DEPLOY_DIR' && mv docker-compose.prod.yml docker-compose.yml"
+          if [ -n "$VPS_ENV_FILE" ]; then
+            env_file="$(mktemp)"
+            printf '%s\n' "$VPS_ENV_FILE" > "$env_file"
+            scp -i ~/.ssh/vps_deploy_key -P "$VPS_PORT" "$env_file" "$VPS_USER@$VPS_HOST:$VPS_DEPLOY_DIR/.env"
+            rm -f "$env_file"
+          fi
+
+      - name: Deploy services
+        run: |
+          set -euo pipefail
+          quote() {
+            printf "%q" "$1"
+          }
+          remote_env=(
+            "DEPLOY_DIR=$(quote "$VPS_DEPLOY_DIR")"
+            "VERSION=$(quote "$DEPLOY_VERSION")"
+            "ENVIRONMENT=$(quote "$DEPLOY_ENVIRONMENT")"
+            "REGISTRY=$(quote "$REGISTRY")"
+            "IMAGE_NAMESPACE=$(quote "$IMAGE_NAMESPACE")"
+            "GHCR_USERNAME=$(quote "$GHCR_USERNAME")"
+            "GHCR_TOKEN=$(quote "$GHCR_TOKEN")"
+            "COMPOSE_SERVICES=$(quote "$VPS_COMPOSE_SERVICES")"
+          )
+          ssh -i ~/.ssh/vps_deploy_key -p "$VPS_PORT" "$VPS_USER@$VPS_HOST" "${remote_env[*]} bash -s" <<'REMOTE'
+          set -euo pipefail
+
+          cd "$DEPLOY_DIR"
+          echo "Deploying ${VERSION} to ${ENVIRONMENT}..."
+
+          if [ ! -f .env ]; then
+            cp .env.example .env
+            echo "Created $DEPLOY_DIR/.env from .env.example. Replace change-me values before exposing traffic."
+          fi
+
+          if ! docker compose version >/dev/null 2>&1; then
+            echo "docker compose is required on the VPS"
+            exit 1
+          fi
+
+          if [ -n "$GHCR_TOKEN" ]; then
+            printf '%s' "$GHCR_TOKEN" | docker login "$REGISTRY" -u "$GHCR_USERNAME" --password-stdin >/dev/null
+          fi
+
+          export BACKEND_IMAGE="$REGISTRY/$IMAGE_NAMESPACE/im-backend:$VERSION"
+          export FRONTEND_IMAGE="$REGISTRY/$IMAGE_NAMESPACE/im-frontend:$VERSION"
+
+          docker compose --env-file .env config >/dev/null
+
+          echo "Pulling images for: $COMPOSE_SERVICES"
+          docker compose --env-file .env pull $COMPOSE_SERVICES
+
+          echo "Starting services..."
+          docker compose --env-file .env up -d --remove-orphans $COMPOSE_SERVICES
+
+          echo "Cleaning up dangling images..."
+          docker image prune -f
+
+          echo "Deployment complete."
+          docker compose --env-file .env ps
+          REMOTE
+
+  health-check:
+    name: Health Check
+    runs-on: ubuntu-latest
+    needs: deploy
+    timeout-minutes: 5
+    env:
+      VPS_API_URL: ${{ vars.VPS_API_URL || secrets.VPS_API_URL }}
+      VPS_FRONTEND_URL: ${{ vars.VPS_FRONTEND_URL || secrets.VPS_FRONTEND_URL }}
+    steps:
+      - name: Wait for services
+        run: sleep 30
+
+      - name: Check API health
+        run: |
+          set -euo pipefail
+          if [ -z "$VPS_API_URL" ]; then
+            echo "VPS_API_URL is not set; skipping API health check"
+            exit 0
+          fi
+          curl -fsS "$VPS_API_URL/healthz"
+          echo "API health check passed"
+
+      - name: Check frontend health
+        run: |
+          set -euo pipefail
+          if [ -z "$VPS_FRONTEND_URL" ]; then
+            echo "VPS_FRONTEND_URL is not set; skipping frontend health check"
+            exit 0
+          fi
+          curl -fsS "$VPS_FRONTEND_URL"
+          echo "Frontend health check passed"
