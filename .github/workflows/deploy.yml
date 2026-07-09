@@ -53,7 +53,7 @@ jobs:
       GHCR_TOKEN: ${{ secrets.GHCR_TOKEN || github.token }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Validate deploy configuration
         env:
