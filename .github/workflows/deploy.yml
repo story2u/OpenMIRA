@@ -46,11 +46,12 @@ jobs:
       VPS_USER: ${{ vars.VPS_USER || secrets.VPS_USER }}
       VPS_PORT: ${{ vars.VPS_PORT || secrets.VPS_PORT || '22' }}
       VPS_DEPLOY_DIR: ${{ vars.VPS_DEPLOY_DIR || secrets.VPS_DEPLOY_DIR || '/opt/im' }}
-      VPS_COMPOSE_SERVICES: ${{ vars.VPS_COMPOSE_SERVICES || 'postgres redis migrate api celery_worker celery_beat frontend' }}
+      VPS_COMPOSE_SERVICES: ${{ vars.VPS_COMPOSE_SERVICES || 'postgres redis migrate api celery_worker celery_beat frontend cloudflared' }}
       DEPLOY_VERSION: ${{ inputs.version || github.event.workflow_run.head_branch || github.ref_name || 'main' }}
       DEPLOY_ENVIRONMENT: ${{ inputs.environment || 'production' }}
       GHCR_USERNAME: ${{ vars.GHCR_USERNAME || github.actor }}
       GHCR_TOKEN: ${{ secrets.GHCR_TOKEN || github.token }}
+      CLOUDFLARE_TUNNEL_TOKEN: ${{ secrets.CLOUDFLARE_TUNNEL_TOKEN }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -63,6 +64,11 @@ jobs:
           test -n "$VPS_HOST" || { echo "VPS_HOST is required"; exit 1; }
           test -n "$VPS_USER" || { echo "VPS_USER is required"; exit 1; }
           test -n "$VPS_SSH_KEY" || { echo "VPS_SSH_KEY secret is required"; exit 1; }
+          case " $VPS_COMPOSE_SERVICES " in
+            *" cloudflared "*)
+              test -n "$CLOUDFLARE_TUNNEL_TOKEN" || { echo "CLOUDFLARE_TUNNEL_TOKEN secret is required when deploying cloudflared"; exit 1; }
+              ;;
+          esac
           case "$VPS_DEPLOY_DIR" in
             *"'"*) echo "VPS_DEPLOY_DIR must not contain single quotes"; exit 1 ;;
           esac
@@ -111,6 +117,7 @@ jobs:
             "GHCR_USERNAME=$(quote "$GHCR_USERNAME")"
             "GHCR_TOKEN=$(quote "$GHCR_TOKEN")"
             "COMPOSE_SERVICES=$(quote "$VPS_COMPOSE_SERVICES")"
+            "CLOUDFLARE_TUNNEL_TOKEN=$(quote "$CLOUDFLARE_TUNNEL_TOKEN")"
           )
           ssh -i ~/.ssh/vps_deploy_key -p "$VPS_PORT" "$VPS_USER@$VPS_HOST" "${remote_env[*]} bash -s" <<'REMOTE'
           set -euo pipefail
@@ -134,6 +141,7 @@ jobs:
 
           export BACKEND_IMAGE="$REGISTRY/$IMAGE_NAMESPACE/im-backend:$VERSION"
           export FRONTEND_IMAGE="$REGISTRY/$IMAGE_NAMESPACE/im-frontend:$VERSION"
+          export CLOUDFLARE_TUNNEL_TOKEN
 
           docker compose --env-file .env config >/dev/null
 
