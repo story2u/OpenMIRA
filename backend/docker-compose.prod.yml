@@ -87,7 +87,7 @@ services:
   celery_beat:
     image: ${BACKEND_IMAGE:-ghcr.io/story2u/im-backend:latest}
     restart: unless-stopped
-    command: celery -A app.worker.celery_app:celery_app beat -l INFO
+    command: celery -A app.worker.celery_app:celery_app beat -l INFO --schedule=/tmp/celerybeat-schedule
     environment: *app-env
     depends_on:
       migrate:
