@@ -2,11 +2,13 @@ from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import Column, DateTime, Enum as SAEnum, Index, UniqueConstraint
+from sqlalchemy import Column, DateTime, Index, UniqueConstraint
+from sqlalchemy import Enum as SAEnum
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlmodel import Field, SQLModel
 
 from app.domain.enums import (
+    AgentAnalysisStatus,
     IMChannel,
     MessageDirection,
     MessageSource,
@@ -82,7 +84,7 @@ class Opportunity(TimestampMixin, table=True):
     source_type: str = Field(default="private", index=True)
     group_name: str | None = None
 
-    source_message_id: UUID | None = Field(default=None, index=True)
+    source_message_id: UUID | None = Field(default=None, index=True, unique=True)
     title: str
     summary: str | None = None
     matched_keywords: list[str] = Field(default_factory=list, sa_column=Column(JSONB, nullable=False))
@@ -98,6 +100,42 @@ class Opportunity(TimestampMixin, table=True):
         sa_column=Column(SAEnum(OpportunityStatus, native_enum=False), nullable=False, index=True),
     )
     detection_reason: str | None = None
+
+    link_verification: dict[str, Any] = Field(
+        default_factory=lambda: {
+            "status": "unverified",
+            "verifiedAt": None,
+            "riskReasons": [],
+            "resolvedInfo": None,
+        },
+        sa_column=Column(JSONB, nullable=False),
+    )
+    extracted_contacts: dict[str, Any] = Field(
+        default_factory=lambda: {
+            "phone": None,
+            "email": None,
+            "telegramHandle": None,
+            "wecomId": None,
+            "extractionSource": None,
+        },
+        sa_column=Column(JSONB, nullable=False),
+    )
+    friend_request_status: str = Field(default="n/a")
+    sop_stage: str = Field(default="detected")
+    agent_actions: list[dict[str, Any]] = Field(
+        default_factory=list,
+        sa_column=Column(JSONB, nullable=False),
+    )
+    agent_analysis_status: AgentAnalysisStatus = Field(
+        default=AgentAnalysisStatus.NOT_REQUESTED,
+        sa_column=Column(SAEnum(AgentAnalysisStatus, native_enum=False), nullable=False, index=True),
+    )
+    agent_analysis_error: str | None = None
+    agent_analyzed_at: datetime | None = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+    )
+    attention_required: bool = Field(default=False, index=True)
 
     ai_reply_draft: str | None = None
     final_reply: str | None = None
@@ -137,8 +175,25 @@ class Message(TimestampMixin, table=True):
         sa_column=Column(SAEnum(MessageSource, native_enum=False), nullable=True),
     )
     text: str | None = None
+    source_type: str = Field(default="private", index=True)
+    group_name: str | None = None
+    raw_message_links: list[str] = Field(default_factory=list, sa_column=Column(JSONB, nullable=False))
     raw_payload: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSONB, nullable=False))
     opportunity_id: UUID | None = Field(default=None, foreign_key="opportunities.id", index=True)
+    agent_analysis_status: AgentAnalysisStatus = Field(
+        default=AgentAnalysisStatus.NOT_REQUESTED,
+        sa_column=Column(SAEnum(AgentAnalysisStatus, native_enum=False), nullable=False, index=True),
+    )
+    agent_result: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSONB, nullable=False))
+    agent_error: str | None = None
+    agent_started_at: datetime | None = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+    )
+    agent_analyzed_at: datetime | None = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+    )
     sent_at: datetime = Field(
         default_factory=utc_now,
         sa_column=Column(DateTime(timezone=True), nullable=False, index=True),

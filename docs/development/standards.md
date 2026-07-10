@@ -61,6 +61,10 @@
 - `AI_ENABLED` 控制生成，`IM_SEND_ENABLED` 控制真实发送；测试和本地默认必须安全关闭。
 - 发送逻辑需先考虑重试与幂等，避免任务重跑造成重复消息。
 - 新 provider 实现现有端口并在组合根注册，领域/application 不直接分支判断 provider。
+- pi Agent 运行时只允许审查过的结构化工具；不得为消息内容开放 coding-agent 内置的 shell、
+  read/write/edit、项目 context 或任意 HTTP 工具。Node/Python schema 必须同步测试。
+- Agent 只提出外部动作建议。新增自动邮件、加好友或私信前必须有独立 ADR、幂等键、人工批准点、
+  adapter 能力检查和审计记录，不能直接在 prompt/tool 中发送。
 
 ## 文档与决策
 

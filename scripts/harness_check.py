@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import ast
+import json
 import re
 import sys
 from collections import deque
@@ -18,6 +19,10 @@ REQUIRED_FILES = (
     "CLAUDE.md",
     "backend/alembic/versions/202607100002_repair_auth_schema.py",
     "backend/pyproject.toml",
+    "backend/pi-agent-runtime/package-lock.json",
+    "backend/pi-agent-runtime/package.json",
+    "backend/pi-agent-runtime/src/index.mjs",
+    "backend/pi-agent-runtime/src/runtime.mjs",
     "backend/uv.lock",
     "docs/README.md",
     "docs/architecture/overview.md",
@@ -37,6 +42,8 @@ REQUIRED_FILES = (
     "docs/decisions/README.md",
     "docs/decisions/0000-template.md",
     "docs/decisions/0001-use-uv-for-python-dependencies.md",
+    "docs/decisions/0002-integrate-pi-as-constrained-runner.md",
+    "docs/decisions/0003-enable-pi-agent-by-default.md",
 )
 
 FORBIDDEN_IMPORTS = {
@@ -345,6 +352,7 @@ def check_ci_and_commands(errors: list[str]) -> None:
         "harness-check:",
         "backend-sync:",
         "backend-check:",
+        "pi-agent-check:",
         "frontend-check:",
         "check:",
     ):
@@ -361,6 +369,49 @@ def check_ci_and_commands(errors: list[str]) -> None:
             errors.append(f"{label} must install backend dependencies with uv sync --locked")
     if (ROOT / "backend/requirements.txt").exists():
         errors.append("backend/requirements.txt duplicates uv project metadata; use pyproject.toml + uv.lock")
+
+    pi_package_path = ROOT / "backend/pi-agent-runtime/package.json"
+    pi_lock_path = ROOT / "backend/pi-agent-runtime/package-lock.json"
+    if pi_package_path.is_file() and pi_lock_path.is_file():
+        try:
+            pi_package = json.loads(pi_package_path.read_text(encoding="utf-8"))
+            pi_lock = json.loads(pi_lock_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as exc:
+            errors.append(f"cannot parse pi agent package metadata: {exc}")
+        else:
+            dependencies = pi_package.get("dependencies", {})
+            for package in ("@earendil-works/pi-agent-core", "@earendil-works/pi-ai"):
+                version = dependencies.get(package)
+                if not isinstance(version, str) or not re.fullmatch(r"\d+\.\d+\.\d+", version):
+                    errors.append(f"{package} must use an exact reviewed version in pi agent runtime")
+            lock_root = pi_lock.get("packages", {}).get("", {})
+            if lock_root.get("dependencies") != dependencies:
+                errors.append("pi agent package.json and package-lock.json root dependencies differ")
+
+    docker_text = (ROOT / "backend/Dockerfile").read_text(encoding="utf-8")
+    if "FROM node:22" not in docker_text or "npm ci --omit=dev --ignore-scripts" not in docker_text:
+        errors.append("backend Dockerfile must install the pinned pi agent runtime with Node 22")
+    if "backend/pi-agent-runtime" not in ci_text or "npm ci --ignore-scripts" not in ci_text:
+        errors.append("backend CI must validate the locked pi agent runtime")
+
+    pi_default_surfaces = {
+        "Python settings": (
+            ROOT / "backend/app/core/config.py",
+            "pi_agent_enabled: bool = True",
+        ),
+        "env example": (ROOT / "backend/.env.example", "PI_AGENT_ENABLED=true"),
+        "local Compose": (ROOT / "backend/docker-compose.yml", 'PI_AGENT_ENABLED: "true"'),
+        "production Compose": (
+            ROOT / "backend/docker-compose.prod.yml",
+            "PI_AGENT_ENABLED: ${PI_AGENT_ENABLED:-true}",
+        ),
+    }
+    for label, (path, expected) in pi_default_surfaces.items():
+        if expected not in path.read_text(encoding="utf-8"):
+            errors.append(f"{label} must enable pi agent by default with: {expected}")
+    deploy_text = deploy_path.read_text(encoding="utf-8") if deploy_path.is_file() else ""
+    if "secrets.DEEPSEEK_API_KEY" not in deploy_text:
+        errors.append("deploy workflow must accept the DeepSeek API key secret")
 
     release_pattern = 'branches: ["release/v*.*.*"]'
     workflow_triggers = {

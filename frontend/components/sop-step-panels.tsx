@@ -100,6 +100,43 @@ export function StepDiscovery({ opportunity }: { opportunity: Opportunity }) {
           </div>
         </div>
       )}
+
+      {opportunity.agentAnalysisStatus === 'failed' && (
+        <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 p-3">
+          <p className="text-sm font-medium text-destructive">pi Agent 分析失败</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {opportunity.agentAnalysisError ?? '本次分析没有产生有效结果，请稍后重新分析。'}
+          </p>
+        </div>
+      )}
+
+      {opportunity.agentActions.length > 0 && (
+        <div className="rounded-lg border bg-primary/5 p-3">
+          <p className="mb-2 text-xs font-medium text-muted-foreground">pi Agent 后续行动建议</p>
+          <ul className="flex flex-col gap-2">
+            {opportunity.agentActions.map((action, index) => (
+              <li key={`${action.actionType}-${index}`} className="rounded-md bg-background/80 p-2.5 text-sm">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-medium">
+                    {{
+                      send_email: '主动发送邮件',
+                      add_friend: '申请添加好友',
+                      private_message: '主动私信',
+                      notify_user: '提醒当前用户',
+                    }[action.actionType]}
+                  </span>
+                  <Badge variant="outline" className="h-5 text-[10px]">
+                    {action.requiresApproval ? '需人工批准' : '内部提醒'}
+                  </Badge>
+                </div>
+                <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{action.reason}</p>
+                {action.target && <p className="mt-1 text-xs">目标：{action.target}</p>}
+                {action.draft && <p className="mt-2 rounded border bg-muted/40 p-2 text-xs">建议草稿：{action.draft}</p>}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   )
 }

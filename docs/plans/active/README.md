@@ -1,4 +1,8 @@
 # 活动计划
 
-当前没有已登记的活动计划。新复杂任务使用 `../template.md`，命名为
-`YYYY-MM-DD-<short-slug>.md`。活动计划必须持续更新进度、发现、决策与验证，而不是只写初始方案。
+当前活动计划：
+
+- [订阅体系与 pi Agent 用量额度](2026-07-11-subscriptions-and-agent-quotas.md)
+
+新复杂任务使用 `../template.md`，命名为 `YYYY-MM-DD-<short-slug>.md`。活动计划必须持续更新
+进度、发现、决策与验证，而不是只写初始方案。

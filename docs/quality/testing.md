@@ -11,6 +11,7 @@
 | Harness/结构 | 文档可达、依赖边界、迁移图、datetime timezone | harness script + stdlib unittest |
 | 领域单测 | 检测策略、状态迁移、时间窗、纯映射 | `backend/tests/test_*.py` + `uv run pytest` |
 | 适配器/安全单测 | webhook 解析、签名/加密、Telegram user client | backend tests + fakes/monkeypatch |
+| pi Agent 契约 | TypeBox 工具、faux provider、子进程 JSON、SSRF/重定向与策略投影 | `backend/pi-agent-runtime/test` + backend tests |
 | 应用/API 集成 | repository、owner 隔离、用例编排、HTTP 契约 | 当前覆盖不足，新增功能应优先补齐 |
 | 前端静态 | 类型、lint、Next.js 构建 | ESLint + `pnpm typecheck` + `pnpm build` |
 | UI/端到端 | 登录后关键旅程、真实 API 写操作 | 当前未建立，是已知技术债 |
@@ -23,6 +24,8 @@
 - schema/migration：upgrade、数据断言、downgrade（若安全）、再 upgrade；至少在临时数据库验证。
 - 前端组件/页面：frontend check；交互改动做键盘、窄屏、loading/error/empty 人工或浏览器测试。
 - IM/AI/队列：单元 fake + 任务重复执行/失败路径；真实发送只在授权的隔离环境冒烟。
+- pi Agent：faux provider，不使用真实 key/付费模型；URL 使用 MockTransport + 固定 DNS；同时验证
+  Docker 镜像内 Node/model registry 和 Alembic upgrade/downgrade。
 - 部署：完整 check + `docker compose config` + 健康/ready 检查和回滚思路。
 
 ## 测试编写规则

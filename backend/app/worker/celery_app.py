@@ -21,6 +21,7 @@ celery_app.conf.update(
     worker_prefetch_multiplier=1,
     task_routes={
         "ai.generate_and_send_reply": {"queue": "ai"},
+        "agent.analyze_message": {"queue": "agent"},
         "opportunity.sweep_pending_for_ai": {"queue": "default"},
     },
     beat_schedule={

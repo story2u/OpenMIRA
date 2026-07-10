@@ -1,5 +1,7 @@
 import type {
   AuthUser,
+  AgentAction,
+  AgentAnalysisStatus,
   ExtractedContacts,
   LinkVerification,
   OAuthAuthorizeResponse,
@@ -35,6 +37,11 @@ interface ApiOpportunity {
   friendRequestStatus?: Opportunity['friendRequestStatus']
   sopStage?: Opportunity['sopStage']
   trustScore?: number
+  agentActions?: AgentAction[]
+  agentAnalysisStatus?: AgentAnalysisStatus
+  agentAnalysisError?: string | null
+  agentAnalyzedAt?: string | null
+  attentionRequired?: boolean
 }
 
 const defaultLinkVerification: LinkVerification = {
@@ -122,12 +129,28 @@ export function toOpportunity(item: ApiOpportunity): Opportunity {
     friendRequestStatus: item.friendRequestStatus ?? (item.sourceType === 'group' ? 'not_sent' : 'n/a'),
     sopStage: item.sopStage ?? 'detected',
     trustScore: item.trustScore ?? 70,
+    agentActions: item.agentActions ?? [],
+    agentAnalysisStatus: item.agentAnalysisStatus ?? 'not_requested',
+    agentAnalysisError: item.agentAnalysisError ?? null,
+    agentAnalyzedAt: item.agentAnalyzedAt ?? null,
+    attentionRequired: item.attentionRequired ?? false,
   }
 }
 
 export async function fetchOpportunities(): Promise<Opportunity[]> {
   const items = await fetchJson<ApiOpportunity[]>('/api/v1/opportunities?limit=200')
   return items.map(toOpportunity)
+}
+
+export async function fetchOpportunity(opportunityId: string): Promise<Opportunity> {
+  return toOpportunity(await fetchJson<ApiOpportunity>(`/api/v1/opportunities/${opportunityId}`))
+}
+
+export async function enqueueAgentAnalysis(opportunityId: string): Promise<{
+  messageId: string
+  status: AgentAnalysisStatus
+}> {
+  return fetchJson(`/api/v1/opportunities/${opportunityId}/agent-analysis`, { method: 'POST' })
 }
 
 export async function fetchReplyTemplates(): Promise<ReplyTemplate[]> {

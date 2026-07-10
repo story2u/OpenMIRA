@@ -10,7 +10,8 @@
 | P1 | 人工回复、AI 草稿、消息历史、状态更新未从前端接后端 | `frontend/lib/api.ts` 与详情组件 | 关键旅程端到端通过，发送失败不伪造状态 |
 | P1 | Celery 发送任务的重试/幂等证据不足 | `backend/app/worker/tasks.py`、回复用例 | 重跑不会重复发消息；失败可恢复且可观察 |
 | P1 | repository/API 的用户隔离缺少集成测试 | 当前 `backend/tests/` | 临时 PostgreSQL/API 测试覆盖跨用户拒绝 |
-| P2 | 链接核验、联系提取、好友申请只是演示 | `frontend/lib/app-store.tsx` | 明确产品决策；真实后端/安全设计或删除生产 UI 暗示 |
+| P2 | 联系方式手工编辑和好友申请执行仍是演示 | `frontend/lib/app-store.tsx` | 接入有审批/审计的真实 API，或删除生产 UI 暗示；pi Agent 当前只提供动作建议 |
+| P2 | Alembic metadata 缺少 Telegram enabled 索引 | `alembic check` 报告 `ix_telegram_user_configs_enabled` 未在历史迁移创建 | 用新 migration 修复并让 `alembic check` 无漂移；不得改写已发布迁移 |
 | P2 | readiness 只返回静态 ok | `backend/app/api/v1/routes/health.py` | 检查关键依赖并区分 liveness/readiness |
 | P2 | 前端缺少组件与 E2E 自动化 | `frontend/` 无测试配置 | 登录后核心只读/写旅程进入 CI |
 | P2 | 可观测性与告警未形成闭环 | 只有基础 logging | 结构日志、关键指标/trace、任务/发送告警有仓库配置与演练 |

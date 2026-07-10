@@ -4,15 +4,23 @@ from uuid import UUID
 import structlog
 
 from app.application.use_cases.ai_reply import AIAutoReplyUseCase, transition_pending_to_ai
+from app.application.use_cases.analyze_message import AnalyzeMessageUseCase
 from app.core.config import get_settings
 from app.core.time_window import WorkTimeConfig, WorkTimeService
+from app.infrastructure.agent.link_inspector import SafeLinkInspector
+from app.infrastructure.agent.pi_client import PiAgentClient
 from app.infrastructure.ai.litellm_client import LiteLLMReplyGenerator
-from app.infrastructure.db.repositories import ConfigRepository, MessageRepository, OpportunityRepository
+from app.infrastructure.db.repositories import (
+    ConfigRepository,
+    MessageRepository,
+    OpportunityRepository,
+)
 from app.infrastructure.db.session import AsyncSessionLocal
 from app.infrastructure.im.base import AdapterRegistry
 from app.infrastructure.im.telegram import TelegramAdapter
 from app.infrastructure.im.wecom import WeComAdapter
 from app.worker.celery_app import celery_app
+from app.worker.queue import CeleryTaskQueue
 
 logger = structlog.get_logger(__name__)
 
@@ -26,6 +34,19 @@ logger = structlog.get_logger(__name__)
 )
 def generate_and_send_reply(opportunity_id: str) -> None:
     asyncio.run(_generate_and_send_reply(UUID(opportunity_id)))
+
+
+@celery_app.task(
+    name="agent.analyze_message",
+    queue="agent",
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    retry_kwargs={"max_retries": 3},
+    soft_time_limit=135,
+    time_limit=150,
+)
+def analyze_message(message_id: str, force: bool = False) -> None:
+    asyncio.run(_analyze_message(UUID(message_id), force=force))
 
 
 @celery_app.task(name="opportunity.sweep_pending_for_ai", queue="default")
@@ -61,6 +82,44 @@ async def _generate_and_send_reply(opportunity_id: UUID) -> None:
             reply_generator=reply_generator,
         )
         await use_case.execute(opportunity)
+
+
+async def _analyze_message(message_id: UUID, *, force: bool) -> None:
+    settings = get_settings()
+    if not settings.pi_agent_enabled:
+        logger.info("agent.analysis_disabled", message_id=str(message_id))
+        return
+
+    async with AsyncSessionLocal() as session:
+        message_repo = MessageRepository(session)
+        opportunity_repo = OpportunityRepository(session)
+        use_case = AnalyzeMessageUseCase(
+            message_repo=message_repo,
+            opportunity_repo=opportunity_repo,
+            agent=PiAgentClient(
+                node_binary=settings.pi_agent_node_binary,
+                runner_path=settings.pi_agent_runner_path,
+                provider=settings.pi_agent_provider,
+                model=settings.pi_agent_model,
+                api_key=settings.effective_pi_agent_api_key,
+                timeout_seconds=settings.pi_agent_timeout_seconds,
+            ),
+            link_inspector=SafeLinkInspector(
+                max_links=settings.pi_agent_max_links,
+                max_content_bytes=settings.pi_agent_max_content_bytes,
+                max_text_chars=settings.pi_agent_max_link_text_chars,
+                timeout_seconds=settings.pi_agent_link_timeout_seconds,
+            ),
+            task_queue=CeleryTaskQueue(),
+            min_opportunity_confidence=settings.pi_agent_min_opportunity_confidence,
+            max_links=settings.pi_agent_max_links,
+        )
+        opportunity = await use_case.execute(message_id, force=force)
+        logger.info(
+            "agent.analysis_completed",
+            message_id=str(message_id),
+            opportunity_id=str(opportunity.id) if opportunity else None,
+        )
 
 
 async def _sweep_pending_for_ai() -> None:

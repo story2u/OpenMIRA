@@ -5,6 +5,8 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.core.time_window import WorkTimeConfig
 from app.domain.enums import (
+    AgentActionType,
+    AgentAnalysisStatus,
     FrontendOpportunityStatus,
     IMChannel,
     MessageSource,
@@ -12,6 +14,14 @@ from app.domain.enums import (
     Priority,
     RuleType,
 )
+
+
+class AgentActionRead(BaseModel):
+    actionType: AgentActionType
+    reason: str
+    target: str | None = None
+    draft: str | None = None
+    requiresApproval: bool = True
 
 
 class OpportunityRead(BaseModel):
@@ -37,6 +47,11 @@ class OpportunityRead(BaseModel):
     friendRequestStatus: str = "not_sent"
     sopStage: str = "detected"
     trustScore: int = 70
+    agentActions: list[AgentActionRead] = Field(default_factory=list)
+    agentAnalysisStatus: AgentAnalysisStatus = AgentAnalysisStatus.NOT_REQUESTED
+    agentAnalysisError: str | None = None
+    agentAnalyzedAt: datetime | None = None
+    attentionRequired: bool = False
 
 
 class OpportunityDetailRead(OpportunityRead):
@@ -63,6 +78,11 @@ class ManualReplyRequest(BaseModel):
 class AIDraftResponse(BaseModel):
     opportunity_id: UUID
     draft: str
+
+
+class AgentAnalysisEnqueueRead(BaseModel):
+    messageId: UUID
+    status: AgentAnalysisStatus
 
 
 class OpportunityStatusUpdate(BaseModel):

@@ -1,4 +1,4 @@
-.PHONY: harness-check backend-sync backend-check frontend-check check
+.PHONY: harness-check backend-sync backend-check pi-agent-sync pi-agent-check frontend-check check
 
 PYTHON ?= python3
 UV ?= uv
@@ -15,9 +15,16 @@ backend-check: backend-sync
 	cd backend && $(UV) run --locked ruff check app tests scripts alembic --select E,F,ASYNC --ignore E501
 	cd backend && $(UV) run --locked pytest -q
 
+pi-agent-sync:
+	cd backend/pi-agent-runtime && npm ci --ignore-scripts
+
+pi-agent-check: pi-agent-sync
+	cd backend/pi-agent-runtime && npm run check
+	cd backend/pi-agent-runtime && npm test
+
 frontend-check:
 	cd frontend && pnpm lint
 	cd frontend && pnpm typecheck
 	cd frontend && pnpm build
 
-check: harness-check backend-check frontend-check
+check: harness-check backend-check pi-agent-check frontend-check

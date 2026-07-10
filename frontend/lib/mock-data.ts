@@ -1,5 +1,21 @@
 import type { ChatMessage, ExtractedContacts, LinkVerification, Opportunity, ReplyTemplate, SopStage } from './types'
 
+type OpportunitySeed = Omit<
+  Opportunity,
+  'agentActions' | 'agentAnalysisStatus' | 'agentAnalysisError' | 'agentAnalyzedAt' | 'attentionRequired'
+>
+
+function withAgentDefaults(opportunity: OpportunitySeed): Opportunity {
+  return {
+    ...opportunity,
+    agentActions: [],
+    agentAnalysisStatus: 'not_requested',
+    agentAnalysisError: null,
+    agentAnalyzedAt: null,
+    attentionRequired: false,
+  }
+}
+
 const noLinks: LinkVerification = {
   status: 'unverified',
   verifiedAt: null,
@@ -15,7 +31,7 @@ const emptyContacts: ExtractedContacts = {
   extractionSource: null,
 }
 
-export const mockOpportunities: Opportunity[] = [
+const seedOpportunities: OpportunitySeed[] = [
   // ===== 核心演示数据 1：链接安全、流程正常推进（群消息） =====
   {
     id: 'opp-safe',
@@ -252,6 +268,8 @@ export const mockOpportunities: Opportunity[] = [
   },
 ]
 
+export const mockOpportunities: Opportunity[] = seedOpportunities.map(withAgentDefaults)
+
 // ===== 批量生成数据（用于分页演示） =====
 const genNames = [
   ['林晓婷', '/avatars/lina.png'],
@@ -288,7 +306,7 @@ function makeGenerated(i: number): Opportunity {
   const day = 1 + (i % 6)
   const hour = 8 + (i % 12)
   const trust = 45 + ((i * 13) % 50)
-  return {
+  return withAgentDefaults({
     id: `opp-gen-${i + 1}`,
     platform: i % 2 === 0 ? 'telegram' : 'wecom',
     contactName: name,
@@ -329,7 +347,7 @@ function makeGenerated(i: number): Opportunity {
         : 'not_sent',
     sopStage: stage,
     trustScore: trust,
-  }
+  })
 }
 
 for (let i = 0; i < 30; i++) {
@@ -505,7 +523,7 @@ export const mockTemplates: ReplyTemplate[] = [
 
 export const templateCategories = ['全部', '开场白', '产品介绍', '报价与商务', '技术与安全', '试用与转化', '自动回复']
 
-export const incomingOpportunity: Opportunity = {
+export const incomingOpportunity: Opportunity = withAgentDefaults({
   id: 'opp-new',
   platform: 'telegram',
   contactName: 'Emma Liu',
@@ -526,4 +544,4 @@ export const incomingOpportunity: Opportunity = {
   friendRequestStatus: 'not_sent',
   sopStage: 'detected',
   trustScore: 70,
-}
+})

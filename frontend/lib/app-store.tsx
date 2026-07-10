@@ -1,7 +1,7 @@
 'use client'
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
-import { fetchOpportunities, fetchReplyTemplates } from './api'
+import { enqueueAgentAnalysis, fetchOpportunities, fetchOpportunity, fetchReplyTemplates } from './api'
 import { useAuth } from './auth'
 import { mockMessages, mockOpportunities, mockTemplates } from './mock-data'
 import type {
@@ -26,7 +26,7 @@ interface AppStore {
   addTemplate: (template: Omit<ReplyTemplate, 'id'>) => void
   updateTemplate: (template: ReplyTemplate) => void
   updateOpportunity: (id: string, patch: Partial<Opportunity>) => void
-  startLinkAnalysis: (id: string) => void
+  startLinkAnalysis: (id: string) => Promise<void>
   updateContacts: (id: string, contacts: Partial<ExtractedContacts>) => void
   sendFriendRequest: (id: string) => void
   overrideRiskAndContinue: (id: string) => void
@@ -91,8 +91,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
     setOpportunities((prev) => prev.map((o) => (o.id === id ? { ...o, ...patch } : o)))
   }, [])
 
-  // 模拟链接安全分析：2.5 秒后返回结果
-  const startLinkAnalysis = useCallback((id: string) => {
+  const startLinkAnalysis = useCallback(async (id: string) => {
     setOpportunities((prev) =>
       prev.map((o) =>
         o.id === id
@@ -100,43 +99,32 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
           : o,
       ),
     )
-    const timer = setTimeout(() => {
+    try {
+      await enqueueAgentAnalysis(id)
+      for (let attempt = 0; attempt < 30; attempt += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 2000))
+        const updated = await fetchOpportunity(id)
+        setOpportunities((prev) => prev.map((item) => (item.id === id ? updated : item)))
+        if (updated.agentAnalysisStatus === 'completed' || updated.agentAnalysisStatus === 'failed') {
+          return
+        }
+      }
+      throw new Error('Agent analysis did not finish within the polling window.')
+    } catch (error) {
+      console.warn('Failed to run pi agent analysis.', error)
       setOpportunities((prev) =>
-        prev.map((o) => {
-          if (o.id !== id) return o
-          // opp-risk 演示分支：始终返回可疑
-          if (o.id === 'opp-risk') {
-            return {
-              ...o,
-              sopStage: 'analyzing',
-              trustScore: 23,
-              linkVerification: {
-                status: 'suspicious',
-                verifiedAt: new Date().toISOString(),
-                riskReasons: [
-                  '域名注册时间仅 11 天，无备案信息',
-                  '页面要求填写手机号与验证码，疑似钓鱼站点',
-                  '页面内容与"企业订单资源"描述不符，实际为推广注册页',
-                ],
-                resolvedInfo: null,
-              },
-            }
-          }
-          return {
-            ...o,
-            sopStage: 'verified',
-            trustScore: Math.max(o.trustScore, 82),
-            linkVerification: {
-              status: 'safe',
-              verifiedAt: new Date().toISOString(),
-              riskReasons: [],
-              resolvedInfo: '落地页为正规企业页面，内容与消息描述一致，未发现钓鱼或欺诈特征。',
-            },
-          }
-        }),
+        prev.map((item) =>
+          item.id === id
+            ? {
+                ...item,
+                agentAnalysisStatus: 'failed',
+                agentAnalysisError: error instanceof Error ? error.message : 'Agent analysis failed.',
+                linkVerification: { ...item.linkVerification, status: 'unverified' },
+              }
+            : item,
+        ),
       )
-    }, 2500)
-    timersRef.current.push(timer)
+    }
   }, [])
 
   const updateContacts = useCallback((id: string, contacts: Partial<ExtractedContacts>) => {

@@ -1,6 +1,7 @@
 'use client'
 
-import { ChevronLeft, ChevronRight, Inbox } from 'lucide-react'
+import { AlertTriangle, ChevronLeft, ChevronRight, Inbox } from 'lucide-react'
+import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
 import { FilterPanel } from '@/components/filter-panel'
 import { OpportunityCard } from '@/components/opportunity-card'
@@ -42,6 +43,7 @@ export default function DashboardPage() {
   }, [filters])
 
   const pendingCount = opportunities.filter((o) => o.status === 'pending').length
+  const attentionOpportunities = opportunities.filter((o) => o.attentionRequired && o.status === 'pending')
 
   return (
     <div className="mx-auto w-full max-w-5xl px-4 py-6 md:px-8">
@@ -57,6 +59,36 @@ export default function DashboardPage() {
           {pendingCount} 条待处理
         </Badge>
       </header>
+
+      {attentionOpportunities.length > 0 && (
+        <section
+          role="alert"
+          aria-label="重大商机提醒"
+          className="mb-5 rounded-xl border border-warning/40 bg-warning/10 p-4"
+        >
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="mt-0.5 size-5 shrink-0 text-warning" />
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold">pi Agent 发现 {attentionOpportunities.length} 条重大商机</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">请优先核对链接结论和后续行动建议，外部动作仍需人工批准。</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {attentionOpportunities.slice(0, 3).map((opportunity) => (
+                  <Button
+                    key={opportunity.id}
+                    nativeButton={false}
+                    render={<Link href={`/opportunity/${opportunity.id}`} />}
+                    variant="outline"
+                    size="sm"
+                    className="bg-background/70"
+                  >
+                    {opportunity.contactName} · 查看建议
+                  </Button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
 
       <div className="mb-3 flex flex-wrap items-center gap-2.5">
         <Tabs value={filters.status} onValueChange={(v) => setFilters({ ...filters, status: v as DashboardFilters['status'] })}>

@@ -2,6 +2,8 @@ export type Platform = 'telegram' | 'wecom'
 export type OpportunityStatus = 'pending' | 'replied' | 'ignored'
 export type Priority = 'low' | 'normal' | 'high' | 'urgent'
 export type MessageSource = 'human' | 'ai' | null
+export type AgentAnalysisStatus = 'not_requested' | 'queued' | 'running' | 'completed' | 'failed'
+export type AgentActionType = 'send_email' | 'add_friend' | 'private_message' | 'notify_user'
 
 export type SourceType = 'group' | 'private'
 export type GroupMemberRole = 'member' | 'unknown'
@@ -33,6 +35,14 @@ export interface ExtractedContacts {
   extractionSource: ContactExtractionSource
 }
 
+export interface AgentAction {
+  actionType: AgentActionType
+  reason: string
+  target: string | null
+  draft: string | null
+  requiresApproval: boolean
+}
+
 export interface Opportunity {
   id: string
   platform: Platform
@@ -54,6 +64,11 @@ export interface Opportunity {
   friendRequestStatus: FriendRequestStatus
   sopStage: SopStage
   trustScore: number
+  agentActions: AgentAction[]
+  agentAnalysisStatus: AgentAnalysisStatus
+  agentAnalysisError: string | null
+  agentAnalyzedAt: string | null
+  attentionRequired: boolean
 }
 
 export interface ChatMessage {

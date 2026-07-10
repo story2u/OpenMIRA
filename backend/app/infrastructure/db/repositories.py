@@ -10,6 +10,7 @@ from sqlmodel import col, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.domain.enums import (
+    AgentAnalysisStatus,
     FrontendOpportunityStatus,
     IMChannel,
     MessageDirection,
@@ -17,7 +18,7 @@ from app.domain.enums import (
     OpportunityStatus,
     Priority,
 )
-from app.domain.ports import DetectionRule, InboundMessage
+from app.domain.ports import AgentAnalysisProjection, DetectionRule, InboundMessage
 from app.infrastructure.db.models import (
     AppConfig,
     AuthAccount,
@@ -201,6 +202,9 @@ class MessageRepository:
         result = await self.session.exec(statement)
         return result.first()
 
+    async def get(self, message_id: UUID) -> Message | None:
+        return await self.session.get(Message, message_id)
+
     async def create_incoming(self, inbound: InboundMessage) -> Message:
         message = Message(
             owner_user_id=inbound.owner_user_id,
@@ -211,12 +215,95 @@ class MessageRepository:
             sender_display_name=inbound.sender_display_name,
             direction=MessageDirection.INCOMING,
             text=inbound.text,
+            source_type=inbound.source_type,
+            group_name=inbound.group_name,
+            raw_message_links=inbound.raw_message_links,
             raw_payload=inbound.raw_payload,
         )
         self.session.add(message)
         await self.session.commit()
         await self.session.refresh(message)
         return message
+
+    async def mark_agent_queued(self, message_id: UUID, *, force: bool = False) -> Message | None:
+        message = await self.session.get(Message, message_id)
+        if not message or message.agent_analysis_status == AgentAnalysisStatus.RUNNING:
+            return message
+        if message.agent_analysis_status == AgentAnalysisStatus.COMPLETED and not force:
+            return message
+        message.agent_analysis_status = AgentAnalysisStatus.QUEUED
+        message.agent_error = None
+        message.updated_at = utc_now()
+        self.session.add(message)
+        await self.session.commit()
+        await self.session.refresh(message)
+        return message
+
+    async def claim_agent_analysis(self, message_id: UUID, *, force: bool = False) -> Message | None:
+        message = await self.session.get(Message, message_id, with_for_update=True)
+        if not message:
+            return None
+        if (
+            message.agent_analysis_status == AgentAnalysisStatus.RUNNING
+            and message.agent_started_at
+            and message.agent_started_at > utc_now() - timedelta(minutes=10)
+        ):
+            return None
+        if message.agent_analysis_status == AgentAnalysisStatus.COMPLETED and not force:
+            return None
+        now = utc_now()
+        message.agent_analysis_status = AgentAnalysisStatus.RUNNING
+        message.agent_started_at = now
+        message.agent_error = None
+        message.updated_at = now
+        self.session.add(message)
+        if message.opportunity_id:
+            opportunity = await self.session.get(Opportunity, message.opportunity_id)
+            if opportunity:
+                opportunity.agent_analysis_status = AgentAnalysisStatus.RUNNING
+                opportunity.agent_analysis_error = None
+                opportunity.sop_stage = "analyzing"
+                opportunity.updated_at = now
+                self.session.add(opportunity)
+        await self.session.commit()
+        await self.session.refresh(message)
+        return message
+
+    async def complete_agent_analysis(
+        self,
+        message: Message,
+        projection: AgentAnalysisProjection,
+    ) -> Message:
+        message.agent_analysis_status = AgentAnalysisStatus.COMPLETED
+        message.agent_result = projection.model_dump(mode="json")
+        message.agent_error = None
+        message.agent_analyzed_at = projection.analyzed_at
+        message.updated_at = projection.analyzed_at
+        self.session.add(message)
+        await self.session.commit()
+        await self.session.refresh(message)
+        return message
+
+    async def fail_agent_analysis(self, message_id: UUID, error: str) -> None:
+        # Recover from provider or database exceptions before writing the durable failure state.
+        await self.session.rollback()
+        message = await self.session.get(Message, message_id)
+        if not message:
+            return
+        now = utc_now()
+        safe_error = error[:1000]
+        message.agent_analysis_status = AgentAnalysisStatus.FAILED
+        message.agent_error = safe_error
+        message.updated_at = now
+        self.session.add(message)
+        if message.opportunity_id:
+            opportunity = await self.session.get(Opportunity, message.opportunity_id)
+            if opportunity:
+                opportunity.agent_analysis_status = AgentAnalysisStatus.FAILED
+                opportunity.agent_analysis_error = safe_error
+                opportunity.updated_at = now
+                self.session.add(opportunity)
+        await self.session.commit()
 
     async def create_outgoing(
         self,
@@ -335,6 +422,7 @@ class OpportunityRepository:
             detection_reason=detection_reason,
             status=status,
             last_message_preview=last_message_preview,
+            friend_request_status="not_sent" if source_type == "group" else "n/a",
         )
         self.session.add(opportunity)
         await self.session.commit()
@@ -343,6 +431,53 @@ class OpportunityRepository:
 
     async def get(self, opportunity_id: UUID) -> Opportunity | None:
         return await self.session.get(Opportunity, opportunity_id)
+
+    async def get_by_source_message(self, message_id: UUID) -> Opportunity | None:
+        statement = select(Opportunity).where(Opportunity.source_message_id == message_id)
+        result = await self.session.exec(statement)
+        return result.first()
+
+    async def apply_agent_projection(
+        self,
+        opportunity: Opportunity,
+        projection: AgentAnalysisProjection,
+    ) -> Opportunity:
+        priority_order = {
+            Priority.LOW: 0,
+            Priority.NORMAL: 1,
+            Priority.HIGH: 2,
+            Priority.URGENT: 3,
+        }
+        opportunity.link_verification = projection.link_verification
+        opportunity.extracted_contacts = projection.extracted_contacts
+        opportunity.agent_actions = projection.actions
+        opportunity.agent_analysis_status = AgentAnalysisStatus.COMPLETED
+        opportunity.agent_analysis_error = None
+        opportunity.agent_analyzed_at = projection.analyzed_at
+        opportunity.attention_required = projection.attention_required
+        opportunity.trust_score = projection.result.trust_score
+        opportunity.confidence = max(opportunity.confidence, projection.result.confidence)
+        if priority_order[projection.result.priority] > priority_order[opportunity.priority]:
+            opportunity.priority = projection.result.priority
+
+        link_status = projection.link_verification.get("status")
+        has_contacts = any(
+            projection.extracted_contacts.get(key)
+            for key in ("phone", "email", "telegramHandle", "wecomId")
+        )
+        if link_status in {"suspicious", "malicious"}:
+            opportunity.sop_stage = "analyzing"
+        elif has_contacts:
+            opportunity.sop_stage = (
+                "contact_extracted" if opportunity.source_type == "group" else "ready_to_chat"
+            )
+        elif opportunity.raw_message_links:
+            opportunity.sop_stage = "verified"
+        opportunity.updated_at = projection.analyzed_at
+        self.session.add(opportunity)
+        await self.session.commit()
+        await self.session.refresh(opportunity)
+        return opportunity
 
     async def list(
         self,

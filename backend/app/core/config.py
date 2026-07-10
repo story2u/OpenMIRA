@@ -60,6 +60,27 @@ class Settings(BaseSettings):
     litellm_model: str = "openai/gpt-4o-mini"
     openai_api_key: str = ""
 
+    pi_agent_enabled: bool = True
+    pi_agent_provider: str = "openai"
+    pi_agent_model: str = "gpt-4o-mini"
+    pi_agent_api_key: str = ""
+    pi_agent_node_binary: str = "node"
+    pi_agent_runner_path: str = "/app/pi-agent-runtime/src/index.mjs"
+    pi_agent_timeout_seconds: float = Field(default=60.0, ge=5.0, le=300.0)
+    pi_agent_min_opportunity_confidence: float = Field(default=0.75, ge=0.0, le=1.0)
+    pi_agent_max_links: int = Field(default=5, ge=0, le=10)
+    pi_agent_link_timeout_seconds: float = Field(default=10.0, ge=1.0, le=30.0)
+    pi_agent_max_content_bytes: int = Field(default=200_000, ge=10_000, le=1_000_000)
+    pi_agent_max_link_text_chars: int = Field(default=12_000, ge=1_000, le=20_000)
+
+    @property
+    def effective_pi_agent_api_key(self) -> str:
+        if self.pi_agent_api_key:
+            return self.pi_agent_api_key
+        if self.pi_agent_provider == "openai":
+            return self.openai_api_key
+        return ""
+
 
 @lru_cache
 def get_settings() -> Settings:

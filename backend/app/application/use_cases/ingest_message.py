@@ -3,7 +3,11 @@ from app.domain.enums import OpportunityStatus
 from app.domain.ports import InboundMessage, TaskQueue
 from app.domain.services.detection_policy import OpportunityDetector
 from app.infrastructure.db.models import Message, Opportunity
-from app.infrastructure.db.repositories import MessageRepository, OpportunityRepository, RuleRepository
+from app.infrastructure.db.repositories import (
+    MessageRepository,
+    OpportunityRepository,
+    RuleRepository,
+)
 
 
 class IngestMessageUseCase:
@@ -40,6 +44,8 @@ class IngestMessageUseCase:
 
         if not detection.is_opportunity:
             await self.message_repo.mark_processed(message.id)
+            if self.task_queue.enqueue_agent_analysis(message.id):
+                await self.message_repo.mark_agent_queued(message.id)
             return message
 
         if self.work_time.is_working_time():
@@ -72,5 +78,8 @@ class IngestMessageUseCase:
             self.task_queue.enqueue_ai_reply(opportunity.id)
         else:
             self.task_queue.notify_reviewers(opportunity.id)
+
+        if self.task_queue.enqueue_agent_analysis(message.id):
+            await self.message_repo.mark_agent_queued(message.id)
 
         return opportunity

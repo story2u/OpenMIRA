@@ -59,6 +59,33 @@ jobs:
       - name: Run backend tests
         run: uv run --locked pytest -q
 
+  pi-agent:
+    name: Pi Agent Runtime
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: backend/pi-agent-runtime
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/pi-agent-runtime/package-lock.json
+
+      - name: Install runtime dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Check runtime syntax
+        run: npm run check
+
+      - name: Run runtime tests
+        run: npm test
+
   frontend:
     name: Frontend Typecheck And Build
     runs-on: ubuntu-latest

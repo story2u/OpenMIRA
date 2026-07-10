@@ -8,9 +8,11 @@ from app.api.deps import (
     get_opportunity_or_404,
     get_opportunity_repo,
     get_reply_generator,
+    get_task_queue,
     require_user,
 )
 from app.application.dto import (
+    AgentAnalysisEnqueueRead,
     AIDraftResponse,
     ManualReplyRequest,
     OpportunityDetailRead,
@@ -20,12 +22,16 @@ from app.application.dto import (
 from app.application.mappers import to_opportunity_detail, to_opportunity_read
 from app.application.use_cases.ai_reply import AIDraftUseCase
 from app.application.use_cases.manual_reply import ManualReplyUseCase
-from app.domain.enums import FrontendOpportunityStatus, IMChannel
-from app.domain.services.opportunity_state import InvalidOpportunityTransition, ensure_transition_allowed
+from app.domain.enums import AgentAnalysisStatus, FrontendOpportunityStatus, IMChannel
+from app.domain.services.opportunity_state import (
+    InvalidOpportunityTransition,
+    ensure_transition_allowed,
+)
 from app.infrastructure.ai.litellm_client import LiteLLMReplyGenerator
 from app.infrastructure.db.models import Opportunity, User
 from app.infrastructure.db.repositories import MessageRepository, OpportunityRepository
 from app.infrastructure.im.base import AdapterRegistry
+from app.worker.queue import CeleryTaskQueue
 
 router = APIRouter()
 
@@ -95,6 +101,51 @@ async def generate_ai_draft(
     )
     draft = await use_case.execute(opportunity)
     return AIDraftResponse(opportunity_id=opportunity.id, draft=draft)
+
+
+@router.post(
+    "/{opportunity_id}/agent-analysis",
+    response_model=AgentAnalysisEnqueueRead,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def enqueue_agent_analysis(
+    _: User = Depends(require_user),
+    opportunity: Opportunity = Depends(get_opportunity_or_404),
+    message_repo: MessageRepository = Depends(get_message_repo),
+    task_queue: CeleryTaskQueue = Depends(get_task_queue),
+) -> AgentAnalysisEnqueueRead:
+    if not opportunity.source_message_id:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="opportunity has no source message to analyze",
+        )
+    source_message = await message_repo.get(opportunity.source_message_id)
+    if not source_message:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="source message not found")
+    if source_message.agent_analysis_status == AgentAnalysisStatus.RUNNING:
+        return AgentAnalysisEnqueueRead(
+            messageId=source_message.id,
+            status=AgentAnalysisStatus.RUNNING,
+        )
+    message = await message_repo.mark_agent_queued(opportunity.source_message_id, force=True)
+    assert message is not None
+    if not task_queue.enqueue_agent_analysis(opportunity.source_message_id, force=True):
+        await message_repo.fail_agent_analysis(
+            opportunity.source_message_id,
+            "pi agent is disabled or the analysis queue is unavailable",
+        )
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="pi agent is disabled or the analysis queue is unavailable",
+        )
+    return AgentAnalysisEnqueueRead(
+        messageId=message.id,
+        status=(
+            AgentAnalysisStatus.RUNNING
+            if message.agent_analysis_status == AgentAnalysisStatus.RUNNING
+            else AgentAnalysisStatus.QUEUED
+        ),
+    )
 
 
 @router.patch("/{opportunity_id}/status", response_model=OpportunityDetailRead)

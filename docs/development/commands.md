@@ -43,6 +43,20 @@ cp .env.example .env
 make dev
 ```
 
+## pi Agent runtime
+
+运行时要求 Node.js 22.19+，依赖由独立 npm 锁文件管理：
+
+```bash
+make pi-agent-check
+cd backend/pi-agent-runtime && npm ci --ignore-scripts
+cd backend/pi-agent-runtime && npm test
+```
+
+`pi-agent-check` 做 locked install、Node 语法检查和 faux-provider 测试，不需要真实模型 key。更新 pi
+必须同时修改 `package.json` / `package-lock.json`，使用精确版本并审查 transitive diff；禁止运行未知
+lifecycle script。
+
 ## 前端
 
 首次安装与常用检查：
@@ -62,7 +76,8 @@ cd frontend && pnpm dev
 make check
 ```
 
-依次运行 harness、uv locked sync、后端语法/lint/test、前端 lint/build。需要安装 uv 与前端依赖。
+依次运行 harness、uv locked sync、后端语法/lint/test、pi runtime locked install/test、前端
+lint/typecheck/build。需要安装 uv、Node/npm 与 pnpm。
 
 ## Docker 集成环境
 
@@ -95,6 +110,7 @@ alembic downgrade -1
 
 - `.github/workflows/ci.yml` 的 harness job：`python scripts/harness_check.py`。
 - backend job：固定 uv 版本、Python 3.12、`uv sync --locked`、compileall、Ruff、pytest。
+- pi-agent job：Node 22、`npm ci --ignore-scripts`、语法检查和 faux-provider 测试。
 - frontend job：Node 22、pnpm 10、frozen install、lint、独立 typecheck、build。
 
 若本地命令与 CI 漂移，优先统一根 Makefile和本文件，不在入口提示词复制更多命令。
