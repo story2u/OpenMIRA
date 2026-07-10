@@ -38,3 +38,51 @@ Authorization: Bearer change-me
 - `POST /api/v1/webhooks/telegram`
 - `GET /api/v1/webhooks/wecom`
 - `POST /api/v1/webhooks/wecom`
+
+## Telegram user-client ingestion
+
+Telegram Bot API cannot read a group unless the bot is added to that group. For job groups where
+you are only a normal member, use the MTProto user-client listener. It logs in with your own
+Telegram account session, reads only chats that account can already access, and feeds messages into
+the same opportunity detection pipeline as the webhook adapters.
+
+1. Create a Telegram API app at <https://my.telegram.org/apps> and copy `api_id` and `api_hash`.
+2. Set these values in `.env`:
+
+```env
+TELEGRAM_USER_ENABLED=true
+TELEGRAM_USER_API_ID=123456
+TELEGRAM_USER_API_HASH=your-api-hash
+TELEGRAM_USER_SESSION=
+TELEGRAM_USER_CHATS=[]
+TELEGRAM_USER_BACKFILL_LIMIT=50
+```
+
+3. Generate a string session:
+
+```bash
+docker compose --env-file .env run --rm -it telegram_listener \
+  python scripts/create_telegram_user_session.py
+```
+
+4. Paste the printed `TELEGRAM_USER_SESSION=...` value into `.env`, then list available dialogs:
+
+```bash
+docker compose --env-file .env run --rm telegram_listener \
+  python scripts/list_telegram_dialogs.py
+```
+
+5. Configure the specific job groups or channels:
+
+```env
+TELEGRAM_USER_CHATS=["-1001234567890","public_jobs_channel"]
+```
+
+6. Start the listener:
+
+```bash
+docker compose --env-file .env up -d --force-recreate telegram_listener
+```
+
+The user-client listener only ingests messages by default. It does not send AI replies from your
+personal Telegram account.

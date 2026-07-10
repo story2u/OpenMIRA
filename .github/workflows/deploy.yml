@@ -46,7 +46,7 @@ jobs:
       VPS_USER: ${{ vars.VPS_USER || secrets.VPS_USER }}
       VPS_PORT: ${{ vars.VPS_PORT || secrets.VPS_PORT || '22' }}
       VPS_DEPLOY_DIR: ${{ vars.VPS_DEPLOY_DIR || secrets.VPS_DEPLOY_DIR || '/opt/im' }}
-      VPS_COMPOSE_SERVICES: ${{ vars.VPS_COMPOSE_SERVICES || 'postgres redis migrate api celery_worker celery_beat frontend cloudflared' }}
+      VPS_COMPOSE_SERVICES: ${{ vars.VPS_COMPOSE_SERVICES || 'postgres redis migrate api celery_worker celery_beat telegram_listener frontend cloudflared' }}
       DEPLOY_VERSION: ${{ inputs.version || github.event.workflow_run.head_branch || github.ref_name || 'main' }}
       DEPLOY_ENVIRONMENT: ${{ inputs.environment || 'production' }}
       GHCR_USERNAME: ${{ vars.GHCR_USERNAME || github.actor }}

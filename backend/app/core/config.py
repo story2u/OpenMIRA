@@ -34,6 +34,12 @@ class Settings(BaseSettings):
     im_send_enabled: bool = False
     telegram_bot_token: str = ""
     telegram_webhook_secret: str = ""
+    telegram_user_enabled: bool = False
+    telegram_user_api_id: int = 0
+    telegram_user_api_hash: str = ""
+    telegram_user_session: str = ""
+    telegram_user_chats: list[str | int] = Field(default_factory=list)
+    telegram_user_backfill_limit: int = 30
 
     wecom_corp_id: str = ""
     wecom_agent_id: str = ""

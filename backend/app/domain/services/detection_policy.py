@@ -4,7 +4,7 @@ from app.domain.enums import Priority, RuleType
 from app.domain.ports import DetectionResult, DetectionRule, OpportunityAIClassifier
 
 
-HIGH_INTENT_WORDS = {
+HIGH_INTENT_WORDS = (
     "报价",
     "价格",
     "采购",
@@ -21,9 +21,9 @@ HIGH_INTENT_WORDS = {
     "quote",
     "enterprise",
     "trial",
-}
+)
 
-JOB_INTENT_WORDS = {
+JOB_INTENT_WORDS = (
     "招聘",
     "招人",
     "岗位",
@@ -55,7 +55,7 @@ JOB_INTENT_WORDS = {
     "part-time",
     "resume",
     "cv",
-}
+)
 
 CONTACT_SIGNAL_RE = re.compile(
     r"(@[A-Za-z0-9_]{4,}|[\w.+-]+@[\w-]+(?:\.[\w-]+)+|(?:微信|VX|vx|TG|Telegram|联系))"
