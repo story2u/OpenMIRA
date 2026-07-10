@@ -1,11 +1,13 @@
 from dataclasses import dataclass
 from datetime import timedelta
+import html
+import json
 from typing import Any
 from urllib.parse import parse_qs, urlencode
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from fastapi.responses import RedirectResponse
+from fastapi.responses import HTMLResponse
 
 from app.api.deps import get_user_repo, require_user
 from app.application.dto import AuthTokenRead, AuthUserRead, OAuthAuthorizeRead
@@ -47,6 +49,29 @@ def auth_token_response(user: User, settings: Settings) -> AuthTokenRead:
 
 def frontend_login_redirect(settings: Settings, token: str) -> str:
     return f"{settings.frontend_base_url.rstrip('/')}/login#{urlencode({'token': token})}"
+
+
+def frontend_login_response(settings: Settings, token: str) -> HTMLResponse:
+    redirect_url = frontend_login_redirect(settings, token)
+    escaped_url = html.escape(redirect_url, quote=True)
+    return HTMLResponse(
+        content=(
+            "<!doctype html>"
+            '<html lang="zh-CN">'
+            "<head>"
+            '<meta charset="utf-8">'
+            '<meta name="robots" content="noindex,nofollow">'
+            f'<meta http-equiv="refresh" content="0;url={escaped_url}">'
+            "<title>正在登录</title>"
+            "</head>"
+            "<body>"
+            f"<script>window.location.replace({json.dumps(redirect_url)});</script>"
+            f'<noscript><a href="{escaped_url}">继续登录</a></noscript>'
+            "</body>"
+            "</html>"
+        ),
+        headers={"Cache-Control": "no-store"},
+    )
 
 
 def provider_config(provider: str, settings: Settings) -> OAuthProviderConfig:
@@ -98,28 +123,59 @@ async def exchange_code_for_profile(
 ) -> dict[str, Any]:
     config = provider_config(provider, settings)
     async with httpx.AsyncClient(timeout=15.0) as client:
-        token_response = await client.post(
-            config.token_url,
-            data={
-                "grant_type": "authorization_code",
-                "code": code,
-                "client_id": config.client_id,
-                "client_secret": config.client_secret,
-                "redirect_uri": config.redirect_uri,
-            },
-            headers={"Accept": "application/json"},
-        )
+        try:
+            token_response = await client.post(
+                config.token_url,
+                data={
+                    "grant_type": "authorization_code",
+                    "code": code,
+                    "client_id": config.client_id,
+                    "client_secret": config.client_secret,
+                    "redirect_uri": config.redirect_uri,
+                },
+                headers={"Accept": "application/json"},
+            )
+        except httpx.RequestError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"{provider} token endpoint is unavailable",
+            ) from exc
+        try:
+            token_data = token_response.json()
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"{provider} token endpoint returned invalid JSON",
+            ) from exc
         if token_response.status_code >= 400:
+            error = token_data.get("error") if isinstance(token_data, dict) else None
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail=f"{provider} token exchange failed",
+                detail=f"{provider} token exchange failed{f': {error}' if error else ''}",
             )
-        token_data = token_response.json()
         id_token = token_data.get("id_token")
         if not id_token:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="OAuth id_token missing")
 
-        jwks = (await client.get(config.jwks_url, headers={"Accept": "application/json"})).json()
+        try:
+            jwks_response = await client.get(config.jwks_url, headers={"Accept": "application/json"})
+        except httpx.RequestError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"{provider} JWKS endpoint is unavailable",
+            ) from exc
+        if jwks_response.status_code >= 400:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"{provider} JWKS endpoint returned {jwks_response.status_code}",
+            )
+        try:
+            jwks = jwks_response.json()
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"{provider} JWKS endpoint returned invalid JSON",
+            ) from exc
 
     try:
         claims = verify_rs256_jwt(
@@ -147,7 +203,7 @@ async def complete_oauth_login(
     state: str,
     settings: Settings,
     repo: UserRepository,
-) -> RedirectResponse:
+) -> HTMLResponse:
     state_payload = decode_signed_token(state, settings)
     if state_payload.get("provider") != provider:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="OAuth state mismatch")
@@ -170,10 +226,7 @@ async def complete_oauth_login(
             avatar_url=profile.get("avatar_url") or "",
         )
 
-    return RedirectResponse(
-        frontend_login_redirect(settings, create_access_token(subject=user.id, settings=settings)),
-        status_code=status.HTTP_303_SEE_OTHER,
-    )
+    return frontend_login_response(settings, create_access_token(subject=user.id, settings=settings))
 
 
 @router.get("/oauth/{provider}/authorize", response_model=OAuthAuthorizeRead)
@@ -205,7 +258,7 @@ async def oauth_callback(
     state: str,
     settings: Settings = Depends(get_settings),
     repo: UserRepository = Depends(get_user_repo),
-) -> RedirectResponse:
+) -> HTMLResponse:
     return await complete_oauth_login(provider, code, state, settings, repo)
 
 
@@ -214,7 +267,7 @@ async def apple_oauth_form_post_callback(
     request: Request,
     settings: Settings = Depends(get_settings),
     repo: UserRepository = Depends(get_user_repo),
-) -> RedirectResponse:
+) -> HTMLResponse:
     form = parse_qs((await request.body()).decode("utf-8"))
     code = form.get("code", [""])[0]
     state_value = form.get("state", [""])[0]
