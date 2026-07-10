@@ -121,6 +121,7 @@ services:
     environment:
       NODE_ENV: production
       NEXT_TELEMETRY_DISABLED: "1"
+      INTERNAL_API_BASE_URL: http://api:8000
     ports:
       - "${FRONTEND_PORT:-3000}:3000"
     depends_on:
