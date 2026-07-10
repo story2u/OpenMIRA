@@ -9,7 +9,7 @@ import httpx
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import HTMLResponse
-from sqlalchemy.exc import IntegrityError, OperationalError, ProgrammingError, SQLAlchemyError
+from sqlalchemy.exc import DBAPIError, IntegrityError, OperationalError, ProgrammingError, SQLAlchemyError
 
 from app.api.deps import get_user_repo, require_user
 from app.application.dto import AuthTokenRead, AuthUserRead, OAuthAuthorizeRead
@@ -126,6 +126,10 @@ def oauth_persistence_error_detail(exc: SQLAlchemyError) -> str:
         return "OAuth user persistence failed: account constraint conflict"
     if isinstance(exc, OperationalError):
         return "OAuth user persistence failed: database connection error"
+    if isinstance(exc, DBAPIError):
+        original = getattr(exc, "orig", None)
+        if original:
+            return f"OAuth user persistence failed: {original.__class__.__name__}"
     return f"OAuth user persistence failed: {exc.__class__.__name__}"
 
 
@@ -233,13 +237,8 @@ async def complete_oauth_login(
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="OAuth state mismatch")
 
         profile = await exchange_code_for_profile(provider, code, settings)
-        existing_user = await repo.get_by_auth_account(provider, profile["subject"])
-        if existing_user and not profile.get("email"):
-            user = await repo.mark_login(existing_user)
-        else:
-            email = profile.get("email")
-            if not email:
-                raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="OAuth email is missing")
+        email = profile.get("email")
+        if email:
             if not profile.get("email_verified"):
                 raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="OAuth email is not verified")
             user = await repo.get_or_create_oauth_user(
@@ -249,6 +248,11 @@ async def complete_oauth_login(
                 display_name=profile.get("name") or email.split("@", 1)[0],
                 avatar_url=profile.get("avatar_url") or "",
             )
+        else:
+            existing_user = await repo.get_by_auth_account(provider, profile["subject"])
+            if not existing_user:
+                raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="OAuth email is missing")
+            user = await repo.mark_login(existing_user)
 
         return frontend_login_response(settings, create_access_token(subject=user.id, settings=settings))
     except HTTPException:

@@ -3,8 +3,9 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
+import structlog
 from sqlalchemy import func
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlmodel import col, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -29,6 +30,8 @@ from app.infrastructure.db.models import (
     User,
     utc_now,
 )
+
+logger = structlog.get_logger(__name__)
 
 
 FRONTEND_STATUS_MAP: dict[FrontendOpportunityStatus, set[OpportunityStatus]] = {
@@ -124,7 +127,18 @@ class UserRepository:
         display_name: str,
         avatar_url: str = "",
     ) -> User:
-        user = await self.get_by_auth_account(provider, provider_subject)
+        auth_account_available = True
+        try:
+            user = await self.get_by_auth_account(provider, provider_subject)
+        except SQLAlchemyError as exc:
+            await self.session.rollback()
+            auth_account_available = False
+            logger.warning(
+                "oauth.auth_account_lookup_failed",
+                provider=provider,
+                error_class=exc.__class__.__name__,
+            )
+            user = None
         if user:
             return await self.mark_login(user)
 
@@ -142,19 +156,28 @@ class UserRepository:
                 if not user:
                     raise
 
-        try:
-            await self.link_auth_account(
-                user=user,
-                provider=provider,
-                provider_subject=provider_subject,
-                email=email,
-            )
-        except IntegrityError:
-            await self.session.rollback()
-            linked_user = await self.get_by_auth_account(provider, provider_subject)
-            if linked_user:
-                return await self.mark_login(linked_user)
-            raise
+        if auth_account_available:
+            try:
+                await self.link_auth_account(
+                    user=user,
+                    provider=provider,
+                    provider_subject=provider_subject,
+                    email=email,
+                )
+            except IntegrityError:
+                await self.session.rollback()
+                linked_user = await self.get_by_auth_account(provider, provider_subject)
+                if linked_user:
+                    return await self.mark_login(linked_user)
+                raise
+            except SQLAlchemyError as exc:
+                await self.session.rollback()
+                logger.warning(
+                    "oauth.auth_account_link_failed",
+                    provider=provider,
+                    user_id=str(user.id),
+                    error_class=exc.__class__.__name__,
+                )
         return await self.mark_login(user)
 
     async def mark_login(self, user: User) -> User:
