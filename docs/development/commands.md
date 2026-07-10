@@ -1,0 +1,100 @@
+# 开发命令
+
+> 状态：当前事实 · 最后核验：2026-07-10
+
+命令默认从仓库根目录执行。根 `Makefile` 是 AI 和 CI 的稳定入口；子项目原生命令用于缩小反馈。
+后端统一由 uv 管理 Python、`.venv`、依赖声明和锁文件；不要使用 `pip install -r` 或手工修改环境。
+
+## Harness
+
+```bash
+make harness-check
+```
+
+只依赖 Python 标准库，检查必需入口、入口大小、Markdown 本地链接、文档索引、CI 接入和后端
+Python 依赖边界。
+
+## 后端
+
+首次本地安装（uv 会按 `requires-python` 获取合适的 Python，并从 `uv.lock` 创建 `.venv`）：
+
+```bash
+cd backend && uv sync --locked --dev
+```
+
+常用检查：
+
+```bash
+make backend-check
+cd backend && uv run --locked pytest -q tests/test_detection_policy.py
+cd backend && uv run --locked ruff check app tests scripts alembic --select E,F,ASYNC --ignore E501
+cd backend && uv run --locked python -m compileall -q app tests scripts alembic
+```
+
+依赖变更使用 `uv add <package>`、`uv add --dev <package>` 或 `uv remove <package>`，同时提交
+`pyproject.toml` 和 `uv.lock`。升级单包使用 `uv lock --upgrade-package <package>`；CI 和 Docker
+始终使用 `--locked`，禁止隐式改锁。
+
+本地直接启动 API 需要有效 `.env`：
+
+```bash
+cd backend
+cp .env.example .env
+make dev
+```
+
+## 前端
+
+首次安装与常用检查：
+
+```bash
+cd frontend && pnpm install --frozen-lockfile
+make frontend-check
+cd frontend && pnpm dev
+```
+
+`frontend-check` 运行 ESLint、独立 `tsc --noEmit` 和 production build。独立 typecheck 是必须项，
+因为当前 `next.config.mjs` 的 build 兼容设置会跳过 TypeScript 错误。
+
+## 完整本地检查
+
+```bash
+make check
+```
+
+依次运行 harness、uv locked sync、后端语法/lint/test、前端 lint/build。需要安装 uv 与前端依赖。
+
+## Docker 集成环境
+
+```bash
+cd backend
+cp .env.example .env
+docker compose build
+docker compose up -d postgres redis
+docker compose run --rm migrate
+docker compose run --rm api python scripts/seed_demo.py
+docker compose up api celery_worker celery_beat telegram_listener
+```
+
+- API 文档：`http://localhost:8000/docs`
+- 根健康检查：`http://localhost:8000/healthz`
+- API 健康检查：`http://localhost:8000/api/v1/healthz`
+
+## 数据库迁移
+
+```bash
+cd backend
+alembic current
+alembic upgrade head
+alembic downgrade -1
+```
+
+自动生成迁移只能作为草稿；必须人工/代理审查约束、索引、默认值、回填、upgrade 和 downgrade。
+
+## 与 CI 的对应关系
+
+- `.github/workflows/ci.yml` 的 harness job：`python scripts/harness_check.py`。
+- backend job：固定 uv 版本、Python 3.12、`uv sync --locked`、compileall、Ruff、pytest。
+- frontend job：Node 22、pnpm 10、frozen install、lint、独立 typecheck、build。
+
+若本地命令与 CI 漂移，优先统一根 Makefile和本文件，不在入口提示词复制更多命令。

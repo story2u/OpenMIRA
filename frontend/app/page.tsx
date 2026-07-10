@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useAppStore } from '@/lib/app-store'
 import { applyFilters, defaultFilters, type DashboardFilters, type SortKey } from '@/lib/dashboard-filters'
-import type { OpportunityStatus, Platform } from '@/lib/types'
+import type { Platform } from '@/lib/types'
 
 const PAGE_SIZE = 12
 

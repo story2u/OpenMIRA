@@ -2,6 +2,10 @@
 
 FastAPI backend for Telegram and WeCom opportunity detection, human review, and after-hours AI replies.
 
+Python and dependencies are managed by [uv](https://docs.astral.sh/uv/). For local development,
+run `uv sync --locked --dev`; add or remove dependencies with `uv add` / `uv remove` and commit both
+`pyproject.toml` and `uv.lock`.
+
 ## Run locally with Docker
 
 ```bash

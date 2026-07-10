@@ -89,7 +89,12 @@ export function TemplateDialog({ open, onOpenChange, template }: TemplateDialogP
           </div>
           <div className="flex flex-col gap-1.5">
             <Label>分类</Label>
-            <Select value={category} onValueChange={setCategory}>
+            <Select
+              value={category}
+              onValueChange={(value) => {
+                if (value) setCategory(value)
+              }}
+            >
               <SelectTrigger aria-label="模板分类">
                 <SelectValue />
               </SelectTrigger>

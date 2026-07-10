@@ -57,10 +57,14 @@ export default function WorkingHoursPage() {
       }}
     >
       <div className="mb-6 flex items-center gap-2">
-        <Button asChild variant="ghost" size="icon" aria-label="返回设置中心">
-          <Link href="/settings">
-            <ArrowLeft className="size-4" />
-          </Link>
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label="返回设置中心"
+          nativeButton={false}
+          render={<Link href="/settings" />}
+        >
+          <ArrowLeft className="size-4" />
         </Button>
         <div>
           <h1 className="text-lg font-semibold tracking-tight md:text-xl">工作时间设置</h1>
@@ -147,7 +151,9 @@ export default function WorkingHoursPage() {
               'America/New_York': '(UTC-5) 美国东部时间 · 纽约',
             }}
             value={timezone}
-            onValueChange={setTimezone}
+            onValueChange={(value) => {
+              if (value) setTimezone(value)
+            }}
           >
             <SelectTrigger className="max-w-72" aria-label="选择时区">
               <SelectValue />

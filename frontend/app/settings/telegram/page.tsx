@@ -190,10 +190,14 @@ export default function TelegramSettingsPage() {
   return (
     <div className="mx-auto w-full max-w-4xl px-4 py-6 md:px-8">
       <div className="mb-6 flex items-center gap-2">
-        <Button asChild variant="ghost" size="icon" aria-label="返回设置中心">
-          <Link href="/settings">
-            <ArrowLeft className="size-4" />
-          </Link>
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label="返回设置中心"
+          nativeButton={false}
+          render={<Link href="/settings" />}
+        >
+          <ArrowLeft className="size-4" />
         </Button>
         <div>
           <h1 className="text-lg font-semibold tracking-tight md:text-xl">Telegram 普通账号</h1>

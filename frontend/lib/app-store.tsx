@@ -41,7 +41,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
   const [messagesByOpportunity, setMessagesByOpportunity] = useState<Record<string, ChatMessage[]>>(mockMessages)
   const [templates, setTemplates] = useState<ReplyTemplate[]>(mockTemplates)
   const [workMode, setWorkMode] = useState<WorkMode>('work')
-  const [newOpportunityId, setNewOpportunityId] = useState<string | null>(null)
+  const [newOpportunityId] = useState<string | null>(null)
   const timersRef = useRef<ReturnType<typeof setTimeout>[]>([])
 
   useEffect(() => {
