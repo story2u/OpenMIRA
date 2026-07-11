@@ -334,9 +334,34 @@ def check_model_datetime_columns(errors: list[str], models_path: Path | None = N
                 )
 
 
+def check_release_workflow(errors: list[str], deploy_path: Path | None = None) -> None:
+    deploy_path = deploy_path or ROOT / ".github/workflows/deploy.yml"
+    docker_path = ROOT / ".github/workflows/docker.yml"
+    if not deploy_path.is_file():
+        errors.append("missing GitHub workflow: .github/workflows/deploy.yml")
+        return
+
+    deploy_text = deploy_path.read_text(encoding="utf-8")
+    if "secrets.DEEPSEEK_API_KEY" not in deploy_text:
+        errors.append("deploy workflow must accept the DeepSeek API key secret")
+    if 'workflows: ["CI"]' not in deploy_text:
+        errors.append("deploy workflow must be triggered directly by CI")
+    if 'workflows: ["Build Images"]' in deploy_text:
+        errors.append("deploy workflow must not chain workflow_run from Build Images")
+    for expected in (
+        "  build:\n",
+        "docker/build-push-action@",
+        "  deploy:\n",
+        "needs: build",
+    ):
+        if expected not in deploy_text:
+            errors.append(f"deploy workflow is missing release pipeline step: {expected.strip()}")
+    if docker_path.exists():
+        errors.append("docker.yml must not create a second workflow_run release stage")
+
+
 def check_ci_and_commands(errors: list[str]) -> None:
     ci_path = ROOT / ".github/workflows/ci.yml"
-    docker_path = ROOT / ".github/workflows/docker.yml"
     deploy_path = ROOT / ".github/workflows/deploy.yml"
     makefile = ROOT / "Makefile"
     ci_text = ci_path.read_text(encoding="utf-8") if ci_path.is_file() else ""
@@ -409,14 +434,11 @@ def check_ci_and_commands(errors: list[str]) -> None:
     for label, (path, expected) in pi_default_surfaces.items():
         if expected not in path.read_text(encoding="utf-8"):
             errors.append(f"{label} must enable pi agent by default with: {expected}")
-    deploy_text = deploy_path.read_text(encoding="utf-8") if deploy_path.is_file() else ""
-    if "secrets.DEEPSEEK_API_KEY" not in deploy_text:
-        errors.append("deploy workflow must accept the DeepSeek API key secret")
+    check_release_workflow(errors, deploy_path)
 
     release_pattern = 'branches: ["release/v*.*.*"]'
     workflow_triggers = {
         "CI": (ci_path, "push:"),
-        "Build Images": (docker_path, "workflow_run:"),
         "Deploy to VPS": (deploy_path, "workflow_run:"),
     }
     for label, (path, required_event) in workflow_triggers.items():

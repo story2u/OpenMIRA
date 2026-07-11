@@ -90,6 +90,28 @@ class HarnessCheckTests(unittest.TestCase):
                 ["persistent datetime must declare DateTime(timezone=True): Bad.created_at"],
             )
 
+    def test_release_workflow_requires_direct_ci_trigger(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            workflow_path = Path(directory) / "deploy.yml"
+            workflow_path.write_text(
+                "on:\n"
+                "  workflow_run:\n"
+                '    workflows: ["Build Images"]\n'
+                "jobs:\n"
+                "  build:\n"
+                "    steps:\n"
+                "      - uses: docker/build-push-action@v7\n"
+                "  deploy:\n"
+                "    needs: build\n"
+                "env:\n"
+                "  DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}\n",
+                encoding="utf-8",
+            )
+            errors: list[str] = []
+            harness_check.check_release_workflow(errors, workflow_path)
+            self.assertIn("deploy workflow must be triggered directly by CI", errors)
+            self.assertIn("deploy workflow must not chain workflow_run from Build Images", errors)
+
 
 if __name__ == "__main__":
     unittest.main()
