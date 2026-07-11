@@ -1,5 +1,6 @@
 import re
 from typing import Any
+from uuid import UUID
 
 import httpx
 
@@ -16,20 +17,28 @@ class TelegramAdapter:
         self.settings = settings
         self.api_base_url = f"https://api.telegram.org/bot{settings.telegram_bot_token}"
 
+    def verify_webhook(self, headers: dict[str, str]) -> None:
+        secret = headers.get("x-telegram-bot-api-secret-token", "")
+        require_secret(secret, self.settings.telegram_webhook_secret, "invalid telegram secret")
+
     async def parse_webhook(
         self,
         payload: dict[str, Any],
         headers: dict[str, str],
         query: dict[str, str] | None = None,
+        *,
+        owner_user_id: UUID | None = None,
+        external_id_prefix: str | None = None,
     ) -> InboundMessage | None:
-        secret = headers.get("x-telegram-bot-api-secret-token", "")
-        require_secret(secret, self.settings.telegram_webhook_secret, "invalid telegram secret")
+        self.verify_webhook(headers)
 
         message = (
             payload.get("message")
             or payload.get("edited_message")
             or payload.get("channel_post")
             or payload.get("edited_channel_post")
+            or payload.get("business_message")
+            or payload.get("edited_business_message")
         )
         if not message:
             return None
@@ -41,7 +50,10 @@ class TelegramAdapter:
         chat = message.get("chat") or {}
         sender = message.get("from") or {}
         conversation_id = str(chat.get("id"))
-        external_message_id = f"{conversation_id}:{message.get('message_id')}"
+        message_identifier = f"{conversation_id}:{message.get('message_id')}"
+        external_message_id = (
+            f"{external_id_prefix}:{message_identifier}" if external_id_prefix else message_identifier
+        )
         chat_type = str(chat.get("type") or "private")
         source_type = "private" if chat_type == "private" else "group"
 
@@ -52,6 +64,7 @@ class TelegramAdapter:
         ) or sender.get("username") or chat.get("title")
 
         return InboundMessage(
+            owner_user_id=owner_user_id,
             channel=self.channel,
             external_message_id=external_message_id,
             conversation_id=conversation_id,

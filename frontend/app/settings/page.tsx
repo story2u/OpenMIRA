@@ -69,8 +69,8 @@ export default function SettingsPage() {
                   <Send className="size-5" />
                 </span>
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium">Telegram 普通账号</p>
-                  <p className="text-xs text-muted-foreground">按用户独立配置</p>
+                  <p className="text-sm font-medium">Telegram 连接</p>
+                  <p className="text-xs text-muted-foreground">群组、Business 与监听来源</p>
                 </div>
                 <ChevronRight className="size-4 text-muted-foreground" />
               </Card>

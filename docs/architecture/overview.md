@@ -89,8 +89,10 @@ ADR 和迁移计划，不要在单个功能中半途改造。
 | `Rule` | 关键词/正则/AI hint 规则 | 启用、优先级、分数驱动检测策略 |
 | `AppConfig` | 运行期业务配置 | JSONB value；当前包含工作时间等配置 |
 | `ReplyTemplate` | 人工回复模板 | 可启用、分类 |
-| `TelegramUserConfig` | 用户级 MTProto 凭据与降级选择版本 | `api_hash`、session 加密存储，每用户唯一；记录已确认的 retention limit |
-| `TelegramMonitor` | 用户要监听的会话 | user + chat 唯一；区分用户 enabled 与套餐 quota_paused，并保存保留优先级 |
+| `TelegramConnection` | 新版用户 Telegram 连接 | owner、连接类型、状态、能力和非明文凭据槽；不向 API 返回秘密 |
+| `TelegramSource` | 连接下的群组/频道/私聊来源 | connection + external chat 唯一；按 owner、enabled 与 quota_paused 过滤 webhook |
+| `TelegramConnectionAttempt` / `TelegramWebhookEvent` | 连接握手与 webhook 审计 | 仅保存连接令牌哈希/TTL；以 Telegram update ID 去重，不保存 raw webhook |
+| `TelegramUserConfig` / `TelegramMonitor` | 旧 MTProto 兼容路径 | 既有加密 session 与 listener 保持可用，直到单独的迁移计划完成 |
 
 结构变更以 `backend/alembic/versions/` 的迁移历史为准；模型变更必须配套新迁移。
 
@@ -137,6 +139,31 @@ sequenceDiagram
     end
 ```
 
+### Telegram 原生连接
+
+```mermaid
+sequenceDiagram
+    participant U as 登录用户
+    participant W as Next.js 设置页
+    participant A as FastAPI
+    participant B as Telegram Bot API
+    participant T as Telegram webhook
+    participant DB as PostgreSQL
+
+    U->>W: 选择群组/频道连接
+    W->>A: 创建短期连接尝试
+    A->>DB: 仅保存 token hash、TTL、owner 和 request IDs
+    A-->>W: Bot deep link
+    U->>B: /start + 选择 chat
+    B->>T: message/chat_shared update
+    T->>A: 带 secret token 的 webhook
+    A->>DB: 按 update_id 去重
+    A->>B: getChat + getChatMember
+    A->>DB: 创建 TelegramConnection/Source
+    B->>T: 后续消息
+    A->>DB: 只按启用 source 路由并摄取
+```
+
 ### pi Agent 消息后处理
 
 - `PI_AGENT_ENABLED` 默认开启；显式设为 `false` 时摄取链路不启动 Node 或链接网络请求。开启但
@@ -156,6 +183,8 @@ sequenceDiagram
 - Telegram 配置读取和 listener 每次刷新都重新解析有效套餐；套餐到期后，按用户保留优先级启动
   额度内 monitor，超额项标记 `quota_paused` 而不删除。用户可在设置页重新选择保留群；选择写入当前
   retention limit，升级后优先级仍保留，未来再次降级可复用。
+- 新版 Bot 来源与旧 MTProto monitor 在 Telegram 套餐额度中合计统计。新来源创建时先检查总额；
+  webhook 只会摄取已启用且未被额度暂停的 `TelegramSource`。
 
 ### 回复
 

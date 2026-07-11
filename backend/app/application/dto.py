@@ -15,6 +15,10 @@ from app.domain.enums import (
     Priority,
     RuleType,
     SubscriptionStatus,
+    TelegramConnectionAttemptStatus,
+    TelegramConnectionStatus,
+    TelegramConnectionType,
+    TelegramSourceType,
 )
 
 
@@ -276,3 +280,54 @@ class TelegramDialogRead(BaseModel):
     id: int
     name: str
     username: str | None = None
+
+
+class TelegramSourceRead(BaseModel):
+    id: UUID
+    connectionId: UUID
+    sourceType: TelegramSourceType
+    externalChatId: str
+    displayName: str
+    username: str | None = None
+    enabled: bool
+    quotaPaused: bool
+    quotaReason: str | None = None
+    lastError: str | None = None
+    updatedAt: datetime
+
+
+class TelegramConnectionRead(BaseModel):
+    id: UUID
+    connectionType: TelegramConnectionType
+    status: TelegramConnectionStatus
+    enabled: bool
+    label: str
+    capabilities: dict = Field(default_factory=dict)
+    lastError: str | None = None
+    lastCheckedAt: datetime | None = None
+    updatedAt: datetime
+    sources: list[TelegramSourceRead] = Field(default_factory=list)
+
+
+class TelegramConnectionAttemptRead(BaseModel):
+    id: UUID
+    connectionType: TelegramConnectionType
+    status: TelegramConnectionAttemptStatus
+    expiresAt: datetime
+    connectionId: UUID | None = None
+    error: str | None = None
+    telegramUrl: str | None = None
+    instructions: list[str] = Field(default_factory=list)
+    localMock: bool = False
+
+
+class TelegramConnectionHealthRead(BaseModel):
+    mode: str
+    botConfigured: bool
+    botUsername: str | None = None
+    businessAvailable: bool
+    mtprotoQrAvailable: bool
+    listenerMode: str
+    legacyMonitoringActive: bool = False
+    legacyActiveSourceCount: int = 0
+    message: str | None = None

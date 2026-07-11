@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import CheckConstraint, Column, DateTime, Index, UniqueConstraint
+from sqlalchemy import BigInteger, CheckConstraint, Column, DateTime, Index, UniqueConstraint
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlmodel import Field, SQLModel
@@ -17,6 +17,10 @@ from app.domain.enums import (
     Priority,
     RuleType,
     SubscriptionStatus,
+    TelegramConnectionAttemptStatus,
+    TelegramConnectionStatus,
+    TelegramConnectionType,
+    TelegramSourceType,
     UsageFeature,
     UsageStatus,
 )
@@ -349,6 +353,184 @@ class TelegramMonitor(TimestampMixin, table=True):
     quota_reason: str | None = Field(default=None, max_length=500)
     retention_priority: int = Field(default=0, ge=0)
     last_error: str | None = None
+
+
+class TelegramConnection(TimestampMixin, table=True):
+    """A user-owned Telegram identity or integration, never a plaintext secret store."""
+
+    __tablename__ = "telegram_connections"
+    __table_args__ = (
+        UniqueConstraint(
+            "provider_connection_id",
+            name="uq_telegram_connections_provider_connection_id",
+        ),
+        Index(
+            "ix_telegram_connections_owner_type_status",
+            "owner_user_id",
+            "connection_type",
+            "status",
+        ),
+    )
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    owner_user_id: UUID = Field(foreign_key="users.id", index=True)
+    connection_type: TelegramConnectionType = Field(
+        sa_column=Column(
+            SAEnum(TelegramConnectionType, native_enum=False),
+            nullable=False,
+            index=True,
+        )
+    )
+    status: TelegramConnectionStatus = Field(
+        default=TelegramConnectionStatus.PENDING,
+        sa_column=Column(
+            SAEnum(TelegramConnectionStatus, native_enum=False),
+            nullable=False,
+            index=True,
+        ),
+    )
+    enabled: bool = Field(default=True, index=True)
+    label: str = Field(default="Telegram 连接", max_length=255)
+    telegram_account_id: str | None = Field(default=None, max_length=128, index=True)
+    provider_connection_id: str | None = Field(default=None, max_length=255, index=True)
+    credential_encrypted: str | None = None
+    connection_metadata: dict[str, Any] = Field(
+        default_factory=dict,
+        sa_column=Column(JSONB, nullable=False),
+    )
+    capabilities: dict[str, Any] = Field(
+        default_factory=dict,
+        sa_column=Column(JSONB, nullable=False),
+    )
+    last_error: str | None = Field(default=None, max_length=1000)
+    last_checked_at: datetime | None = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+    )
+
+
+class TelegramSource(TimestampMixin, table=True):
+    """A group, channel, or private conversation selected through a connection."""
+
+    __tablename__ = "telegram_sources"
+    __table_args__ = (
+        UniqueConstraint(
+            "connection_id",
+            "external_chat_id",
+            name="uq_telegram_sources_connection_chat",
+        ),
+        Index(
+            "ix_telegram_sources_owner_enabled",
+            "owner_user_id",
+            "enabled",
+            "quota_paused",
+        ),
+    )
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    owner_user_id: UUID = Field(foreign_key="users.id", index=True)
+    connection_id: UUID = Field(foreign_key="telegram_connections.id", index=True)
+    source_type: TelegramSourceType = Field(
+        sa_column=Column(
+            SAEnum(TelegramSourceType, native_enum=False),
+            nullable=False,
+            index=True,
+        )
+    )
+    external_chat_id: str = Field(index=True, max_length=128)
+    display_name: str = Field(default="Telegram 来源", max_length=255)
+    username: str | None = Field(default=None, max_length=255)
+    enabled: bool = Field(default=True, index=True)
+    quota_paused: bool = Field(default=False, index=True)
+    quota_reason: str | None = Field(default=None, max_length=500)
+    retention_priority: int = Field(default=0, ge=0)
+    last_error: str | None = Field(default=None, max_length=1000)
+
+
+class TelegramConnectionAttempt(TimestampMixin, table=True):
+    """A short-lived, owner-bound handshake. The random token itself is never stored."""
+
+    __tablename__ = "telegram_connection_attempts"
+    __table_args__ = (
+        UniqueConstraint("token_hash", name="uq_telegram_connection_attempts_token_hash"),
+        UniqueConstraint(
+            "group_request_id",
+            name="uq_telegram_connection_attempts_group_request_id",
+        ),
+        UniqueConstraint(
+            "channel_request_id",
+            name="uq_telegram_connection_attempts_channel_request_id",
+        ),
+        Index(
+            "ix_telegram_connection_attempts_owner_status_expires",
+            "owner_user_id",
+            "status",
+            "expires_at",
+        ),
+    )
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    owner_user_id: UUID = Field(foreign_key="users.id", index=True)
+    connection_type: TelegramConnectionType = Field(
+        sa_column=Column(
+            SAEnum(TelegramConnectionType, native_enum=False),
+            nullable=False,
+            index=True,
+        )
+    )
+    status: TelegramConnectionAttemptStatus = Field(
+        default=TelegramConnectionAttemptStatus.PENDING,
+        sa_column=Column(
+            SAEnum(TelegramConnectionAttemptStatus, native_enum=False),
+            nullable=False,
+            index=True,
+        ),
+    )
+    token_hash: str = Field(max_length=128)
+    group_request_id: int | None = Field(default=None, index=True)
+    channel_request_id: int | None = Field(default=None, index=True)
+    telegram_account_id: str | None = Field(default=None, max_length=128, index=True)
+    connection_id: UUID | None = Field(
+        default=None,
+        foreign_key="telegram_connections.id",
+        index=True,
+    )
+    attempt_metadata: dict[str, Any] = Field(
+        default_factory=dict,
+        sa_column=Column(JSONB, nullable=False),
+    )
+    expires_at: datetime = Field(
+        sa_column=Column(DateTime(timezone=True), nullable=False, index=True)
+    )
+    completed_at: datetime | None = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+    )
+    error: str | None = Field(default=None, max_length=1000)
+
+
+class TelegramWebhookEvent(TimestampMixin, table=True):
+    """Minimal webhook audit and idempotency record; raw payload stays out of persistence."""
+
+    __tablename__ = "telegram_webhook_events"
+    __table_args__ = (
+        UniqueConstraint("update_id", name="uq_telegram_webhook_events_update_id"),
+    )
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    update_id: int = Field(sa_column=Column(BigInteger, nullable=False, index=True))
+    payload_hash: str = Field(max_length=128)
+    event_type: str = Field(default="unknown", max_length=64, index=True)
+    connection_id: UUID | None = Field(
+        default=None,
+        foreign_key="telegram_connections.id",
+        index=True,
+    )
+    processed_at: datetime | None = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+    )
+    error: str | None = Field(default=None, max_length=1000)
 
 
 class ReplyTemplate(TimestampMixin, table=True):

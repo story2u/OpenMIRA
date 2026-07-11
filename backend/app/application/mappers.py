@@ -5,7 +5,10 @@ from app.application.dto import (
     OpportunityDetailRead,
     OpportunityRead,
     ReplyTemplateRead,
+    TelegramConnectionAttemptRead,
+    TelegramConnectionRead,
     TelegramMonitorRead,
+    TelegramSourceRead,
     TelegramUserConfigRead,
 )
 from app.domain.enums import (
@@ -17,7 +20,10 @@ from app.infrastructure.db.models import (
     Message,
     Opportunity,
     ReplyTemplate,
+    TelegramConnection,
+    TelegramConnectionAttempt,
     TelegramMonitor,
+    TelegramSource,
     TelegramUserConfig,
     User,
 )
@@ -160,4 +166,58 @@ def to_telegram_user_config_read(
         retentionSelectionRequired=retention_selection_required,
         retentionSelectedAt=config.retention_selected_at,
         updatedAt=config.updated_at,
+    )
+
+
+def to_telegram_source_read(source: TelegramSource) -> TelegramSourceRead:
+    return TelegramSourceRead(
+        id=source.id,
+        connectionId=source.connection_id,
+        sourceType=source.source_type,
+        externalChatId=source.external_chat_id,
+        displayName=source.display_name,
+        username=source.username,
+        enabled=source.enabled,
+        quotaPaused=source.quota_paused,
+        quotaReason=source.quota_reason,
+        lastError=source.last_error,
+        updatedAt=source.updated_at,
+    )
+
+
+def to_telegram_connection_read(
+    connection: TelegramConnection,
+    sources: list[TelegramSource],
+) -> TelegramConnectionRead:
+    return TelegramConnectionRead(
+        id=connection.id,
+        connectionType=connection.connection_type,
+        status=connection.status,
+        enabled=connection.enabled,
+        label=connection.label,
+        capabilities=connection.capabilities,
+        lastError=connection.last_error,
+        lastCheckedAt=connection.last_checked_at,
+        updatedAt=connection.updated_at,
+        sources=[to_telegram_source_read(source) for source in sources],
+    )
+
+
+def to_telegram_connection_attempt_read(
+    attempt: TelegramConnectionAttempt,
+    *,
+    telegram_url: str | None = None,
+    instructions: list[str] | None = None,
+    local_mock: bool = False,
+) -> TelegramConnectionAttemptRead:
+    return TelegramConnectionAttemptRead(
+        id=attempt.id,
+        connectionType=attempt.connection_type,
+        status=attempt.status,
+        expiresAt=attempt.expires_at,
+        connectionId=attempt.connection_id,
+        error=attempt.error,
+        telegramUrl=telegram_url,
+        instructions=instructions or [],
+        localMock=local_mock,
     )

@@ -1,7 +1,7 @@
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import AnyHttpUrl, Field
+from pydantic import AnyHttpUrl, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -47,6 +47,15 @@ class Settings(BaseSettings):
     im_send_enabled: bool = False
     telegram_bot_token: str = ""
     telegram_webhook_secret: str = ""
+    telegram_bot_username: str = ""
+    telegram_webhook_url: str = ""
+    telegram_integration_mode: Literal["mock", "live"] = "mock"
+    telegram_connect_ttl_seconds: int = Field(default=600, ge=60, le=3600)
+    # P2 remains unavailable until a dedicated long-lived QR worker is deployed.
+    telegram_mtproto_qr_enabled: bool = False
+    telegram_mtproto_qr_worker_enabled: bool = False
+    telegram_mtproto_api_id: int | None = Field(default=None, ge=1)
+    telegram_mtproto_api_hash: str = ""
 
     wecom_corp_id: str = ""
     wecom_agent_id: str = ""
@@ -71,6 +80,11 @@ class Settings(BaseSettings):
     pi_agent_max_content_bytes: int = Field(default=200_000, ge=10_000, le=1_000_000)
     pi_agent_max_link_text_chars: int = Field(default=12_000, ge=1_000, le=20_000)
 
+    @field_validator("telegram_mtproto_api_id", mode="before")
+    @classmethod
+    def empty_mtproto_api_id_is_unset(cls, value: object) -> object:
+        return None if value == "" else value
+
     @property
     def effective_pi_agent_api_key(self) -> str:
         if self.pi_agent_api_key:
@@ -78,6 +92,23 @@ class Settings(BaseSettings):
         if self.pi_agent_provider == "openai":
             return self.openai_api_key
         return ""
+
+    @property
+    def telegram_bot_configured(self) -> bool:
+        return bool(
+            self.telegram_bot_token
+            and self.telegram_bot_token != "change-me"
+            and self.telegram_bot_username
+        )
+
+    @property
+    def telegram_mtproto_qr_available(self) -> bool:
+        return bool(
+            self.telegram_mtproto_qr_enabled
+            and self.telegram_mtproto_qr_worker_enabled
+            and self.telegram_mtproto_api_id
+            and self.telegram_mtproto_api_hash
+        )
 
 
 @lru_cache

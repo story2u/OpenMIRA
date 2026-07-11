@@ -157,6 +157,62 @@ export interface TelegramDialog {
   username: string | null
 }
 
+export type TelegramConnectionType = 'bot_chat' | 'business' | 'mtproto_qr'
+export type TelegramConnectionStatus = 'pending' | 'connected' | 'disabled' | 'error' | 'expired'
+export type TelegramConnectionAttemptStatus = 'pending' | 'completed' | 'cancelled' | 'expired' | 'failed'
+export type TelegramSourceType = 'group' | 'channel' | 'private'
+
+export interface TelegramConnectionHealth {
+  mode: 'mock' | 'live'
+  botConfigured: boolean
+  botUsername: string | null
+  businessAvailable: boolean
+  mtprotoQrAvailable: boolean
+  listenerMode: string
+  legacyMonitoringActive: boolean
+  legacyActiveSourceCount: number
+  message: string | null
+}
+
+export interface TelegramConnectionSource {
+  id: string
+  connectionId: string
+  sourceType: TelegramSourceType
+  externalChatId: string
+  displayName: string
+  username: string | null
+  enabled: boolean
+  quotaPaused: boolean
+  quotaReason: string | null
+  lastError: string | null
+  updatedAt: string
+}
+
+export interface TelegramConnection {
+  id: string
+  connectionType: TelegramConnectionType
+  status: TelegramConnectionStatus
+  enabled: boolean
+  label: string
+  capabilities: Record<string, boolean>
+  lastError: string | null
+  lastCheckedAt: string | null
+  updatedAt: string
+  sources: TelegramConnectionSource[]
+}
+
+export interface TelegramConnectionAttempt {
+  id: string
+  connectionType: TelegramConnectionType
+  status: TelegramConnectionAttemptStatus
+  expiresAt: string
+  connectionId: string | null
+  error: string | null
+  telegramUrl: string | null
+  instructions: string[]
+  localMock: boolean
+}
+
 export interface PlanEntitlements {
   planCode: PlanCode
   telegramGroupLimit: number | null

@@ -20,6 +20,10 @@ from app.domain.enums import (
     PlanCode,
     Priority,
     SubscriptionStatus,
+    TelegramConnectionAttemptStatus,
+    TelegramConnectionStatus,
+    TelegramConnectionType,
+    TelegramSourceType,
     UsageFeature,
     UsageStatus,
 )
@@ -40,8 +44,12 @@ from app.infrastructure.db.models import (
     ReplyTemplate,
     Rule,
     SubscriptionAccount,
+    TelegramConnection,
+    TelegramConnectionAttempt,
     TelegramMonitor,
+    TelegramSource,
     TelegramUserConfig,
+    TelegramWebhookEvent,
     UsageLedger,
     User,
     utc_now,
@@ -1059,6 +1067,545 @@ class TelegramUserConfigRepository:
         monitor.updated_at = utc_now()
         self.session.add(monitor)
         await self.session.commit()
+
+
+class TelegramConnectionRepository:
+    """Persistence boundary for the new user-owned Telegram connection model."""
+
+    SOURCE_QUOTA_REASON = "paused because the current subscription group quota was exceeded"
+
+    def __init__(self, session: AsyncSession) -> None:
+        self.session = session
+
+    async def create_attempt(
+        self,
+        *,
+        owner_user_id: UUID,
+        connection_type: TelegramConnectionType,
+        token_hash: str,
+        expires_at: datetime,
+        group_request_id: int | None = None,
+        channel_request_id: int | None = None,
+    ) -> TelegramConnectionAttempt:
+        attempt = TelegramConnectionAttempt(
+            owner_user_id=owner_user_id,
+            connection_type=connection_type,
+            token_hash=token_hash,
+            expires_at=expires_at,
+            group_request_id=group_request_id,
+            channel_request_id=channel_request_id,
+        )
+        self.session.add(attempt)
+        try:
+            await self.session.commit()
+        except IntegrityError:
+            await self.session.rollback()
+            raise
+        await self.session.refresh(attempt)
+        return attempt
+
+    async def get_attempt_for_owner(
+        self,
+        *,
+        owner_user_id: UUID,
+        attempt_id: UUID,
+    ) -> TelegramConnectionAttempt | None:
+        statement = select(TelegramConnectionAttempt).where(
+            TelegramConnectionAttempt.id == attempt_id,
+            TelegramConnectionAttempt.owner_user_id == owner_user_id,
+        )
+        result = await self.session.exec(statement)
+        attempt = result.first()
+        if attempt:
+            await self._expire_attempt_if_needed(attempt)
+        return attempt
+
+    async def get_attempt_by_token_hash(self, token_hash: str) -> TelegramConnectionAttempt | None:
+        statement = select(TelegramConnectionAttempt).where(
+            TelegramConnectionAttempt.token_hash == token_hash
+        )
+        result = await self.session.exec(statement)
+        attempt = result.first()
+        if attempt:
+            await self._expire_attempt_if_needed(attempt)
+        return attempt
+
+    async def cancel_attempt_for_owner(
+        self,
+        *,
+        owner_user_id: UUID,
+        attempt_id: UUID,
+    ) -> TelegramConnectionAttempt | None:
+        attempt = await self.get_attempt_for_owner(
+            owner_user_id=owner_user_id,
+            attempt_id=attempt_id,
+        )
+        if not attempt:
+            return None
+        if attempt.status == TelegramConnectionAttemptStatus.PENDING:
+            attempt.status = TelegramConnectionAttemptStatus.CANCELLED
+            attempt.updated_at = utc_now()
+            self.session.add(attempt)
+            await self.session.commit()
+            await self.session.refresh(attempt)
+        return attempt
+
+    async def fail_attempt(
+        self,
+        *,
+        attempt: TelegramConnectionAttempt,
+        error: str,
+    ) -> TelegramConnectionAttempt:
+        if attempt.status == TelegramConnectionAttemptStatus.PENDING:
+            attempt.status = TelegramConnectionAttemptStatus.FAILED
+            attempt.error = error[:1000]
+            attempt.updated_at = utc_now()
+            self.session.add(attempt)
+            await self.session.commit()
+            await self.session.refresh(attempt)
+        return attempt
+
+    async def get_attempt_by_request_id(self, request_id: int) -> TelegramConnectionAttempt | None:
+        statement = select(TelegramConnectionAttempt).where(
+            (TelegramConnectionAttempt.group_request_id == request_id)
+            | (TelegramConnectionAttempt.channel_request_id == request_id)
+        )
+        result = await self.session.exec(statement)
+        attempt = result.first()
+        if attempt:
+            await self._expire_attempt_if_needed(attempt)
+        return attempt
+
+    async def bind_attempt_telegram_account(
+        self,
+        *,
+        attempt: TelegramConnectionAttempt,
+        telegram_account_id: str,
+    ) -> TelegramConnectionAttempt:
+        if attempt.status != TelegramConnectionAttemptStatus.PENDING:
+            raise ValueError("connection attempt is no longer active")
+        if attempt.telegram_account_id and attempt.telegram_account_id != telegram_account_id:
+            raise ValueError("connection attempt belongs to a different Telegram account")
+        attempt.telegram_account_id = telegram_account_id
+        attempt.updated_at = utc_now()
+        self.session.add(attempt)
+        await self.session.commit()
+        await self.session.refresh(attempt)
+        return attempt
+
+    async def list_connections_for_owner(self, owner_user_id: UUID) -> list[TelegramConnection]:
+        statement = (
+            select(TelegramConnection)
+            .where(TelegramConnection.owner_user_id == owner_user_id)
+            .order_by(col(TelegramConnection.created_at).asc())
+        )
+        result = await self.session.exec(statement)
+        return list(result.all())
+
+    async def get_connection_for_owner(
+        self,
+        *,
+        owner_user_id: UUID,
+        connection_id: UUID,
+    ) -> TelegramConnection | None:
+        statement = select(TelegramConnection).where(
+            TelegramConnection.id == connection_id,
+            TelegramConnection.owner_user_id == owner_user_id,
+        )
+        result = await self.session.exec(statement)
+        return result.first()
+
+    async def list_sources_for_owner(self, owner_user_id: UUID) -> list[TelegramSource]:
+        statement = (
+            select(TelegramSource)
+            .where(TelegramSource.owner_user_id == owner_user_id)
+            .order_by(col(TelegramSource.created_at).asc())
+        )
+        result = await self.session.exec(statement)
+        return list(result.all())
+
+    async def list_active_sources_for_chat(
+        self,
+        external_chat_id: str,
+    ) -> list[tuple[TelegramSource, TelegramConnection]]:
+        statement = (
+            select(TelegramSource, TelegramConnection)
+            .join(TelegramConnection, TelegramSource.connection_id == TelegramConnection.id)
+            .where(
+                TelegramSource.external_chat_id == external_chat_id,
+                TelegramSource.enabled.is_(True),
+                TelegramSource.quota_paused.is_(False),
+                TelegramConnection.enabled.is_(True),
+                TelegramConnection.status == TelegramConnectionStatus.CONNECTED,
+            )
+        )
+        result = await self.session.exec(statement)
+        return [(row[0], row[1]) for row in result.all()]
+
+    async def list_enabled_sources_for_chat(
+        self,
+        external_chat_id: str,
+    ) -> list[tuple[TelegramSource, TelegramConnection]]:
+        """Return candidate owners before quota reconciliation for a webhook delivery."""
+        statement = (
+            select(TelegramSource, TelegramConnection)
+            .join(TelegramConnection, TelegramSource.connection_id == TelegramConnection.id)
+            .where(
+                TelegramSource.external_chat_id == external_chat_id,
+                TelegramSource.enabled.is_(True),
+                TelegramConnection.enabled.is_(True),
+                TelegramConnection.status == TelegramConnectionStatus.CONNECTED,
+            )
+        )
+        result = await self.session.exec(statement)
+        return [(row[0], row[1]) for row in result.all()]
+
+    async def count_active_sources_by_user(self, owner_user_id: UUID) -> int:
+        statement = (
+            select(func.count())
+            .select_from(TelegramSource)
+            .join(TelegramConnection, TelegramSource.connection_id == TelegramConnection.id)
+            .where(
+                TelegramSource.owner_user_id == owner_user_id,
+                TelegramSource.enabled.is_(True),
+                TelegramSource.quota_paused.is_(False),
+                TelegramConnection.enabled.is_(True),
+                TelegramConnection.status == TelegramConnectionStatus.CONNECTED,
+            )
+        )
+        result = await self.session.exec(statement)
+        return int(result.one())
+
+    async def reconcile_source_quota_for_user(
+        self,
+        *,
+        owner_user_id: UUID,
+        capacity: int,
+        legacy_active_count: int,
+    ) -> list[TelegramSource]:
+        user = await self.session.get(User, owner_user_id, with_for_update=True)
+        if not user or not user.is_active:
+            await self.session.rollback()
+            return []
+        statement = (
+            select(TelegramSource)
+            .join(TelegramConnection, TelegramSource.connection_id == TelegramConnection.id)
+            .where(
+                TelegramSource.owner_user_id == owner_user_id,
+                TelegramSource.enabled.is_(True),
+                TelegramConnection.enabled.is_(True),
+            )
+            .order_by(
+                col(TelegramSource.retention_priority).desc(),
+                col(TelegramSource.quota_paused).asc(),
+                col(TelegramSource.created_at).asc(),
+            )
+        )
+        result = await self.session.exec(statement)
+        sources = list(result.all())
+        available = max(capacity - legacy_active_count, 0)
+        now = utc_now()
+        for index, source in enumerate(sources):
+            paused = index >= available
+            source.quota_paused = paused
+            source.quota_reason = self.SOURCE_QUOTA_REASON if paused else None
+            source.updated_at = now
+            self.session.add(source)
+        await self.session.commit()
+        return sources
+
+    async def complete_bot_chat(
+        self,
+        *,
+        attempt: TelegramConnectionAttempt,
+        external_chat_id: str,
+        source_type: TelegramSourceType,
+        display_name: str,
+        username: str | None,
+        entitlements: PlanEntitlements,
+        legacy_active_count: int,
+    ) -> tuple[TelegramConnection, TelegramSource]:
+        user = await self.session.get(User, attempt.owner_user_id, with_for_update=True)
+        if not user or not user.is_active:
+            raise ValueError("active user is required")
+        if attempt.status != TelegramConnectionAttemptStatus.PENDING:
+            raise ValueError("connection attempt is no longer active")
+        if attempt.connection_type != TelegramConnectionType.BOT_CHAT:
+            raise ValueError("connection attempt is not a bot chat request")
+
+        existing_connection_statement = (
+            select(TelegramConnection)
+            .where(
+                TelegramConnection.owner_user_id == attempt.owner_user_id,
+                TelegramConnection.connection_type == TelegramConnectionType.BOT_CHAT,
+            )
+            .order_by(col(TelegramConnection.created_at).asc())
+        )
+        existing_connection_result = await self.session.exec(existing_connection_statement)
+        connection = existing_connection_result.first()
+        if not connection:
+            connection = TelegramConnection(
+                owner_user_id=attempt.owner_user_id,
+                connection_type=TelegramConnectionType.BOT_CHAT,
+                status=TelegramConnectionStatus.CONNECTED,
+                label="Telegram 群组与频道",
+                capabilities={"receive_group_messages": True, "receive_channel_posts": True},
+            )
+            self.session.add(connection)
+            await self.session.flush()
+        else:
+            connection.status = TelegramConnectionStatus.CONNECTED
+            connection.enabled = True
+            connection.last_error = None
+            connection.last_checked_at = utc_now()
+            connection.updated_at = utc_now()
+            self.session.add(connection)
+
+        source_statement = select(TelegramSource).where(
+            TelegramSource.connection_id == connection.id,
+            TelegramSource.external_chat_id == external_chat_id,
+        )
+        source_result = await self.session.exec(source_statement)
+        source = source_result.first()
+        if not source:
+            current_sources = await self.count_active_sources_by_user(attempt.owner_user_id)
+            ensure_group_quota(
+                entitlements=entitlements,
+                telegram_groups=legacy_active_count + current_sources + 1,
+                wecom_groups=0,
+            )
+            source = TelegramSource(
+                owner_user_id=attempt.owner_user_id,
+                connection_id=connection.id,
+                source_type=source_type,
+                external_chat_id=external_chat_id,
+                display_name=display_name,
+                username=username,
+            )
+        else:
+            source.source_type = source_type
+            source.display_name = display_name
+            source.username = username
+            source.enabled = True
+            source.quota_paused = False
+            source.quota_reason = None
+            source.last_error = None
+            source.updated_at = utc_now()
+        self.session.add(source)
+
+        now = utc_now()
+        attempt.status = TelegramConnectionAttemptStatus.COMPLETED
+        attempt.connection_id = connection.id
+        attempt.completed_at = now
+        attempt.updated_at = now
+        self.session.add(attempt)
+        await self.session.commit()
+        await self.session.refresh(connection)
+        await self.session.refresh(source)
+        return connection, source
+
+    async def complete_business_connection(
+        self,
+        *,
+        telegram_account_id: str,
+        provider_connection_id: str,
+        is_enabled: bool,
+        capabilities: dict,
+    ) -> TelegramConnection | None:
+        now = utc_now()
+        attempt_statement = (
+            select(TelegramConnectionAttempt)
+            .where(
+                TelegramConnectionAttempt.connection_type == TelegramConnectionType.BUSINESS,
+                TelegramConnectionAttempt.telegram_account_id == telegram_account_id,
+                TelegramConnectionAttempt.status == TelegramConnectionAttemptStatus.PENDING,
+                TelegramConnectionAttempt.expires_at > now,
+            )
+            .order_by(col(TelegramConnectionAttempt.created_at).desc())
+        )
+        result = await self.session.exec(attempt_statement)
+        attempt = result.first()
+        if not attempt:
+            return None
+        user = await self.session.get(User, attempt.owner_user_id, with_for_update=True)
+        if not user or not user.is_active:
+            raise ValueError("active user is required")
+        connection = await self.get_connection_by_provider_connection_id(provider_connection_id)
+        if connection and connection.owner_user_id != attempt.owner_user_id:
+            raise ValueError("business connection is already owned by another user")
+        if not connection:
+            connection = TelegramConnection(
+                owner_user_id=attempt.owner_user_id,
+                connection_type=TelegramConnectionType.BUSINESS,
+                provider_connection_id=provider_connection_id,
+                telegram_account_id=telegram_account_id,
+                label="Telegram Business 私聊",
+            )
+        connection.status = (
+            TelegramConnectionStatus.CONNECTED if is_enabled else TelegramConnectionStatus.DISABLED
+        )
+        connection.enabled = is_enabled
+        connection.capabilities = capabilities
+        connection.last_checked_at = now
+        connection.last_error = None
+        connection.updated_at = now
+        self.session.add(connection)
+        await self.session.flush()
+
+        attempt.status = TelegramConnectionAttemptStatus.COMPLETED
+        attempt.connection_id = connection.id
+        attempt.completed_at = now
+        attempt.updated_at = now
+        self.session.add(attempt)
+        await self.session.commit()
+        await self.session.refresh(connection)
+        return connection
+
+    async def get_connection_by_provider_connection_id(
+        self,
+        provider_connection_id: str,
+    ) -> TelegramConnection | None:
+        statement = select(TelegramConnection).where(
+            TelegramConnection.provider_connection_id == provider_connection_id
+        )
+        result = await self.session.exec(statement)
+        return result.first()
+
+    async def set_business_connection_state(
+        self,
+        *,
+        provider_connection_id: str,
+        enabled: bool,
+        capabilities: dict,
+    ) -> TelegramConnection | None:
+        connection = await self.get_connection_by_provider_connection_id(provider_connection_id)
+        if not connection:
+            return None
+        connection.enabled = enabled
+        connection.status = (
+            TelegramConnectionStatus.CONNECTED if enabled else TelegramConnectionStatus.DISABLED
+        )
+        connection.capabilities = capabilities
+        connection.last_checked_at = utc_now()
+        connection.updated_at = utc_now()
+        self.session.add(connection)
+        await self.session.commit()
+        await self.session.refresh(connection)
+        return connection
+
+    async def set_connection_enabled(
+        self,
+        *,
+        owner_user_id: UUID,
+        connection_id: UUID,
+        enabled: bool,
+    ) -> TelegramConnection | None:
+        connection = await self.get_connection_for_owner(
+            owner_user_id=owner_user_id,
+            connection_id=connection_id,
+        )
+        if not connection:
+            return None
+        connection.enabled = enabled
+        connection.status = (
+            TelegramConnectionStatus.CONNECTED if enabled else TelegramConnectionStatus.DISABLED
+        )
+        connection.updated_at = utc_now()
+        self.session.add(connection)
+        await self.session.commit()
+        await self.session.refresh(connection)
+        return connection
+
+    async def delete_connection(
+        self,
+        *,
+        owner_user_id: UUID,
+        connection_id: UUID,
+    ) -> bool:
+        connection = await self.get_connection_for_owner(
+            owner_user_id=owner_user_id,
+            connection_id=connection_id,
+        )
+        if not connection:
+            return False
+        sources = await self.session.exec(
+            select(TelegramSource).where(TelegramSource.connection_id == connection.id)
+        )
+        for source in sources.all():
+            await self.session.delete(source)
+        await self.session.delete(connection)
+        await self.session.commit()
+        return True
+
+    async def delete_source(
+        self,
+        *,
+        owner_user_id: UUID,
+        source_id: UUID,
+    ) -> bool:
+        statement = select(TelegramSource).where(
+            TelegramSource.id == source_id,
+            TelegramSource.owner_user_id == owner_user_id,
+        )
+        result = await self.session.exec(statement)
+        source = result.first()
+        if not source:
+            return False
+        await self.session.delete(source)
+        await self.session.commit()
+        return True
+
+    async def reserve_webhook_event(
+        self,
+        *,
+        update_id: int,
+        payload_hash: str,
+        event_type: str,
+    ) -> tuple[TelegramWebhookEvent, bool]:
+        event = TelegramWebhookEvent(
+            update_id=update_id,
+            payload_hash=payload_hash,
+            event_type=event_type,
+        )
+        self.session.add(event)
+        try:
+            await self.session.commit()
+        except IntegrityError:
+            await self.session.rollback()
+            statement = select(TelegramWebhookEvent).where(TelegramWebhookEvent.update_id == update_id)
+            result = await self.session.exec(statement)
+            existing = result.first()
+            if not existing:
+                raise
+            # A failed delivery leaves processed_at unset so Telegram can retry the same update.
+            return existing, existing.processed_at is None
+        await self.session.refresh(event)
+        return event, True
+
+    async def finish_webhook_event(
+        self,
+        *,
+        event: TelegramWebhookEvent,
+        connection_id: UUID | None = None,
+        error: str | None = None,
+    ) -> None:
+        event.connection_id = connection_id or event.connection_id
+        event.error = error[:1000] if error else None
+        event.processed_at = utc_now()
+        event.updated_at = utc_now()
+        self.session.add(event)
+        await self.session.commit()
+
+    async def _expire_attempt_if_needed(self, attempt: TelegramConnectionAttempt) -> None:
+        if (
+            attempt.status == TelegramConnectionAttemptStatus.PENDING
+            and attempt.expires_at <= utc_now()
+        ):
+            attempt.status = TelegramConnectionAttemptStatus.EXPIRED
+            attempt.updated_at = utc_now()
+            self.session.add(attempt)
+            await self.session.commit()
+            await self.session.refresh(attempt)
 
 
 class ReplyTemplateRepository:

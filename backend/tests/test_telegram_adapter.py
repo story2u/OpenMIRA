@@ -1,4 +1,5 @@
 from types import SimpleNamespace
+from uuid import uuid4
 
 import pytest
 
@@ -36,3 +37,26 @@ async def test_telegram_adapter_parses_group_job_message() -> None:
     assert inbound.group_name == "AI 招聘群"
     assert inbound.sender_display_name == "Alice"
     assert "https://jobs.example.com/1" in inbound.raw_message_links
+
+
+@pytest.mark.asyncio
+async def test_telegram_adapter_namespaces_connection_messages_and_sets_owner() -> None:
+    owner_id = uuid4()
+    adapter = TelegramAdapter(
+        SimpleNamespace(
+            telegram_bot_token="token",
+            telegram_webhook_secret="secret",
+            im_send_enabled=False,
+        )
+    )
+
+    inbound = await adapter.parse_webhook(
+        {"message": {"message_id": 9, "chat": {"id": -1001, "type": "group", "title": "群"}, "text": "hello"}},
+        {"x-telegram-bot-api-secret-token": "secret"},
+        owner_user_id=owner_id,
+        external_id_prefix="connection:123",
+    )
+
+    assert inbound is not None
+    assert inbound.owner_user_id == owner_id
+    assert inbound.external_message_id == "connection:123:-1001:9"

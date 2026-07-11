@@ -1,248 +1,228 @@
 'use client'
 
-import { ArrowLeft, Check, KeyRound, ListChecks, PauseCircle, RefreshCw, Send, ShieldCheck } from 'lucide-react'
-import Link from 'next/link'
-import { FormEvent, useEffect, useMemo, useState } from 'react'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { Card } from '@/components/ui/card'
-import { Checkbox } from '@/components/ui/checkbox'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Switch } from '@/components/ui/switch'
-import { Textarea } from '@/components/ui/textarea'
 import {
-  fetchTelegramDialogs,
-  fetchTelegramUserConfig,
-  sendTelegramCode,
-  updateTelegramMonitorRetention,
-  updateTelegramUserConfig,
-  verifyTelegramCode,
+  ArrowLeft,
+  Bot,
+  Building2,
+  CheckCircle2,
+  ExternalLink,
+  Loader2,
+  QrCode,
+  Radio,
+  RefreshCw,
+  ShieldCheck,
+  Trash2,
+  Unplug,
+} from 'lucide-react'
+import Link from 'next/link'
+import { useCallback, useEffect, useState } from 'react'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
+import { Switch } from '@/components/ui/switch'
+import {
+  cancelTelegramConnectionAttempt,
+  deleteTelegramConnection,
+  deleteTelegramConnectionSource,
+  fetchTelegramConnectionAttempt,
+  fetchTelegramConnectionHealth,
+  fetchTelegramConnections,
+  startTelegramBotChatConnection,
+  startTelegramBusinessConnection,
+  updateTelegramConnection,
 } from '@/lib/api'
-import type { TelegramDialog, TelegramUserConfig } from '@/lib/types'
+import type {
+  TelegramConnection,
+  TelegramConnectionAttempt,
+  TelegramConnectionHealth,
+  TelegramConnectionStatus,
+} from '@/lib/types'
 
-function chatsToText(chats: Array<string | number>) {
-  return chats.map(String).join('\n')
+const STATUS_LABELS: Record<TelegramConnectionStatus, string> = {
+  pending: '等待连接',
+  connected: '已连接',
+  disabled: '已停用',
+  error: '需要处理',
+  expired: '已过期',
 }
 
-function parseChats(value: string): Array<string | number> {
-  const seen = new Set<string>()
-  return value
-    .split(/\n|,/)
-    .map((item) => item.trim())
-    .filter(Boolean)
-    .map((item) => (/^-?\d+$/.test(item) ? Number(item) : item))
-    .filter((item) => {
-      const key = String(item)
-      if (seen.has(key)) return false
-      seen.add(key)
-      return true
-    })
+function statusVariant(status: TelegramConnectionStatus) {
+  if (status === 'connected') return 'secondary' as const
+  if (status === 'error') return 'destructive' as const
+  return 'outline' as const
+}
+
+function attemptStatusLabel(attempt: TelegramConnectionAttempt) {
+  if (attempt.localMock) return '本地 mock 已完成'
+  if (attempt.status === 'pending') return '等待你在 Telegram 中完成操作'
+  if (attempt.status === 'completed') return '连接已完成'
+  if (attempt.status === 'expired') return '连接已过期，请重新开始'
+  if (attempt.status === 'cancelled') return '连接已取消'
+  return attempt.error || '连接失败，请重试'
 }
 
 export default function TelegramSettingsPage() {
-  const [config, setConfig] = useState<TelegramUserConfig | null>(null)
-  const [enabled, setEnabled] = useState(false)
-  const [apiId, setApiId] = useState('')
-  const [apiHash, setApiHash] = useState('')
-  const [phone, setPhone] = useState('')
-  const [code, setCode] = useState('')
-  const [password, setPassword] = useState('')
-  const [sessionString, setSessionString] = useState('')
-  const [chatsText, setChatsText] = useState('')
-  const [backfillLimit, setBackfillLimit] = useState('50')
-  const [loginId, setLoginId] = useState('')
-  const [dialogs, setDialogs] = useState<TelegramDialog[]>([])
-  const [statusText, setStatusText] = useState('')
-  const [error, setError] = useState('')
+  const [health, setHealth] = useState<TelegramConnectionHealth | null>(null)
+  const [connections, setConnections] = useState<TelegramConnection[]>([])
+  const [attempt, setAttempt] = useState<TelegramConnectionAttempt | null>(null)
   const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
-  const [retentionSaving, setRetentionSaving] = useState(false)
-  const [retainedMonitorIds, setRetainedMonitorIds] = useState<Set<string>>(() => new Set())
+  const [action, setAction] = useState<'bot' | 'business' | 'refresh' | string | null>(null)
+  const [error, setError] = useState('')
 
-  const selectedChats = useMemo(() => new Set(parseChats(chatsText).map(String)), [chatsText])
-  const monitorLimit = config?.monitorLimit ?? 1
-  const monitorErrors = useMemo(
-    () =>
-      config?.monitors
-        .map((monitor) => monitor.lastError)
-        .filter((item): item is string => Boolean(item)) ?? [],
-    [config],
-  )
-  const enabledMonitors = useMemo(
-    () => config?.monitors.filter((monitor) => monitor.enabled) ?? [],
-    [config],
-  )
-  const hasOverQuotaMonitors = enabledMonitors.length > monitorLimit
-
-  function applyConfig(nextConfig: TelegramUserConfig) {
-    const firstMonitor = nextConfig.monitors[0]
-    const enabledActiveMonitors = nextConfig.monitors.filter(
-      (monitor) => monitor.enabled && !monitor.quotaPaused,
-    )
-    const editableMonitors = nextConfig.monitors.some((monitor) => monitor.enabled)
-      ? enabledActiveMonitors
-      : nextConfig.monitors
-    setConfig(nextConfig)
-    setEnabled(nextConfig.monitors.some((monitor) => monitor.enabled))
-    setApiId(nextConfig.apiId ? String(nextConfig.apiId) : '')
-    setChatsText(chatsToText(editableMonitors.map((monitor) => monitor.chatId)))
-    setRetainedMonitorIds(new Set(enabledActiveMonitors.map((monitor) => monitor.id)))
-    setBackfillLimit(String(firstMonitor?.backfillLimit || 50))
-  }
+  const load = useCallback(async () => {
+    const [nextHealth, nextConnections] = await Promise.all([
+      fetchTelegramConnectionHealth(),
+      fetchTelegramConnections(),
+    ])
+    setHealth(nextHealth)
+    setConnections(nextConnections)
+  }, [])
 
   useEffect(() => {
-    let cancelled = false
-    async function loadConfig() {
+    let active = true
+    load()
+      .catch((exc) => {
+        if (active) setError(exc instanceof Error ? exc.message : '无法加载 Telegram 连接')
+      })
+      .finally(() => {
+        if (active) setLoading(false)
+      })
+    return () => {
+      active = false
+    }
+  }, [load])
+
+  useEffect(() => {
+    if (!attempt || attempt.status !== 'pending' || attempt.localMock) return
+    let active = true
+    const poll = async () => {
       try {
-        const nextConfig = await fetchTelegramUserConfig()
-        if (cancelled) return
-        applyConfig(nextConfig)
+        const nextAttempt = await fetchTelegramConnectionAttempt(attempt.id)
+        if (!active) return
+        setAttempt((current) => current ? {
+          ...nextAttempt,
+          telegramUrl: current.telegramUrl,
+          instructions: current.instructions,
+          localMock: current.localMock,
+        } : nextAttempt)
+        if (nextAttempt.status === 'completed') {
+          await load()
+        }
       } catch (exc) {
-        if (!cancelled) setError(exc instanceof Error ? exc.message : '加载配置失败')
-      } finally {
-        if (!cancelled) setLoading(false)
+        if (active) setError(exc instanceof Error ? exc.message : '无法更新连接状态')
       }
     }
-    loadConfig()
+    const timer = window.setInterval(poll, 2_000)
+    void poll()
     return () => {
-      cancelled = true
+      active = false
+      window.clearInterval(timer)
+    }
+  }, [attempt, load])
+
+  const refresh = useCallback(async () => {
+    setError('')
+    setAction('refresh')
+    try {
+      await load()
+    } catch (exc) {
+      setError(exc instanceof Error ? exc.message : '刷新失败')
+    } finally {
+      setAction(null)
+    }
+  }, [load])
+
+  const startBotChat = useCallback(async () => {
+    setError('')
+    setAction('bot')
+    try {
+      const nextAttempt = await startTelegramBotChatConnection()
+      setAttempt(nextAttempt)
+      if (nextAttempt.status === 'completed') await load()
+    } catch (exc) {
+      setError(exc instanceof Error ? exc.message : '无法开始群组连接')
+    } finally {
+      setAction(null)
+    }
+  }, [load])
+
+  const startBusiness = useCallback(async () => {
+    setError('')
+    setAction('business')
+    try {
+      setAttempt(await startTelegramBusinessConnection())
+    } catch (exc) {
+      setError(exc instanceof Error ? exc.message : '无法开始 Business 连接')
+    } finally {
+      setAction(null)
     }
   }, [])
 
-  function addChat(chatId: number | string) {
-    const next = parseChats(chatsText)
-    if (next.map(String).includes(String(chatId))) {
-      return
-    }
-    if (next.length >= monitorLimit) {
-      setError(`当前套餐最多监听 ${monitorLimit} 个群/频道`)
-      return
-    }
+  const cancelAttempt = useCallback(async () => {
+    if (!attempt) return
     setError('')
-    setChatsText(chatsToText([...next, chatId]))
-  }
-
-  async function handleSendCode() {
-    setError('')
-    setStatusText('')
-    const numericApiId = Number(apiId)
-    if (!numericApiId || !apiHash || !phone) {
-      setError('请填写 API ID、API Hash 和手机号')
-      return
-    }
+    setAction(`cancel-${attempt.id}`)
     try {
-      const result = await sendTelegramCode(numericApiId, apiHash, phone)
-      setLoginId(result.loginId)
-      setStatusText('验证码已发送')
+      setAttempt(await cancelTelegramConnectionAttempt(attempt.id))
     } catch (exc) {
-      setError(exc instanceof Error ? exc.message : '发送验证码失败')
-    }
-  }
-
-  async function handleVerifyCode() {
-    setError('')
-    setStatusText('')
-    if (!loginId || !code) {
-      setError('请先发送验证码并填写验证码')
-      return
-    }
-    try {
-      const result = await verifyTelegramCode(loginId, code, password)
-      if (result.status === 'password_required') {
-        setStatusText('需要二步验证密码')
-        return
-      }
-      if (result.config) {
-        applyConfig(result.config)
-        setStatusText('Telegram 账号已连接')
-      }
-    } catch (exc) {
-      setError(exc instanceof Error ? exc.message : '验证码确认失败')
-    }
-  }
-
-  async function handleLoadDialogs() {
-    setError('')
-    setStatusText('')
-    try {
-      const items = await fetchTelegramDialogs()
-      setDialogs(items)
-      setStatusText(`已加载 ${items.length} 个会话`)
-    } catch (exc) {
-      setError(exc instanceof Error ? exc.message : '加载会话失败')
-    }
-  }
-
-  async function handleSave(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    setError('')
-    setStatusText('')
-    setSaving(true)
-    try {
-      const chats = parseChats(chatsText)
-      if (chats.length > monitorLimit) {
-        setError(`当前套餐最多监听 ${monitorLimit} 个群/频道`)
-        return
-      }
-      const nextConfig = await updateTelegramUserConfig({
-        enabled,
-        apiId: apiId ? Number(apiId) : null,
-        apiHash: apiHash || undefined,
-        sessionString: sessionString || undefined,
-        chats,
-        backfillLimit: Number(backfillLimit) || 30,
-      })
-      applyConfig(nextConfig)
-      setApiHash('')
-      setSessionString('')
-      setStatusText('配置已保存')
-    } catch (exc) {
-      setError(exc instanceof Error ? exc.message : '保存失败')
+      setError(exc instanceof Error ? exc.message : '取消连接失败')
     } finally {
-      setSaving(false)
+      setAction(null)
     }
-  }
+  }, [attempt])
 
-  function toggleRetainedMonitor(monitorId: string, checked: boolean) {
+  const toggleConnection = useCallback(async (connection: TelegramConnection, enabled: boolean) => {
     setError('')
-    setRetainedMonitorIds((current) => {
-      const next = new Set(current)
-      if (checked) {
-        if (next.size >= monitorLimit) {
-          setError(`当前套餐只能保留 ${monitorLimit} 个群/频道`)
-          return current
-        }
-        next.add(monitorId)
-      } else {
-        next.delete(monitorId)
-      }
-      return next
-    })
-  }
-
-  async function handleSaveRetention() {
-    setError('')
-    setStatusText('')
-    if (retainedMonitorIds.size !== monitorLimit) {
-      setError(`请选择恰好 ${monitorLimit} 个要继续监听的群/频道`)
-      return
-    }
-    setRetentionSaving(true)
+    setAction(`connection-${connection.id}`)
     try {
-      const nextConfig = await updateTelegramMonitorRetention([...retainedMonitorIds])
-      applyConfig(nextConfig)
-      setStatusText('已保存降级后的保留群，其余群保持暂停')
+      const updated = await updateTelegramConnection(connection.id, enabled)
+      setConnections((current) => current.map((item) => (item.id === updated.id ? updated : item)))
     } catch (exc) {
-      setError(exc instanceof Error ? exc.message : '保存保留群失败')
+      setError(exc instanceof Error ? exc.message : '更新连接状态失败')
     } finally {
-      setRetentionSaving(false)
+      setAction(null)
     }
-  }
+  }, [])
+
+  const removeConnection = useCallback(
+    async (connection: TelegramConnection) => {
+      if (!window.confirm(`移除“${connection.label}”及其全部监听来源？`)) return
+      setError('')
+      setAction(`connection-${connection.id}`)
+      try {
+        await deleteTelegramConnection(connection.id)
+        setConnections((current) => current.filter((item) => item.id !== connection.id))
+      } catch (exc) {
+        setError(exc instanceof Error ? exc.message : '移除连接失败')
+      } finally {
+        setAction(null)
+      }
+    },
+    [],
+  )
+
+  const removeSource = useCallback(async (sourceId: string) => {
+    if (!window.confirm('停止监听并移除此来源？')) return
+    setError('')
+    setAction(`source-${sourceId}`)
+    try {
+      await deleteTelegramConnectionSource(sourceId)
+      setConnections((current) =>
+        current.map((connection) => ({
+          ...connection,
+          sources: connection.sources.filter((source) => source.id !== sourceId),
+        })),
+      )
+    } catch (exc) {
+      setError(exc instanceof Error ? exc.message : '移除来源失败')
+    } finally {
+      setAction(null)
+    }
+  }, [])
 
   return (
     <div className="mx-auto w-full max-w-4xl px-4 py-6 md:px-8">
-      <div className="mb-6 flex items-center gap-2">
+      <header className="mb-6 flex items-start gap-2">
         <Button
           variant="ghost"
           size="icon"
@@ -252,232 +232,179 @@ export default function TelegramSettingsPage() {
         >
           <ArrowLeft className="size-4" />
         </Button>
-        <div>
-          <h1 className="text-lg font-semibold tracking-tight md:text-xl">Telegram 普通账号</h1>
-          <p className="text-xs text-muted-foreground">每个登录用户独立保存一套监听配置</p>
+        <div className="min-w-0 flex-1">
+          <h1 className="text-xl font-semibold tracking-tight md:text-2xl">Telegram 连接</h1>
+          <p className="mt-1 text-sm text-muted-foreground">选择连接方式并管理正在监听的来源</p>
         </div>
-      </div>
+        <Button variant="outline" size="sm" onClick={refresh} disabled={action === 'refresh'}>
+          {action === 'refresh' ? <Loader2 className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />}
+          刷新
+        </Button>
+      </header>
 
-      {hasOverQuotaMonitors ? (
-        <Card className="mb-5 gap-4 border-warning/40 bg-warning/5 p-4 shadow-sm md:p-5">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="flex items-start gap-3">
-              <span className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-lg bg-warning/15 text-warning">
-                <PauseCircle className="size-5" />
-              </span>
-              <div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <h2 className="text-sm font-semibold">选择降级后继续监听的群</h2>
-                  <Badge variant={config?.retentionSelectionRequired ? 'destructive' : 'secondary'}>
-                    {config?.retentionSelectionRequired ? '需要确认' : '已选择'}
-                  </Badge>
-                </div>
-                <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                  当前保存了 {enabledMonitors.length} 个群，本套餐可继续监听 {monitorLimit} 个。未选中的群只会暂停，配置不会被删除。
-                </p>
-              </div>
+      {health?.mode === 'mock' ? (
+        <div className="mb-5 flex gap-3 rounded-xl border border-warning/35 bg-warning/5 p-4 text-sm">
+          <ShieldCheck className="mt-0.5 size-4 shrink-0 text-warning" />
+          <p>当前为本地 mock adapter。它只验证连接流程，不会连接、读取或发送真实 Telegram 消息。</p>
+        </div>
+      ) : null}
+
+      {health?.legacyMonitoringActive ? (
+        <div className="mb-5 flex gap-3 rounded-xl border border-border bg-muted/45 p-4 text-sm">
+          <ShieldCheck className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+          <p>检测到 {health.legacyActiveSourceCount} 个旧 MTProto 监听仍在运行。为保护既有授权，系统不会迁移或展示其凭据；它们仍会计入套餐群额度。</p>
+        </div>
+      ) : null}
+
+      {health?.message ? <p className="mb-5 text-xs text-muted-foreground">{health.message}</p> : null}
+      {error ? <p className="mb-5 rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive" role="alert">{error}</p> : null}
+
+      <section aria-labelledby="connection-methods" className="mb-7">
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <div>
+            <h2 id="connection-methods" className="text-base font-semibold">选择连接方式</h2>
+            <p className="mt-0.5 text-sm text-muted-foreground">不会在网页中输入 Telegram API Hash、手机号或 Session。</p>
+          </div>
+          <Badge variant="outline">{health?.listenerMode || '加载中'}</Badge>
+        </div>
+        <div className="grid gap-4 lg:grid-cols-3">
+          <Card className="gap-4 border-sky-500/35 bg-sky-500/[0.03] p-5 shadow-sm">
+            <div className="flex items-start justify-between gap-3">
+              <span className="flex size-10 items-center justify-center rounded-xl bg-sky-500/12 text-sky-600 dark:text-sky-400"><Bot className="size-5" /></span>
+              <Badge className="bg-sky-500 text-white">推荐 · P0</Badge>
             </div>
-            <span className="text-sm font-medium">
-              已选择 {retainedMonitorIds.size} / {monitorLimit}
-            </span>
-          </div>
+            <div>
+              <h3 className="font-semibold">群组 / 频道</h3>
+              <p className="mt-1 text-sm leading-5 text-muted-foreground">通过平台机器人选择已添加机器人的群或频道，验证后开始监听。</p>
+            </div>
+            <div className="mt-auto">
+              <Button className="w-full" onClick={startBotChat} disabled={loading || action === 'bot' || !health}>
+                {action === 'bot' ? <Loader2 className="size-4 animate-spin" /> : <Radio className="size-4" />}
+                连接群组或频道
+              </Button>
+            </div>
+          </Card>
 
-          <div className="grid gap-2 sm:grid-cols-2">
-            {enabledMonitors.map((monitor) => {
-              const checked = retainedMonitorIds.has(monitor.id)
-              const disabled = !checked && retainedMonitorIds.size >= monitorLimit
-              return (
-                <label
-                  key={monitor.id}
-                  className="flex cursor-pointer items-center gap-3 rounded-lg border bg-background px-3 py-3 has-disabled:cursor-not-allowed has-disabled:opacity-60"
-                >
-                  <Checkbox
-                    checked={checked}
-                    disabled={disabled}
-                    onCheckedChange={(nextChecked) => toggleRetainedMonitor(monitor.id, nextChecked)}
-                    aria-label={`保留 ${monitor.chatTitle || monitor.name || monitor.chatId}`}
-                  />
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-medium">
-                      {monitor.chatTitle || monitor.name || monitor.chatId}
-                    </span>
-                    <span className="block truncate font-mono text-[11px] text-muted-foreground">
-                      {monitor.chatId}
-                    </span>
-                  </span>
-                  <Badge variant={checked ? 'secondary' : 'outline'}>
-                    {checked ? '继续监听' : '暂停'}
-                  </Badge>
-                </label>
-              )
-            })}
-          </div>
+          <Card className="gap-4 p-5 shadow-sm">
+            <div className="flex items-start justify-between gap-3">
+              <span className="flex size-10 items-center justify-center rounded-xl bg-violet-500/12 text-violet-600 dark:text-violet-400"><Building2 className="size-5" /></span>
+              <Badge variant="outline">P1</Badge>
+            </div>
+            <div>
+              <h3 className="font-semibold">Business 私聊</h3>
+              <p className="mt-1 text-sm leading-5 text-muted-foreground">在 Telegram Business 设置中绑定机器人，用于接收授权范围内的私聊。</p>
+            </div>
+            <div className="mt-auto">
+              <Button className="w-full" variant="outline" onClick={startBusiness} disabled={!health?.businessAvailable || action === 'business'}>
+                {action === 'business' ? <Loader2 className="size-4 animate-spin" /> : <Building2 className="size-4" />}
+                {health?.businessAvailable ? '开始 Business 连接' : '管理员尚未配置'}
+              </Button>
+            </div>
+          </Card>
 
-          <div className="flex justify-end">
-            <Button type="button" onClick={handleSaveRetention} disabled={retentionSaving}>
-              {retentionSaving ? '保存中' : '保存保留选择'}
+          <Card className="gap-4 p-5 opacity-75 shadow-sm">
+            <div className="flex items-start justify-between gap-3">
+              <span className="flex size-10 items-center justify-center rounded-xl bg-muted text-muted-foreground"><QrCode className="size-5" /></span>
+              <Badge variant="outline">P2 · 未启用</Badge>
+            </div>
+            <div>
+              <h3 className="font-semibold">普通账号 QR</h3>
+              <p className="mt-1 text-sm leading-5 text-muted-foreground">将使用平台统一配置和常驻 worker；此环境尚未部署该能力。</p>
+            </div>
+            <Button className="mt-auto w-full" variant="outline" disabled>
+              <QrCode className="size-4" />
+              等待平台启用
             </Button>
+          </Card>
+        </div>
+      </section>
+
+      {attempt ? (
+        <Card className="mb-7 gap-4 border-primary/30 bg-primary/[0.035] p-5 shadow-sm" aria-live="polite">
+          <div className="flex items-start gap-3">
+            {attempt.status === 'completed' ? <CheckCircle2 className="mt-0.5 size-5 text-success" /> : <Radio className="mt-0.5 size-5 text-primary" />}
+            <div className="min-w-0 flex-1">
+              <h2 className="font-semibold">连接进度</h2>
+              <p className="mt-1 text-sm text-muted-foreground">{attemptStatusLabel(attempt)}</p>
+            </div>
+            <Badge variant={attempt.status === 'completed' ? 'secondary' : 'outline'}>{attempt.status}</Badge>
+          </div>
+          {attempt.instructions.length > 0 ? (
+            <ol className="list-decimal space-y-1 pl-5 text-sm text-muted-foreground">
+              {attempt.instructions.map((instruction) => <li key={instruction}>{instruction}</li>)}
+            </ol>
+          ) : null}
+          <div className="flex flex-wrap gap-2">
+            {attempt.telegramUrl ? (
+              <Button nativeButton={false} render={<a href={attempt.telegramUrl} target="_blank" rel="noreferrer" />}>
+                <ExternalLink className="size-4" />
+                在 Telegram 中打开
+              </Button>
+            ) : null}
+            {attempt.status === 'pending' ? (
+              <Button variant="outline" onClick={cancelAttempt} disabled={action === `cancel-${attempt.id}`}>
+                <Unplug className="size-4" />
+                取消连接
+              </Button>
+            ) : null}
+            {attempt.status !== 'pending' ? <Button variant="ghost" onClick={() => setAttempt(null)}>关闭</Button> : null}
           </div>
         </Card>
       ) : null}
 
-      <form className="grid gap-5 lg:grid-cols-[1fr_320px]" onSubmit={handleSave}>
-        <div className="flex flex-col gap-5">
-          <Card className="gap-4 p-4 shadow-sm md:p-5">
-            <div className="flex items-center justify-between gap-4">
-              <div className="flex items-center gap-2">
-                <Send className="size-4 text-sky-600" />
-                <Label htmlFor="telegram-enabled" className="text-sm font-medium">
-                  启用监听
-                </Label>
-              </div>
-              <Switch id="telegram-enabled" checked={enabled} onCheckedChange={setEnabled} />
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="grid gap-1.5">
-                <Label htmlFor="api-id">API ID</Label>
-                <Input id="api-id" value={apiId} onChange={(event) => setApiId(event.target.value)} inputMode="numeric" />
-              </div>
-              <div className="grid gap-1.5">
-                <Label htmlFor="api-hash">API Hash</Label>
-                <Input
-                  id="api-hash"
-                  type="password"
-                  value={apiHash}
-                  onChange={(event) => setApiHash(event.target.value)}
-                  placeholder={config?.apiHashConfigured ? '已配置，留空不修改' : ''}
-                />
-              </div>
-            </div>
-          </Card>
-
-          <Card className="gap-4 p-4 shadow-sm md:p-5">
-            <div className="flex items-center gap-2">
-              <KeyRound className="size-4 text-muted-foreground" />
-              <h2 className="text-sm font-medium">账号登录</h2>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
-              <div className="grid gap-1.5">
-                <Label htmlFor="phone">手机号</Label>
-                <Input id="phone" value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="+8613800000000" />
-              </div>
-              <div className="flex items-end">
-                <Button type="button" variant="outline" onClick={handleSendCode} disabled={loading}>
-                  发送验证码
-                </Button>
-              </div>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-[1fr_1fr_auto]">
-              <div className="grid gap-1.5">
-                <Label htmlFor="code">验证码</Label>
-                <Input id="code" value={code} onChange={(event) => setCode(event.target.value)} />
-              </div>
-              <div className="grid gap-1.5">
-                <Label htmlFor="twofa">二步验证密码</Label>
-                <Input id="twofa" type="password" value={password} onChange={(event) => setPassword(event.target.value)} />
-              </div>
-              <div className="flex items-end">
-                <Button type="button" variant="outline" onClick={handleVerifyCode}>
-                  确认
-                </Button>
-              </div>
-            </div>
-            <div className="grid gap-1.5">
-              <Label htmlFor="session">Session String</Label>
-              <Textarea
-                id="session"
-                value={sessionString}
-                onChange={(event) => setSessionString(event.target.value)}
-                placeholder={config?.sessionConfigured ? '已配置，留空不修改' : '可粘贴脚本生成的 session'}
-                className="min-h-20 font-mono text-xs"
-              />
-            </div>
-          </Card>
-
-          <Card className="gap-4 p-4 shadow-sm md:p-5">
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2">
-                <ListChecks className="size-4 text-muted-foreground" />
-                <h2 className="text-sm font-medium">监听群/频道</h2>
-              </div>
-              <Button type="button" variant="outline" size="sm" onClick={handleLoadDialogs}>
-                <RefreshCw className="size-4" />
-                加载会话
-              </Button>
-            </div>
-            <Textarea
-              value={chatsText}
-              onChange={(event) => setChatsText(event.target.value)}
-              className="min-h-32 font-mono text-xs"
-              placeholder={'-1001234567890\npublic_jobs_channel'}
-            />
-            {dialogs.length > 0 && (
-              <div className="max-h-72 overflow-auto rounded-md border">
-                {dialogs.map((dialog) => (
-                  <div key={dialog.id} className="flex items-center justify-between gap-3 border-b px-3 py-2 last:border-b-0">
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium">{dialog.name}</p>
-                      <p className="truncate font-mono text-[11px] text-muted-foreground">
-                        {dialog.id}
-                        {dialog.username ? ` · @${dialog.username}` : ''}
-                      </p>
-                    </div>
-                    <Button
-                      type="button"
-                      variant={selectedChats.has(String(dialog.id)) ? 'secondary' : 'outline'}
-                      size="sm"
-                      disabled={!selectedChats.has(String(dialog.id)) && selectedChats.size >= monitorLimit}
-                      onClick={() => addChat(dialog.id)}
-                    >
-                      {selectedChats.has(String(dialog.id)) ? <Check className="size-4" /> : '添加'}
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </Card>
+      <section aria-labelledby="current-connections">
+        <div className="mb-3">
+          <h2 id="current-connections" className="text-base font-semibold">当前连接</h2>
+          <p className="mt-0.5 text-sm text-muted-foreground">停用不会删除来源；移除连接会停止并删除其来源。</p>
         </div>
-
-        <aside className="flex flex-col gap-5">
-          <Card className="gap-4 p-4 shadow-sm">
-            <div className="flex items-center gap-2">
-              <ShieldCheck className="size-4 text-muted-foreground" />
-              <h2 className="text-sm font-medium">状态</h2>
-            </div>
-            <div className="grid gap-2 text-sm">
-              <p>API Hash：{config?.apiHashConfigured ? '已保存' : '未配置'}</p>
-              <p>Session：{config?.sessionConfigured ? '已保存' : '未配置'}</p>
-              <p>
-                正在监听：{config?.activeMonitorCount ?? parseChats(chatsText).length} / {monitorLimit}
-              </p>
-              {monitorErrors.map((item) => (
-                <p key={item} className="text-destructive">
-                  错误：{item}
-                </p>
-              ))}
-            </div>
+        {loading ? (
+          <Card className="items-center p-8 text-sm text-muted-foreground"><Loader2 className="size-5 animate-spin" />正在加载连接…</Card>
+        ) : connections.length === 0 ? (
+          <Card className="items-center gap-2 p-8 text-center shadow-sm">
+            <Bot className="size-6 text-muted-foreground" />
+            <p className="font-medium">还没有 Telegram 连接</p>
+            <p className="text-sm text-muted-foreground">从上方选择一种方式开始；群组/频道是当前可用的推荐路径。</p>
           </Card>
-
-          <Card className="gap-3 p-4 shadow-sm">
-            <div className="grid gap-1.5">
-              <Label htmlFor="backfill">历史回填条数</Label>
-              <Input
-                id="backfill"
-                type="number"
-                min={0}
-                max={500}
-                value={backfillLimit}
-                onChange={(event) => setBackfillLimit(event.target.value)}
-              />
-            </div>
-            {statusText && <p className="rounded-md bg-success/10 px-3 py-2 text-xs text-success">{statusText}</p>}
-            {error && <p className="rounded-md bg-destructive/10 px-3 py-2 text-xs text-destructive">{error}</p>}
-            <Button type="submit" disabled={loading || saving}>
-              {saving ? '保存中' : '保存配置'}
-            </Button>
-          </Card>
-        </aside>
-      </form>
+        ) : (
+          <div className="flex flex-col gap-3">
+            {connections.map((connection) => (
+              <Card key={connection.id} className="gap-4 p-4 shadow-sm md:p-5">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="flex min-w-0 items-start gap-3">
+                    <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-sky-500/12 text-sky-600 dark:text-sky-400"><Radio className="size-4" /></span>
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2"><h3 className="font-semibold">{connection.label}</h3><Badge variant={statusVariant(connection.status)}>{STATUS_LABELS[connection.status]}</Badge></div>
+                      <p className="mt-1 text-xs text-muted-foreground">{connection.connectionType === 'bot_chat' ? '机器人群组/频道' : connection.connectionType === 'business' ? 'Telegram Business 私聊' : '普通账号 QR'}</p>
+                      {connection.lastError ? <p className="mt-1 text-xs text-destructive">{connection.lastError}</p> : null}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Switch
+                      checked={connection.enabled}
+                      disabled={action === `connection-${connection.id}`}
+                      onCheckedChange={(enabled) => void toggleConnection(connection, enabled)}
+                      aria-label={`${connection.enabled ? '停用' : '启用'} ${connection.label}`}
+                    />
+                    <Button variant="ghost" size="icon-sm" onClick={() => void removeConnection(connection)} disabled={action === `connection-${connection.id}`} aria-label={`移除 ${connection.label}`}><Trash2 className="size-4 text-destructive" /></Button>
+                  </div>
+                </div>
+                {connection.sources.length > 0 ? (
+                  <div className="grid gap-2 border-t pt-3">
+                    {connection.sources.map((source) => (
+                      <div key={source.id} className="flex items-center gap-3 rounded-lg bg-muted/45 px-3 py-2.5">
+                        <Radio className="size-3.5 shrink-0 text-muted-foreground" />
+                        <div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{source.displayName}</p><p className="truncate text-xs text-muted-foreground">{source.sourceType === 'channel' ? '频道' : source.sourceType === 'group' ? '群组' : '私聊'}{source.username ? ` · @${source.username}` : ''}</p></div>
+                        {source.quotaPaused ? <Badge variant="outline">套餐暂停</Badge> : <Badge variant="secondary">监听中</Badge>}
+                        <Button variant="ghost" size="icon-xs" onClick={() => void removeSource(source.id)} disabled={action === `source-${source.id}`} aria-label={`移除 ${source.displayName}`}><Trash2 className="size-3.5 text-destructive" /></Button>
+                      </div>
+                    ))}
+                  </div>
+                ) : <p className="border-t pt-3 text-sm text-muted-foreground">尚未添加来源。</p>}
+              </Card>
+            ))}
+          </div>
+        )}
+      </section>
     </div>
   )
 }

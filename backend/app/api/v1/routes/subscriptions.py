@@ -1,11 +1,20 @@
 from fastapi import APIRouter, Depends
 
-from app.api.deps import get_subscription_repo, get_telegram_user_config_repo, require_user
+from app.api.deps import (
+    get_subscription_repo,
+    get_telegram_connection_repo,
+    get_telegram_user_config_repo,
+    require_user,
+)
 from app.application.dto import PlanEntitlementsRead, SubscriptionUsageRead
 from app.domain.enums import PlanCode
 from app.domain.services.subscription_policy import get_plan_entitlements
 from app.infrastructure.db.models import User
-from app.infrastructure.db.repositories import SubscriptionRepository, TelegramUserConfigRepository
+from app.infrastructure.db.repositories import (
+    SubscriptionRepository,
+    TelegramConnectionRepository,
+    TelegramUserConfigRepository,
+)
 
 router = APIRouter()
 
@@ -31,13 +40,17 @@ async def get_my_subscription(
     current_user: User = Depends(require_user),
     subscription_repo: SubscriptionRepository = Depends(get_subscription_repo),
     telegram_repo: TelegramUserConfigRepository = Depends(get_telegram_user_config_repo),
+    telegram_connection_repo: TelegramConnectionRepository = Depends(get_telegram_connection_repo),
 ) -> SubscriptionUsageRead:
     snapshot = await subscription_repo.get_snapshot(current_user.id)
     consumed, reserved = await subscription_repo.usage_counts(
         user_id=current_user.id,
         period=snapshot.period,
     )
-    telegram_used = await telegram_repo.count_active_monitors_by_user(current_user.id)
+    legacy_telegram_used = await telegram_repo.count_active_monitors_by_user(current_user.id)
+    telegram_used = legacy_telegram_used + await telegram_connection_repo.count_active_sources_by_user(
+        current_user.id
+    )
     # WeCom currently has a global webhook and no user-owned group configuration table.
     # Keep this explicit until that real integration exists instead of presenting mock usage.
     wecom_used = 0

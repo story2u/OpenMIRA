@@ -19,6 +19,7 @@ from app.infrastructure.db.repositories import (
     ReplyTemplateRepository,
     RuleRepository,
     SubscriptionRepository,
+    TelegramConnectionRepository,
     TelegramUserConfigRepository,
     UserRepository,
 )
@@ -105,6 +106,12 @@ def get_telegram_user_config_repo(
     session: AsyncSession = Depends(get_session),
 ) -> TelegramUserConfigRepository:
     return TelegramUserConfigRepository(session)
+
+
+def get_telegram_connection_repo(
+    session: AsyncSession = Depends(get_session),
+) -> TelegramConnectionRepository:
+    return TelegramConnectionRepository(session)
 
 
 async def get_work_time_service(

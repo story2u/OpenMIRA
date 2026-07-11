@@ -91,3 +91,31 @@ class UsageStatus(StrEnum):
     RESERVED = "reserved"
     CONSUMED = "consumed"
     RELEASED = "released"
+
+
+class TelegramConnectionType(StrEnum):
+    BOT_CHAT = "bot_chat"
+    BUSINESS = "business"
+    MTPROTO_QR = "mtproto_qr"
+
+
+class TelegramConnectionStatus(StrEnum):
+    PENDING = "pending"
+    CONNECTED = "connected"
+    DISABLED = "disabled"
+    ERROR = "error"
+    EXPIRED = "expired"
+
+
+class TelegramConnectionAttemptStatus(StrEnum):
+    PENDING = "pending"
+    COMPLETED = "completed"
+    CANCELLED = "cancelled"
+    EXPIRED = "expired"
+    FAILED = "failed"
+
+
+class TelegramSourceType(StrEnum):
+    GROUP = "group"
+    CHANNEL = "channel"
+    PRIVATE = "private"

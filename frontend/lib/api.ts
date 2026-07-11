@@ -11,6 +11,9 @@ import type {
   PlanEntitlements,
   SubscriptionUsage,
   TelegramDialog,
+  TelegramConnection,
+  TelegramConnectionAttempt,
+  TelegramConnectionHealth,
   TelegramUserConfig,
   TelegramUserConfigUpdate,
 } from './types'
@@ -105,6 +108,9 @@ async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
       // Keep the HTTP status fallback when the response is not JSON.
     }
     throw new Error(detail)
+  }
+  if (response.status === 204) {
+    return undefined as T
   }
   return response.json() as Promise<T>
 }
@@ -220,4 +226,56 @@ export async function verifyTelegramCode(loginId: string, code: string, password
 
 export async function fetchTelegramDialogs(): Promise<TelegramDialog[]> {
   return fetchJson<TelegramDialog[]>('/api/v1/integrations/telegram-user/dialogs')
+}
+
+export async function fetchTelegramConnectionHealth(): Promise<TelegramConnectionHealth> {
+  return fetchJson<TelegramConnectionHealth>('/api/v1/integrations/telegram/health')
+}
+
+export async function fetchTelegramConnections(): Promise<TelegramConnection[]> {
+  return fetchJson<TelegramConnection[]>('/api/v1/integrations/telegram/connections')
+}
+
+export async function startTelegramBotChatConnection(): Promise<TelegramConnectionAttempt> {
+  return fetchJson<TelegramConnectionAttempt>('/api/v1/integrations/telegram/connect/bot-chat', {
+    method: 'POST',
+  })
+}
+
+export async function startTelegramBusinessConnection(): Promise<TelegramConnectionAttempt> {
+  return fetchJson<TelegramConnectionAttempt>('/api/v1/integrations/telegram/connect/business', {
+    method: 'POST',
+  })
+}
+
+export async function fetchTelegramConnectionAttempt(attemptId: string): Promise<TelegramConnectionAttempt> {
+  return fetchJson<TelegramConnectionAttempt>(`/api/v1/integrations/telegram/connect/attempts/${attemptId}`)
+}
+
+export async function cancelTelegramConnectionAttempt(attemptId: string): Promise<TelegramConnectionAttempt> {
+  return fetchJson<TelegramConnectionAttempt>(`/api/v1/integrations/telegram/connect/attempts/${attemptId}/cancel`, {
+    method: 'POST',
+  })
+}
+
+export async function updateTelegramConnection(
+  connectionId: string,
+  enabled: boolean,
+): Promise<TelegramConnection> {
+  return fetchJson<TelegramConnection>(`/api/v1/integrations/telegram/connections/${connectionId}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ enabled }),
+  })
+}
+
+export async function deleteTelegramConnection(connectionId: string): Promise<void> {
+  return fetchJson<void>(`/api/v1/integrations/telegram/connections/${connectionId}`, {
+    method: 'DELETE',
+  })
+}
+
+export async function deleteTelegramConnectionSource(sourceId: string): Promise<void> {
+  return fetchJson<void>(`/api/v1/integrations/telegram/sources/${sourceId}`, {
+    method: 'DELETE',
+  })
 }

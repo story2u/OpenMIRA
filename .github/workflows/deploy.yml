@@ -121,6 +121,12 @@ jobs:
       RUNTIME_DEFAULT_WORK_START: ${{ vars.DEFAULT_WORK_START }}
       RUNTIME_DEFAULT_WORK_END: ${{ vars.DEFAULT_WORK_END }}
       RUNTIME_PENDING_HUMAN_SLA_MINUTES: ${{ vars.PENDING_HUMAN_SLA_MINUTES }}
+      RUNTIME_TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      RUNTIME_TELEGRAM_BOT_USERNAME: ${{ vars.TELEGRAM_BOT_USERNAME }}
+      RUNTIME_TELEGRAM_MTPROTO_QR_ENABLED: ${{ vars.TELEGRAM_MTPROTO_QR_ENABLED || 'false' }}
+      RUNTIME_TELEGRAM_MTPROTO_QR_WORKER_ENABLED: ${{ vars.TELEGRAM_MTPROTO_QR_WORKER_ENABLED || 'false' }}
+      RUNTIME_TELEGRAM_MTPROTO_API_ID: ${{ vars.TELEGRAM_MTPROTO_API_ID }}
+      RUNTIME_TELEGRAM_MTPROTO_API_HASH: ${{ secrets.TELEGRAM_MTPROTO_API_HASH }}
       RUNTIME_AI_ENABLED: ${{ vars.AI_ENABLED }}
       RUNTIME_LITELLM_MODEL: ${{ vars.LITELLM_MODEL }}
       RUNTIME_OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
@@ -238,6 +244,12 @@ jobs:
           append_env DEFAULT_WORK_START "$RUNTIME_DEFAULT_WORK_START"
           append_env DEFAULT_WORK_END "$RUNTIME_DEFAULT_WORK_END"
           append_env PENDING_HUMAN_SLA_MINUTES "$RUNTIME_PENDING_HUMAN_SLA_MINUTES"
+          append_env TELEGRAM_BOT_TOKEN "$RUNTIME_TELEGRAM_BOT_TOKEN"
+          append_env TELEGRAM_BOT_USERNAME "$RUNTIME_TELEGRAM_BOT_USERNAME"
+          append_env TELEGRAM_MTPROTO_QR_ENABLED "$RUNTIME_TELEGRAM_MTPROTO_QR_ENABLED"
+          append_env TELEGRAM_MTPROTO_QR_WORKER_ENABLED "$RUNTIME_TELEGRAM_MTPROTO_QR_WORKER_ENABLED"
+          append_env TELEGRAM_MTPROTO_API_ID "$RUNTIME_TELEGRAM_MTPROTO_API_ID"
+          append_env TELEGRAM_MTPROTO_API_HASH "$RUNTIME_TELEGRAM_MTPROTO_API_HASH"
           append_env AI_ENABLED "$RUNTIME_AI_ENABLED"
           append_env LITELLM_MODEL "$RUNTIME_LITELLM_MODEL"
           append_env OPENAI_API_KEY "$RUNTIME_OPENAI_API_KEY"
@@ -309,6 +321,12 @@ jobs:
 
           if raw_value("JWT_SECRET_KEY") in {"", "change-me", "change-me-with-a-long-random-string"}:
               upsert("JWT_SECRET_KEY", f'JWT_SECRET_KEY="{secrets.token_urlsafe(48)}"')
+
+          if raw_value("TELEGRAM_WEBHOOK_SECRET") in {"", "change-me"}:
+              upsert(
+                  "TELEGRAM_WEBHOOK_SECRET",
+                  f'TELEGRAM_WEBHOOK_SECRET="{secrets.token_urlsafe(32)}"',
+              )
 
           base_path.write_text("\n".join(lines).rstrip() + "\n")
           incoming_path.unlink(missing_ok=True)
@@ -419,6 +437,11 @@ jobs:
           if [ -n "$runtime_services" ]; then
             echo "Starting runtime services:$runtime_services"
             docker compose --env-file .env up -d --remove-orphans --no-deps --force-recreate $runtime_services
+          fi
+
+          api_container="$(docker compose --env-file .env ps -q api || true)"
+          if [ -n "$api_container" ]; then
+            docker compose --env-file .env exec -T api python scripts/register_telegram_webhook.py
           fi
 
           echo "Cleaning up dangling images..."
