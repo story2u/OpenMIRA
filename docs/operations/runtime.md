@@ -1,6 +1,6 @@
 # 运行与运维
 
-> 状态：当前事实 · 最后核验：2026-07-10
+> 状态：当前事实 · 最后核验：2026-07-11
 
 ## 服务拓扑
 
@@ -25,7 +25,7 @@ Docker context。CI 分别验证两个锁文件。
 | Web/Auth | `FRONTEND_BASE_URL`、`CORS_ORIGINS`、`JWT_SECRET_KEY`、`ADMIN_API_TOKEN` | 生产必须使用强随机值 |
 | OAuth | `GOOGLE_*`、`APPLE_*` | 至少配置一个 provider；Apple secret 可由 key material 生成 |
 | 工作模式 | `DEFAULT_TIMEZONE`、`DEFAULT_WORKDAYS`、`DEFAULT_WORK_START/END`、`PENDING_HUMAN_SLA_MINUTES` | 决定人工/AI 路由与超时 |
-| Telegram | `TELEGRAM_BOT_TOKEN`、`TELEGRAM_WEBHOOK_SECRET`、`TELEGRAM_FREE_MONITOR_LIMIT` | Bot webhook 和用户监听限制 |
+| Telegram | `TELEGRAM_BOT_TOKEN`、`TELEGRAM_WEBHOOK_SECRET` | Bot webhook；用户监听数量由订阅 entitlement 决定 |
 | 企业微信 | `WECOM_CORP_ID`、`WECOM_AGENT_ID`、`WECOM_SECRET`、`WECOM_TOKEN`、`WECOM_AES_KEY` | webhook 验签、解密与发送 |
 | AI/发送 | `AI_ENABLED`、`LITELLM_MODEL`、`OPENAI_API_KEY`、`IM_SEND_ENABLED` | 两个功能开关默认关闭 |
 | pi Agent | `PI_AGENT_ENABLED`、`PI_AGENT_PROVIDER`、`PI_AGENT_MODEL`、`PI_AGENT_API_KEY`、`PI_AGENT_*TIMEOUT*`、`PI_AGENT_MAX_*` | 默认开启；DeepSeek 可由 GitHub `DEEPSEEK_API_KEY` Secret 映射，OpenAI 可回退使用 `OPENAI_API_KEY` |
@@ -36,9 +36,14 @@ Docker context。CI 分别验证两个锁文件。
 ## 队列
 
 worker 监听 `default,im,ai,agent`。关键任务定义在 `backend/app/worker/tasks.py`：AI 回复、pi 消息
-后处理和人工 SLA 超时扫描。`agent.analyze_message` 最多自动重试 3 次，子进程另有硬超时；Message
-状态和 source message 唯一索引提供重复任务保护。新增任务时需要明确 queue、超时、重试、幂等键
-和可观测字段，并同步 compose/部署配置。
+后处理和人工 SLA 超时扫描。`agent.analyze_message` 入队前在 PostgreSQL 原子预留用户额度，成功后
+转为 consumed，最终重试失败或入队失败转为 released；最多自动重试 3 次，子进程另有硬超时。
+Message 状态、usage ledger 幂等键和 source message 唯一索引共同提供重复任务保护。新增任务时需要
+明确 queue、超时、重试、幂等键和可观测字段，并同步 compose/部署配置。
+
+Telegram listener 每轮加载配置时按有效套餐重算 monitor 配额。降级超额项仅设置
+`quota_paused/quota_reason` 并停止对应 listener，不删除群配置；用户通过设置页选择保留项后，下一轮
+刷新会停止旧 listener、启动新选择。升级会恢复容量内暂停项，同时保留用户选择优先级。
 
 ## 健康与启动顺序
 

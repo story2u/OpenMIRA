@@ -6,6 +6,7 @@ from app.api.deps import (
     get_message_repo,
     get_opportunity_repo,
     get_rule_repo,
+    get_subscription_repo,
     get_task_queue,
     get_work_time_service,
 )
@@ -14,7 +15,12 @@ from app.application.use_cases.ingest_message import IngestMessageUseCase
 from app.domain.enums import IMChannel
 from app.domain.services.detection_policy import OpportunityDetector
 from app.infrastructure.db.models import Opportunity
-from app.infrastructure.db.repositories import MessageRepository, OpportunityRepository, RuleRepository
+from app.infrastructure.db.repositories import (
+    MessageRepository,
+    OpportunityRepository,
+    RuleRepository,
+    SubscriptionRepository,
+)
 from app.infrastructure.im.base import AdapterRegistry
 from app.worker.queue import CeleryTaskQueue
 
@@ -31,6 +37,7 @@ async def telegram_webhook(
     detector: OpportunityDetector = Depends(get_detector),
     work_time=Depends(get_work_time_service),
     task_queue: CeleryTaskQueue = Depends(get_task_queue),
+    subscription_repo: SubscriptionRepository = Depends(get_subscription_repo),
 ) -> dict:
     payload = await request.json()
     adapter = adapters.get(IMChannel.TELEGRAM)
@@ -45,6 +52,7 @@ async def telegram_webhook(
         detector=detector,
         work_time=work_time,
         task_queue=task_queue,
+        subscription_repo=subscription_repo,
     )
     result = await use_case.execute(inbound)
     response = {"ok": True, "id": str(result.id), "type": result.__class__.__name__}

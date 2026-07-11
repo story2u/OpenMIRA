@@ -149,5 +149,11 @@ class TaskQueue(Protocol):
     def notify_reviewers(self, opportunity_id: UUID) -> None:
         ...
 
-    def enqueue_agent_analysis(self, message_id: UUID, *, force: bool = False) -> bool:
+    def enqueue_agent_analysis(
+        self,
+        message_id: UUID,
+        *,
+        force: bool = False,
+        usage_ledger_id: UUID | None = None,
+    ) -> bool:
         ...

@@ -111,8 +111,16 @@ class FakeTaskQueue:
     def enqueue_ai_reply(self, opportunity_id) -> None:
         raise AssertionError(f"must not auto reply to agent-created opportunity {opportunity_id}")
 
-    def enqueue_agent_analysis(self, message_id, *, force=False) -> bool:
-        raise AssertionError(f"must not recursively enqueue {message_id}/{force}")
+    def enqueue_agent_analysis(
+        self,
+        message_id,
+        *,
+        force=False,
+        usage_ledger_id=None,
+    ) -> bool:
+        raise AssertionError(
+            f"must not recursively enqueue {message_id}/{force}/{usage_ledger_id}"
+        )
 
 
 async def test_pi_agent_can_promote_rule_miss_but_only_to_human_review() -> None:

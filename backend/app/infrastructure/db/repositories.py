@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
@@ -16,9 +17,21 @@ from app.domain.enums import (
     MessageDirection,
     MessageSource,
     OpportunityStatus,
+    PlanCode,
     Priority,
+    SubscriptionStatus,
+    UsageFeature,
+    UsageStatus,
 )
 from app.domain.ports import AgentAnalysisProjection, DetectionRule, InboundMessage
+from app.domain.services.subscription_policy import (
+    BillingPeriod,
+    PlanEntitlements,
+    effective_plan_code,
+    ensure_group_quota,
+    get_plan_entitlements,
+    utc_calendar_month,
+)
 from app.infrastructure.db.models import (
     AppConfig,
     AuthAccount,
@@ -26,8 +39,10 @@ from app.infrastructure.db.models import (
     Opportunity,
     ReplyTemplate,
     Rule,
+    SubscriptionAccount,
     TelegramMonitor,
     TelegramUserConfig,
+    UsageLedger,
     User,
     utc_now,
 )
@@ -190,6 +205,192 @@ class UserRepository:
         return user
 
 
+@dataclass(frozen=True, slots=True)
+class SubscriptionSnapshot:
+    plan_code: PlanCode
+    subscription_status: SubscriptionStatus
+    period: BillingPeriod
+    entitlements: PlanEntitlements
+    cancel_at_period_end: bool
+
+
+@dataclass(frozen=True, slots=True)
+class UsageReservation:
+    allowed: bool
+    created: bool
+    ledger: UsageLedger | None
+    limit: int
+    allocated: int
+
+
+class SubscriptionRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self.session = session
+
+    async def get_account(self, user_id: UUID) -> SubscriptionAccount | None:
+        statement = select(SubscriptionAccount).where(SubscriptionAccount.user_id == user_id)
+        result = await self.session.exec(statement)
+        return result.first()
+
+    async def get_snapshot(
+        self,
+        user_id: UUID,
+        *,
+        now: datetime | None = None,
+    ) -> SubscriptionSnapshot:
+        current = now or utc_now()
+        account = await self.get_account(user_id)
+        plan_code = effective_plan_code(
+            plan_code=account.plan_code if account else None,
+            status=account.status if account else None,
+            period_start=account.current_period_start if account else None,
+            period_end=account.current_period_end if account else None,
+            now=current,
+        )
+        if (
+            account
+            and plan_code != PlanCode.FREE
+            and account.current_period_start
+            and account.current_period_end
+        ):
+            period = BillingPeriod(
+                start=account.current_period_start,
+                end=account.current_period_end,
+            )
+        else:
+            period = utc_calendar_month(current)
+        return SubscriptionSnapshot(
+            plan_code=plan_code,
+            subscription_status=(account.status if account else SubscriptionStatus.INACTIVE),
+            period=period,
+            entitlements=get_plan_entitlements(plan_code),
+            cancel_at_period_end=bool(account and account.cancel_at_period_end),
+        )
+
+    async def reserve_agent_analysis(
+        self,
+        *,
+        user_id: UUID,
+        message_id: UUID,
+        idempotency_key: str,
+        now: datetime | None = None,
+    ) -> UsageReservation:
+        current = now or utc_now()
+        normalized_key = idempotency_key.strip()[:255]
+        if not normalized_key:
+            raise ValueError("idempotency_key is required")
+        # The user row is the per-owner serialization point, including Free users who do not
+        # have a subscription_accounts row. This prevents concurrent reservations overspending.
+        user = await self.session.get(User, user_id, with_for_update=True)
+        if not user or not user.is_active:
+            await self.session.rollback()
+            return UsageReservation(False, False, None, 0, 0)
+
+        existing_statement = select(UsageLedger).where(
+            UsageLedger.user_id == user_id,
+            UsageLedger.feature == UsageFeature.PI_AGENT_ANALYSIS,
+            UsageLedger.idempotency_key == normalized_key,
+        )
+        existing_result = await self.session.exec(existing_statement)
+        existing = existing_result.first()
+        snapshot = await self.get_snapshot(user_id, now=current)
+        limit = snapshot.entitlements.pi_agent_analysis_monthly_limit
+        allocated = await self._allocated_usage(user_id, snapshot.period)
+        if existing:
+            reservation = UsageReservation(
+                allowed=existing.status in {UsageStatus.RESERVED, UsageStatus.CONSUMED},
+                created=False,
+                ledger=existing,
+                limit=limit,
+                allocated=allocated,
+            )
+            await self.session.commit()
+            return reservation
+        if allocated >= limit:
+            await self.session.rollback()
+            return UsageReservation(False, False, None, limit, allocated)
+
+        ledger = UsageLedger(
+            user_id=user_id,
+            feature=UsageFeature.PI_AGENT_ANALYSIS,
+            quantity=1,
+            period_start=snapshot.period.start,
+            period_end=snapshot.period.end,
+            idempotency_key=normalized_key,
+            source_message_id=message_id,
+            status=UsageStatus.RESERVED,
+        )
+        self.session.add(ledger)
+        await self.session.commit()
+        await self.session.refresh(ledger)
+        return UsageReservation(True, True, ledger, limit, allocated + 1)
+
+    async def usage_counts(
+        self,
+        *,
+        user_id: UUID,
+        period: BillingPeriod,
+    ) -> tuple[int, int]:
+        statement = (
+            select(UsageLedger.status, func.sum(UsageLedger.quantity))
+            .where(
+                UsageLedger.user_id == user_id,
+                UsageLedger.feature == UsageFeature.PI_AGENT_ANALYSIS,
+                UsageLedger.period_start == period.start,
+                UsageLedger.period_end == period.end,
+                UsageLedger.status.in_([UsageStatus.RESERVED, UsageStatus.CONSUMED]),
+            )
+            .group_by(UsageLedger.status)
+        )
+        result = await self.session.exec(statement)
+        counts = {status: int(quantity) for status, quantity in result.all()}
+        return counts.get(UsageStatus.CONSUMED, 0), counts.get(UsageStatus.RESERVED, 0)
+
+    async def consume_usage(self, ledger_id: UUID) -> UsageLedger | None:
+        ledger = await self.session.get(UsageLedger, ledger_id, with_for_update=True)
+        if not ledger:
+            return None
+        if ledger.status == UsageStatus.CONSUMED:
+            return ledger
+        if ledger.status != UsageStatus.RESERVED:
+            return ledger
+        now = utc_now()
+        ledger.status = UsageStatus.CONSUMED
+        ledger.consumed_at = now
+        ledger.updated_at = now
+        self.session.add(ledger)
+        await self.session.commit()
+        await self.session.refresh(ledger)
+        return ledger
+
+    async def release_usage(self, ledger_id: UUID, reason: str) -> UsageLedger | None:
+        ledger = await self.session.get(UsageLedger, ledger_id, with_for_update=True)
+        if not ledger:
+            return None
+        if ledger.status != UsageStatus.RESERVED:
+            return ledger
+        now = utc_now()
+        ledger.status = UsageStatus.RELEASED
+        ledger.released_at = now
+        ledger.failure_reason = reason[:500]
+        ledger.updated_at = now
+        self.session.add(ledger)
+        await self.session.commit()
+        await self.session.refresh(ledger)
+        return ledger
+
+    async def _allocated_usage(self, user_id: UUID, period: BillingPeriod) -> int:
+        statement = select(func.coalesce(func.sum(UsageLedger.quantity), 0)).where(
+            UsageLedger.user_id == user_id,
+            UsageLedger.feature == UsageFeature.PI_AGENT_ANALYSIS,
+            UsageLedger.period_start == period.start,
+            UsageLedger.period_end == period.end,
+            UsageLedger.status.in_([UsageStatus.RESERVED, UsageStatus.CONSUMED]),
+        )
+        result = await self.session.exec(statement)
+        return int(result.one())
+
+
 class MessageRepository:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
@@ -235,6 +436,26 @@ class MessageRepository:
         message.agent_error = None
         message.updated_at = utc_now()
         self.session.add(message)
+        await self.session.commit()
+        await self.session.refresh(message)
+        return message
+
+    async def mark_agent_quota_exceeded(self, message_id: UUID) -> Message | None:
+        message = await self.session.get(Message, message_id)
+        if not message:
+            return None
+        now = utc_now()
+        message.agent_analysis_status = AgentAnalysisStatus.QUOTA_EXCEEDED
+        message.agent_error = "monthly pi agent analysis quota exceeded"
+        message.updated_at = now
+        self.session.add(message)
+        if message.opportunity_id:
+            opportunity = await self.session.get(Opportunity, message.opportunity_id)
+            if opportunity:
+                opportunity.agent_analysis_status = AgentAnalysisStatus.QUOTA_EXCEEDED
+                opportunity.agent_analysis_error = message.agent_error
+                opportunity.updated_at = now
+                self.session.add(opportunity)
         await self.session.commit()
         await self.session.refresh(message)
         return message
@@ -605,6 +826,8 @@ class ConfigRepository:
 
 
 class TelegramUserConfigRepository:
+    MONITOR_QUOTA_REASON = "paused because the current subscription group quota was exceeded"
+
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
@@ -622,15 +845,114 @@ class TelegramUserConfigRepository:
         result = await self.session.exec(statement)
         return list(result.all())
 
-    async def list_enabled_monitors(self) -> list[tuple[TelegramUserConfig, TelegramMonitor]]:
+    async def count_active_monitors_by_user(self, user_id: UUID) -> int:
+        statement = (
+            select(func.count())
+            .select_from(TelegramMonitor)
+            .join(TelegramUserConfig, TelegramMonitor.telegram_config_id == TelegramUserConfig.id)
+            .where(
+                TelegramMonitor.user_id == user_id,
+                TelegramUserConfig.enabled.is_(True),
+                TelegramMonitor.enabled.is_(True),
+                TelegramMonitor.quota_paused.is_(False),
+            )
+        )
+        result = await self.session.exec(statement)
+        return int(result.one())
+
+    async def list_enabled_user_ids(self) -> list[UUID]:
+        statement = (
+            select(TelegramMonitor.user_id)
+            .join(TelegramUserConfig, TelegramMonitor.telegram_config_id == TelegramUserConfig.id)
+            .where(TelegramMonitor.enabled.is_(True))
+            .where(TelegramUserConfig.enabled.is_(True))
+            .distinct()
+        )
+        result = await self.session.exec(statement)
+        return list(result.all())
+
+    async def reconcile_monitor_quota_for_user(
+        self,
+        *,
+        user_id: UUID,
+        capacity: int,
+    ) -> list[tuple[TelegramUserConfig, TelegramMonitor]]:
+        user = await self.session.get(User, user_id, with_for_update=True)
+        if not user or not user.is_active:
+            await self.session.rollback()
+            return []
         statement = (
             select(TelegramUserConfig, TelegramMonitor)
             .join(TelegramMonitor, TelegramMonitor.telegram_config_id == TelegramUserConfig.id)
-            .where(TelegramMonitor.enabled.is_(True))
-            .order_by(col(TelegramMonitor.updated_at).asc())
+            .where(
+                TelegramUserConfig.user_id == user_id,
+                TelegramUserConfig.enabled.is_(True),
+                TelegramMonitor.enabled.is_(True),
+            )
+            .order_by(
+                col(TelegramMonitor.retention_priority).desc(),
+                col(TelegramMonitor.quota_paused).asc(),
+                col(TelegramMonitor.created_at).asc(),
+            )
         )
         result = await self.session.exec(statement)
-        return [(row[0], row[1]) for row in result.all()]
+        rows = [(row[0], row[1]) for row in result.all()]
+        active: list[tuple[TelegramUserConfig, TelegramMonitor]] = []
+        now = utc_now()
+        for index, (config, monitor) in enumerate(rows):
+            should_pause = index >= capacity
+            if monitor.quota_paused != should_pause:
+                monitor.quota_paused = should_pause
+                monitor.updated_at = now
+            monitor.quota_reason = self.MONITOR_QUOTA_REASON if should_pause else None
+            self.session.add(monitor)
+            if not should_pause:
+                active.append((config, monitor))
+        await self.session.commit()
+        return active
+
+    async def select_retained_monitors(
+        self,
+        *,
+        user_id: UUID,
+        monitor_ids: list[UUID],
+        capacity: int,
+    ) -> list[TelegramMonitor]:
+        user = await self.session.get(User, user_id, with_for_update=True)
+        if not user or not user.is_active:
+            raise ValueError("active user is required")
+        config = await self.get_by_user(user_id)
+        if not config:
+            raise ValueError("Telegram account is not configured")
+        monitors = await self.list_monitors_by_user(user_id)
+        enabled_monitors = [monitor for monitor in monitors if monitor.enabled]
+        selected_ids = set(monitor_ids)
+        enabled_ids = {monitor.id for monitor in enabled_monitors}
+        if selected_ids - enabled_ids:
+            raise ValueError("retained monitors must belong to the current user and be enabled")
+        if len(selected_ids) > capacity:
+            raise ValueError(f"current plan allows {capacity} retained Telegram monitors")
+        if len(enabled_monitors) <= capacity:
+            raise ValueError("monitor retention selection is not required for the current plan")
+        if len(selected_ids) != capacity:
+            raise ValueError(f"select exactly {capacity} Telegram monitors to retain")
+
+        now = utc_now()
+        for monitor in enabled_monitors:
+            retained = monitor.id in selected_ids
+            monitor.quota_paused = not retained
+            monitor.quota_reason = None if retained else self.MONITOR_QUOTA_REASON
+            monitor.retention_priority = 100 if retained else 0
+            monitor.updated_at = now
+            self.session.add(monitor)
+        config.retention_limit = capacity
+        config.retention_selected_at = now
+        config.updated_at = now
+        self.session.add(config)
+        await self.session.commit()
+        for monitor in monitors:
+            await self.session.refresh(monitor)
+        return monitors
 
     async def save_account_for_user(
         self,
@@ -664,17 +986,47 @@ class TelegramUserConfigRepository:
         chats: list[str | int],
         enabled: bool,
         backfill_limit: int,
+        entitlements: PlanEntitlements,
+        enabled_wecom_groups: int = 0,
     ) -> list[TelegramMonitor]:
+        user = await self.session.get(User, user_id, with_for_update=True)
+        if not user or not user.is_active:
+            raise ValueError("active user is required")
         existing = {monitor.chat_id: monitor for monitor in await self.list_monitors_by_user(user_id)}
         desired_chat_ids = list(dict.fromkeys(str(chat) for chat in chats))
+        current_active_chat_ids = {
+            monitor.chat_id
+            for monitor in existing.values()
+            if monitor.enabled and not monitor.quota_paused
+        }
+        active_selection_changed = set(desired_chat_ids) != current_active_chat_ids
+        ensure_group_quota(
+            entitlements=entitlements,
+            telegram_groups=len(desired_chat_ids) if enabled else 0,
+            wecom_groups=enabled_wecom_groups,
+        )
         config = await self.session.get(TelegramUserConfig, telegram_config_id)
         if config:
             config.enabled = enabled
+            if not enabled or active_selection_changed:
+                config.retention_limit = None
+                config.retention_selected_at = None
             config.updated_at = utc_now()
             self.session.add(config)
 
+        if active_selection_changed or not enabled:
+            for monitor in existing.values():
+                monitor.retention_priority = 0
+                self.session.add(monitor)
+
         for chat_id, monitor in list(existing.items()):
-            if chat_id not in desired_chat_ids:
+            if not enabled:
+                monitor.enabled = False
+                monitor.quota_paused = False
+                monitor.quota_reason = None
+                monitor.updated_at = utc_now()
+                self.session.add(monitor)
+            elif chat_id not in desired_chat_ids and not monitor.quota_paused:
                 await self.session.delete(monitor)
 
         monitors: list[TelegramMonitor] = []
@@ -687,6 +1039,8 @@ class TelegramUserConfigRepository:
                     chat_id=chat,
                 )
             monitor.enabled = enabled
+            monitor.quota_paused = False
+            monitor.quota_reason = None
             monitor.backfill_limit = backfill_limit
             monitor.updated_at = utc_now()
             self.session.add(monitor)

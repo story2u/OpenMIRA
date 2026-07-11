@@ -1,6 +1,6 @@
 'use client'
 
-import { Bell, ChevronRight, Clock, MessageSquare, Send, Tags, X } from 'lucide-react'
+import { Bell, ChevronRight, Clock, CreditCard, MessageSquare, Send, Tags, X } from 'lucide-react'
 import Link from 'next/link'
 import { useState } from 'react'
 import { Badge } from '@/components/ui/badge'
@@ -39,6 +39,24 @@ export default function SettingsPage() {
       </header>
 
       <div className="flex flex-col gap-5">
+        <section aria-labelledby="subscription-heading">
+          <h2 id="subscription-heading" className="mb-2.5 text-sm font-semibold text-muted-foreground">
+            订阅
+          </h2>
+          <Link href="/settings/subscription" className="block">
+            <Card className="flex-row items-center gap-3 rounded-xl p-4 shadow-sm transition-shadow hover:shadow-md">
+              <span className="flex size-10 items-center justify-center rounded-lg bg-violet-500/15 text-violet-600 dark:text-violet-400">
+                <CreditCard className="size-5" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium">套餐与用量</p>
+                <p className="text-xs text-muted-foreground">查看群监控和 AI 分析额度</p>
+              </div>
+              <ChevronRight className="size-4 text-muted-foreground" />
+            </Card>
+          </Link>
+        </section>
+
         {/* 平台绑定 */}
         <section aria-labelledby="platform-heading">
           <h2 id="platform-heading" className="mb-2.5 text-sm font-semibold text-muted-foreground">

@@ -45,9 +45,17 @@ def test_agent_queue_routes_message_id_and_force_flag(monkeypatch) -> None:
         lambda name, args: sent.append((name, args)),
     )
     message_id = uuid4()
+    ledger_id = uuid4()
 
-    assert CeleryTaskQueue().enqueue_agent_analysis(message_id, force=True) is True
-    assert sent == [("agent.analyze_message", [str(message_id), True])]
+    assert (
+        CeleryTaskQueue().enqueue_agent_analysis(
+            message_id,
+            force=True,
+            usage_ledger_id=ledger_id,
+        )
+        is True
+    )
+    assert sent == [("agent.analyze_message", [str(message_id), True, str(ledger_id)])]
 
 
 def test_agent_queue_is_a_noop_until_provider_key_is_configured(monkeypatch) -> None:

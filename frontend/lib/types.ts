@@ -1,8 +1,16 @@
 export type Platform = 'telegram' | 'wecom'
+export type PlanCode = 'free' | 'plus' | 'pro' | 'max'
+export type SubscriptionStatus = 'active' | 'trialing' | 'past_due' | 'canceled' | 'inactive'
 export type OpportunityStatus = 'pending' | 'replied' | 'ignored'
 export type Priority = 'low' | 'normal' | 'high' | 'urgent'
 export type MessageSource = 'human' | 'ai' | null
-export type AgentAnalysisStatus = 'not_requested' | 'queued' | 'running' | 'completed' | 'failed'
+export type AgentAnalysisStatus =
+  | 'not_requested'
+  | 'quota_exceeded'
+  | 'queued'
+  | 'running'
+  | 'completed'
+  | 'failed'
 export type AgentActionType = 'send_email' | 'add_friend' | 'private_message' | 'notify_user'
 
 export type SourceType = 'group' | 'private'
@@ -114,6 +122,8 @@ export interface TelegramMonitor {
   chatId: string
   chatTitle: string | null
   backfillLimit: number
+  quotaPaused: boolean
+  quotaReason: string | null
   lastError: string | null
   updatedAt: string | null
 }
@@ -125,6 +135,10 @@ export interface TelegramUserConfig {
   monitors: TelegramMonitor[]
   monitorLimit: number
   canCreateMore: boolean
+  activeMonitorCount: number
+  storedMonitorCount: number
+  retentionSelectionRequired: boolean
+  retentionSelectedAt: string | null
   updatedAt: string | null
 }
 
@@ -141,4 +155,27 @@ export interface TelegramDialog {
   id: number
   name: string
   username: string | null
+}
+
+export interface PlanEntitlements {
+  planCode: PlanCode
+  telegramGroupLimit: number | null
+  wecomGroupLimit: number | null
+  combinedGroupLimit: number
+  piAgentAnalysisMonthlyLimit: number
+}
+
+export interface SubscriptionUsage {
+  planCode: PlanCode
+  subscriptionStatus: SubscriptionStatus
+  periodStart: string
+  periodEnd: string
+  cancelAtPeriodEnd: boolean
+  entitlements: PlanEntitlements
+  telegramGroupsUsed: number
+  wecomGroupsUsed: number
+  combinedGroupsUsed: number
+  aiAnalysesConsumed: number
+  aiAnalysesReserved: number
+  aiAnalysesRemaining: number
 }

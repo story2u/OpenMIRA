@@ -1,10 +1,12 @@
 'use client'
 
-import { ArrowLeft, Check, KeyRound, ListChecks, RefreshCw, Send, ShieldCheck } from 'lucide-react'
+import { ArrowLeft, Check, KeyRound, ListChecks, PauseCircle, RefreshCw, Send, ShieldCheck } from 'lucide-react'
 import Link from 'next/link'
 import { FormEvent, useEffect, useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
@@ -13,6 +15,7 @@ import {
   fetchTelegramDialogs,
   fetchTelegramUserConfig,
   sendTelegramCode,
+  updateTelegramMonitorRetention,
   updateTelegramUserConfig,
   verifyTelegramCode,
 } from '@/lib/api'
@@ -54,6 +57,8 @@ export default function TelegramSettingsPage() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [retentionSaving, setRetentionSaving] = useState(false)
+  const [retainedMonitorIds, setRetainedMonitorIds] = useState<Set<string>>(() => new Set())
 
   const selectedChats = useMemo(() => new Set(parseChats(chatsText).map(String)), [chatsText])
   const monitorLimit = config?.monitorLimit ?? 1
@@ -64,13 +69,25 @@ export default function TelegramSettingsPage() {
         .filter((item): item is string => Boolean(item)) ?? [],
     [config],
   )
+  const enabledMonitors = useMemo(
+    () => config?.monitors.filter((monitor) => monitor.enabled) ?? [],
+    [config],
+  )
+  const hasOverQuotaMonitors = enabledMonitors.length > monitorLimit
 
   function applyConfig(nextConfig: TelegramUserConfig) {
     const firstMonitor = nextConfig.monitors[0]
+    const enabledActiveMonitors = nextConfig.monitors.filter(
+      (monitor) => monitor.enabled && !monitor.quotaPaused,
+    )
+    const editableMonitors = nextConfig.monitors.some((monitor) => monitor.enabled)
+      ? enabledActiveMonitors
+      : nextConfig.monitors
     setConfig(nextConfig)
     setEnabled(nextConfig.monitors.some((monitor) => monitor.enabled))
     setApiId(nextConfig.apiId ? String(nextConfig.apiId) : '')
-    setChatsText(chatsToText(nextConfig.monitors.map((monitor) => monitor.chatId)))
+    setChatsText(chatsToText(editableMonitors.map((monitor) => monitor.chatId)))
+    setRetainedMonitorIds(new Set(enabledActiveMonitors.map((monitor) => monitor.id)))
     setBackfillLimit(String(firstMonitor?.backfillLimit || 50))
   }
 
@@ -187,6 +204,42 @@ export default function TelegramSettingsPage() {
     }
   }
 
+  function toggleRetainedMonitor(monitorId: string, checked: boolean) {
+    setError('')
+    setRetainedMonitorIds((current) => {
+      const next = new Set(current)
+      if (checked) {
+        if (next.size >= monitorLimit) {
+          setError(`当前套餐只能保留 ${monitorLimit} 个群/频道`)
+          return current
+        }
+        next.add(monitorId)
+      } else {
+        next.delete(monitorId)
+      }
+      return next
+    })
+  }
+
+  async function handleSaveRetention() {
+    setError('')
+    setStatusText('')
+    if (retainedMonitorIds.size !== monitorLimit) {
+      setError(`请选择恰好 ${monitorLimit} 个要继续监听的群/频道`)
+      return
+    }
+    setRetentionSaving(true)
+    try {
+      const nextConfig = await updateTelegramMonitorRetention([...retainedMonitorIds])
+      applyConfig(nextConfig)
+      setStatusText('已保存降级后的保留群，其余群保持暂停')
+    } catch (exc) {
+      setError(exc instanceof Error ? exc.message : '保存保留群失败')
+    } finally {
+      setRetentionSaving(false)
+    }
+  }
+
   return (
     <div className="mx-auto w-full max-w-4xl px-4 py-6 md:px-8">
       <div className="mb-6 flex items-center gap-2">
@@ -204,6 +257,69 @@ export default function TelegramSettingsPage() {
           <p className="text-xs text-muted-foreground">每个登录用户独立保存一套监听配置</p>
         </div>
       </div>
+
+      {hasOverQuotaMonitors ? (
+        <Card className="mb-5 gap-4 border-warning/40 bg-warning/5 p-4 shadow-sm md:p-5">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="flex items-start gap-3">
+              <span className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-lg bg-warning/15 text-warning">
+                <PauseCircle className="size-5" />
+              </span>
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h2 className="text-sm font-semibold">选择降级后继续监听的群</h2>
+                  <Badge variant={config?.retentionSelectionRequired ? 'destructive' : 'secondary'}>
+                    {config?.retentionSelectionRequired ? '需要确认' : '已选择'}
+                  </Badge>
+                </div>
+                <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                  当前保存了 {enabledMonitors.length} 个群，本套餐可继续监听 {monitorLimit} 个。未选中的群只会暂停，配置不会被删除。
+                </p>
+              </div>
+            </div>
+            <span className="text-sm font-medium">
+              已选择 {retainedMonitorIds.size} / {monitorLimit}
+            </span>
+          </div>
+
+          <div className="grid gap-2 sm:grid-cols-2">
+            {enabledMonitors.map((monitor) => {
+              const checked = retainedMonitorIds.has(monitor.id)
+              const disabled = !checked && retainedMonitorIds.size >= monitorLimit
+              return (
+                <label
+                  key={monitor.id}
+                  className="flex cursor-pointer items-center gap-3 rounded-lg border bg-background px-3 py-3 has-disabled:cursor-not-allowed has-disabled:opacity-60"
+                >
+                  <Checkbox
+                    checked={checked}
+                    disabled={disabled}
+                    onCheckedChange={(nextChecked) => toggleRetainedMonitor(monitor.id, nextChecked)}
+                    aria-label={`保留 ${monitor.chatTitle || monitor.name || monitor.chatId}`}
+                  />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-medium">
+                      {monitor.chatTitle || monitor.name || monitor.chatId}
+                    </span>
+                    <span className="block truncate font-mono text-[11px] text-muted-foreground">
+                      {monitor.chatId}
+                    </span>
+                  </span>
+                  <Badge variant={checked ? 'secondary' : 'outline'}>
+                    {checked ? '继续监听' : '暂停'}
+                  </Badge>
+                </label>
+              )
+            })}
+          </div>
+
+          <div className="flex justify-end">
+            <Button type="button" onClick={handleSaveRetention} disabled={retentionSaving}>
+              {retentionSaving ? '保存中' : '保存保留选择'}
+            </Button>
+          </div>
+        </Card>
+      ) : null}
 
       <form className="grid gap-5 lg:grid-cols-[1fr_320px]" onSubmit={handleSave}>
         <div className="flex flex-col gap-5">
@@ -332,7 +448,7 @@ export default function TelegramSettingsPage() {
               <p>API Hash：{config?.apiHashConfigured ? '已保存' : '未配置'}</p>
               <p>Session：{config?.sessionConfigured ? '已保存' : '未配置'}</p>
               <p>
-                监听目标：{parseChats(chatsText).length} / {monitorLimit}
+                正在监听：{config?.activeMonitorCount ?? parseChats(chatsText).length} / {monitorLimit}
               </p>
               {monitorErrors.map((item) => (
                 <p key={item} className="text-destructive">

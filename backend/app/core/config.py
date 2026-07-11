@@ -38,8 +38,6 @@ class Settings(BaseSettings):
     apple_oauth_key_id: str = ""
     apple_oauth_private_key: str = ""
 
-    telegram_free_monitor_limit: int = 1
-
     default_timezone: str = "Asia/Shanghai"
     default_workdays: list[int] = Field(default_factory=lambda: [1, 2, 3, 4, 5])
     default_work_start: str = "09:00"

@@ -1,6 +1,6 @@
-from uuid import UUID
+from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 
 from app.api.deps import (
     get_adapter_registry,
@@ -8,6 +8,7 @@ from app.api.deps import (
     get_opportunity_or_404,
     get_opportunity_repo,
     get_reply_generator,
+    get_subscription_repo,
     get_task_queue,
     require_user,
 )
@@ -22,6 +23,7 @@ from app.application.dto import (
 from app.application.mappers import to_opportunity_detail, to_opportunity_read
 from app.application.use_cases.ai_reply import AIDraftUseCase
 from app.application.use_cases.manual_reply import ManualReplyUseCase
+from app.application.use_cases.schedule_agent_analysis import ScheduleAgentAnalysisUseCase
 from app.domain.enums import AgentAnalysisStatus, FrontendOpportunityStatus, IMChannel
 from app.domain.services.opportunity_state import (
     InvalidOpportunityTransition,
@@ -29,7 +31,11 @@ from app.domain.services.opportunity_state import (
 )
 from app.infrastructure.ai.litellm_client import LiteLLMReplyGenerator
 from app.infrastructure.db.models import Opportunity, User
-from app.infrastructure.db.repositories import MessageRepository, OpportunityRepository
+from app.infrastructure.db.repositories import (
+    MessageRepository,
+    OpportunityRepository,
+    SubscriptionRepository,
+)
 from app.infrastructure.im.base import AdapterRegistry
 from app.worker.queue import CeleryTaskQueue
 
@@ -109,10 +115,12 @@ async def generate_ai_draft(
     status_code=status.HTTP_202_ACCEPTED,
 )
 async def enqueue_agent_analysis(
-    _: User = Depends(require_user),
+    current_user: User = Depends(require_user),
     opportunity: Opportunity = Depends(get_opportunity_or_404),
     message_repo: MessageRepository = Depends(get_message_repo),
+    subscription_repo: SubscriptionRepository = Depends(get_subscription_repo),
     task_queue: CeleryTaskQueue = Depends(get_task_queue),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ) -> AgentAnalysisEnqueueRead:
     if not opportunity.source_message_id:
         raise HTTPException(
@@ -120,31 +128,43 @@ async def enqueue_agent_analysis(
             detail="opportunity has no source message to analyze",
         )
     source_message = await message_repo.get(opportunity.source_message_id)
-    if not source_message:
+    if not source_message or source_message.owner_user_id != current_user.id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="source message not found")
     if source_message.agent_analysis_status == AgentAnalysisStatus.RUNNING:
         return AgentAnalysisEnqueueRead(
             messageId=source_message.id,
             status=AgentAnalysisStatus.RUNNING,
         )
-    message = await message_repo.mark_agent_queued(opportunity.source_message_id, force=True)
-    assert message is not None
-    if not task_queue.enqueue_agent_analysis(opportunity.source_message_id, force=True):
-        await message_repo.fail_agent_analysis(
-            opportunity.source_message_id,
-            "pi agent is disabled or the analysis queue is unavailable",
+    request_key = (idempotency_key or str(uuid4())).strip()
+    if not request_key or len(request_key) > 200:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Idempotency-Key must contain between 1 and 200 characters",
         )
+    result = await ScheduleAgentAnalysisUseCase(
+        message_repo=message_repo,
+        subscription_repo=subscription_repo,
+        task_queue=task_queue,
+    ).execute(
+        source_message,
+        idempotency_key=f"manual:{request_key}",
+        force=True,
+    )
+    if result.status == AgentAnalysisStatus.QUOTA_EXCEEDED:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=(
+                f"monthly pi agent quota exceeded ({result.quota_allocated}/{result.quota_limit})"
+            ),
+        )
+    if result.status == AgentAnalysisStatus.FAILED:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="pi agent is disabled or the analysis queue is unavailable",
         )
     return AgentAnalysisEnqueueRead(
-        messageId=message.id,
-        status=(
-            AgentAnalysisStatus.RUNNING
-            if message.agent_analysis_status == AgentAnalysisStatus.RUNNING
-            else AgentAnalysisStatus.QUEUED
-        ),
+        messageId=result.message_id,
+        status=result.status,
     )
 
 

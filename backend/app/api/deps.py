@@ -18,6 +18,7 @@ from app.infrastructure.db.repositories import (
     OpportunityRepository,
     ReplyTemplateRepository,
     RuleRepository,
+    SubscriptionRepository,
     TelegramUserConfigRepository,
     UserRepository,
 )
@@ -94,6 +95,10 @@ def get_template_repo(session: AsyncSession = Depends(get_session)) -> ReplyTemp
 
 def get_user_repo(session: AsyncSession = Depends(get_session)) -> UserRepository:
     return UserRepository(session)
+
+
+def get_subscription_repo(session: AsyncSession = Depends(get_session)) -> SubscriptionRepository:
+    return SubscriptionRepository(session)
 
 
 def get_telegram_user_config_repo(

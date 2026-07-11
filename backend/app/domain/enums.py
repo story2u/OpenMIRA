@@ -46,6 +46,7 @@ class RuleType(StrEnum):
 
 class AgentAnalysisStatus(StrEnum):
     NOT_REQUESTED = "not_requested"
+    QUOTA_EXCEEDED = "quota_exceeded"
     QUEUED = "queued"
     RUNNING = "running"
     COMPLETED = "completed"
@@ -65,3 +66,28 @@ class LinkSafetyStatus(StrEnum):
     SAFE = "safe"
     SUSPICIOUS = "suspicious"
     MALICIOUS = "malicious"
+
+
+class PlanCode(StrEnum):
+    FREE = "free"
+    PLUS = "plus"
+    PRO = "pro"
+    MAX = "max"
+
+
+class SubscriptionStatus(StrEnum):
+    ACTIVE = "active"
+    TRIALING = "trialing"
+    PAST_DUE = "past_due"
+    CANCELED = "canceled"
+    INACTIVE = "inactive"
+
+
+class UsageFeature(StrEnum):
+    PI_AGENT_ANALYSIS = "pi_agent_analysis"
+
+
+class UsageStatus(StrEnum):
+    RESERVED = "reserved"
+    CONSUMED = "consumed"
+    RELEASED = "released"

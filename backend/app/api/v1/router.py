@@ -8,8 +8,9 @@ from app.api.v1.routes import (
     opportunities,
     rules,
     stats,
-    templates,
+    subscriptions,
     telegram_user_configs,
+    templates,
     webhooks_telegram,
     webhooks_wecom,
 )
@@ -25,6 +26,7 @@ api_router.include_router(rules.router, prefix="/rules", tags=["rules"])
 api_router.include_router(configs.router, prefix="/configs", tags=["configs"])
 api_router.include_router(templates.router, prefix="/templates", tags=["templates"])
 api_router.include_router(stats.router, prefix="/stats", tags=["stats"])
+api_router.include_router(subscriptions.router, prefix="/subscriptions", tags=["subscriptions"])
 api_router.include_router(
     telegram_user_configs.router,
     prefix="/integrations/telegram-user",

@@ -8,9 +8,15 @@ from telethon import TelegramClient
 from telethon.errors import SessionPasswordNeededError
 from telethon.sessions import StringSession
 
-from app.api.deps import get_redis_client, get_telegram_user_config_repo, require_user
+from app.api.deps import (
+    get_redis_client,
+    get_subscription_repo,
+    get_telegram_user_config_repo,
+    require_user,
+)
 from app.application.dto import (
     TelegramDialogRead,
+    TelegramMonitorRetentionUpdate,
     TelegramSendCodeRead,
     TelegramSendCodeRequest,
     TelegramUserConfigRead,
@@ -21,8 +27,9 @@ from app.application.dto import (
 from app.application.mappers import to_telegram_user_config_read
 from app.core.config import Settings, get_settings
 from app.core.security import decrypt_secret, encrypt_secret
+from app.domain.services.subscription_policy import GroupQuotaExceeded, telegram_group_capacity
 from app.infrastructure.db.models import TelegramUserConfig, User
-from app.infrastructure.db.repositories import TelegramUserConfigRepository
+from app.infrastructure.db.repositories import SubscriptionRepository, TelegramUserConfigRepository
 
 router = APIRouter()
 
@@ -97,14 +104,20 @@ def decrypted_telegram_credentials(
 
 @router.get("/config", response_model=TelegramUserConfigRead)
 async def get_config(
-    settings: Settings = Depends(get_settings),
     current_user: User = Depends(require_user),
     repo: TelegramUserConfigRepository = Depends(get_telegram_user_config_repo),
+    subscription_repo: SubscriptionRepository = Depends(get_subscription_repo),
 ) -> TelegramUserConfigRead:
+    snapshot = await subscription_repo.get_snapshot(current_user.id)
+    monitor_limit = telegram_group_capacity(snapshot.entitlements)
+    await repo.reconcile_monitor_quota_for_user(
+        user_id=current_user.id,
+        capacity=monitor_limit,
+    )
     return to_telegram_user_config_read(
         await repo.get_by_user(current_user.id),
         await repo.list_monitors_by_user(current_user.id),
-        monitor_limit=settings.telegram_free_monitor_limit,
+        monitor_limit=monitor_limit,
     )
 
 
@@ -114,7 +127,10 @@ async def update_config(
     settings: Settings = Depends(get_settings),
     current_user: User = Depends(require_user),
     repo: TelegramUserConfigRepository = Depends(get_telegram_user_config_repo),
+    subscription_repo: SubscriptionRepository = Depends(get_subscription_repo),
 ) -> TelegramUserConfigRead:
+    snapshot = await subscription_repo.get_snapshot(current_user.id)
+    monitor_limit = telegram_group_capacity(snapshot.entitlements)
     existing = await repo.get_by_user(current_user.id)
     api_id = payload.apiId if payload.apiId is not None else existing.api_id if existing else None
     api_hash_encrypted = (
@@ -126,11 +142,11 @@ async def update_config(
         else None
     )
     chats = normalize_chats(payload.chats)
-    if len(chats) > settings.telegram_free_monitor_limit:
-        suffix = "" if settings.telegram_free_monitor_limit == 1 else "s"
+    if len(chats) > monitor_limit:
+        suffix = "" if monitor_limit == 1 else "s"
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"current plan allows {settings.telegram_free_monitor_limit} Telegram monitor{suffix}",
+            detail=f"current plan allows {monitor_limit} Telegram monitor{suffix}",
         )
     has_api_hash = bool(api_hash_encrypted or (existing and existing.api_hash_encrypted))
     has_session = bool(session_encrypted or (existing and existing.session_encrypted))
@@ -148,17 +164,50 @@ async def update_config(
         api_hash_encrypted=api_hash_encrypted,
         session_encrypted=session_encrypted,
     )
-    monitors = await repo.replace_monitors_for_user(
-        user_id=current_user.id,
-        telegram_config_id=config.id,
-        chats=chats,
-        enabled=payload.enabled,
-        backfill_limit=payload.backfillLimit,
+    try:
+        await repo.replace_monitors_for_user(
+            user_id=current_user.id,
+            telegram_config_id=config.id,
+            chats=chats,
+            enabled=payload.enabled,
+            backfill_limit=payload.backfillLimit,
+            entitlements=snapshot.entitlements,
+        )
+    except GroupQuotaExceeded as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+    return to_telegram_user_config_read(
+        config,
+        await repo.list_monitors_by_user(current_user.id),
+        monitor_limit=monitor_limit,
     )
+
+
+@router.put("/monitors/retention", response_model=TelegramUserConfigRead)
+async def update_monitor_retention(
+    payload: TelegramMonitorRetentionUpdate,
+    current_user: User = Depends(require_user),
+    repo: TelegramUserConfigRepository = Depends(get_telegram_user_config_repo),
+    subscription_repo: SubscriptionRepository = Depends(get_subscription_repo),
+) -> TelegramUserConfigRead:
+    snapshot = await subscription_repo.get_snapshot(current_user.id)
+    monitor_limit = telegram_group_capacity(snapshot.entitlements)
+    try:
+        monitors = await repo.select_retained_monitors(
+            user_id=current_user.id,
+            monitor_ids=payload.monitorIds,
+            capacity=monitor_limit,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc),
+        ) from exc
+    config = await repo.get_by_user(current_user.id)
+    assert config is not None
     return to_telegram_user_config_read(
         config,
         monitors,
-        monitor_limit=settings.telegram_free_monitor_limit,
+        monitor_limit=monitor_limit,
     )
 
 
@@ -199,6 +248,7 @@ async def verify_code(
     current_user: User = Depends(require_user),
     redis: Redis = Depends(get_redis_client),
     repo: TelegramUserConfigRepository = Depends(get_telegram_user_config_repo),
+    subscription_repo: SubscriptionRepository = Depends(get_subscription_repo),
 ) -> TelegramVerifyCodeRead:
     key = login_key(current_user.id, payload.loginId)
     raw_payload = await redis.get(key)
@@ -236,7 +286,9 @@ async def verify_code(
             config=to_telegram_user_config_read(
                 config,
                 await repo.list_monitors_by_user(current_user.id),
-                monitor_limit=settings.telegram_free_monitor_limit,
+                monitor_limit=telegram_group_capacity(
+                    (await subscription_repo.get_snapshot(current_user.id)).entitlements
+                ),
             ),
         )
     except Exception as exc:

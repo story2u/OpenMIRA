@@ -1,6 +1,6 @@
 # 架构总览
 
-> 状态：当前事实 · 最后核验：2026-07-10 · 代码真相源：`backend/app/`、`frontend/`
+> 状态：当前事实 · 最后核验：2026-07-11 · 代码真相源：`backend/app/`、`frontend/`
 
 ## 系统上下文
 
@@ -33,7 +33,7 @@ flowchart LR
 | Celery beat | 同上 | 周期调度待人工商机超时检查 |
 | pi Agent runner | `backend/pi-agent-runtime/src/index.mjs` | 由 worker 按消息启动；只提交结构化分析，不持有业务动作权限 |
 | Telegram listener | `backend/app/worker/telegram_listener.py` | 按用户启动 MTProto 监听器并复用消息摄取用例 |
-| PostgreSQL | SQLModel + Alembic | 用户、认证账号、消息、商机、规则、配置、模板、Telegram 配置 |
+| PostgreSQL | SQLModel + Alembic | 用户、订阅/用量账本、消息、商机、规则、配置、模板、Telegram 配置 |
 | Redis | DB 0/1/2 | 应用临时状态、Celery broker、Celery result backend |
 
 本地编排见 `backend/docker-compose.yml`；生产镜像编排见
@@ -82,13 +82,15 @@ ADR 和迁移计划，不要在单个功能中半途改造。
 | 模型 | 作用 | 关键关系/约束 |
 | --- | --- | --- |
 | `User` / `AuthAccount` | 本地用户与 OAuth 身份 | provider + subject 唯一；资源按 `user_id` 隔离 |
+| `SubscriptionAccount` | 用户付费状态与当前 billing period | user 唯一；只有 active/trialing 且在周期内的付费套餐生效 |
+| `UsageLedger` | AI 功能额度的可审计账本 | user + feature + idempotency key 唯一；reserved/consumed/released |
 | `Message` | 收发消息审计记录 | channel + external_message_id 幂等；保存 pi 分析状态/结果；可关联 opportunity |
 | `Opportunity` | 商机聚合根 | 持有来源、检测结果、Agent 投影、状态、草稿与最终回复；source_message 唯一 |
 | `Rule` | 关键词/正则/AI hint 规则 | 启用、优先级、分数驱动检测策略 |
 | `AppConfig` | 运行期业务配置 | JSONB value；当前包含工作时间等配置 |
 | `ReplyTemplate` | 人工回复模板 | 可启用、分类 |
-| `TelegramUserConfig` | 用户级 MTProto 凭据 | `api_hash`、session 加密存储，每用户唯一 |
-| `TelegramMonitor` | 用户要监听的会话 | user + chat 唯一；受免费数量限制 |
+| `TelegramUserConfig` | 用户级 MTProto 凭据与降级选择版本 | `api_hash`、session 加密存储，每用户唯一；记录已确认的 retention limit |
+| `TelegramMonitor` | 用户要监听的会话 | user + chat 唯一；区分用户 enabled 与套餐 quota_paused，并保存保留优先级 |
 
 结构变更以 `backend/alembic/versions/` 的迁移历史为准；模型变更必须配套新迁移。
 
@@ -120,7 +122,12 @@ sequenceDiagram
         U->>DB: 创建 AI_AUTO_REPLY Opportunity
         U->>Q: enqueue_ai_reply
     end
-    U->>Q: enqueue agent.analyze_message（开启时）
+    U->>DB: 按 owner 锁定并预留 pi Agent 月额度
+    alt owner 缺失或额度耗尽
+        U->>DB: fail closed / quota_exceeded
+    else 额度可用
+        U->>Q: enqueue agent.analyze_message（开启且 provider 已配置）
+    end
     Q->>Q: 验证 URL / 限制抓取
     Q->>P: 规范化消息 + 链接证据
     P-->>Q: submit_analysis 结构化建议
@@ -143,6 +150,12 @@ sequenceDiagram
 - Python 再用 Pydantic 校验并执行确定性投影：链接读取器的风险不能被模型降级；邮件、好友申请、
   私信建议强制需要人工批准；内部重大商机提醒可以直接展示。
 - Agent 高置信补判商机时只创建 `PENDING_HUMAN`，不能让模型把自己路由到自动回复。
+- 自动分析使用 message 级幂等键，手工重跑接受 `Idempotency-Key`；两条路径都在 enqueue 前通过
+  `SubscriptionRepository` 预留额度。worker 成功结算，最终失败释放；Free 使用 UTC 自然月，付费
+  用户使用有效 subscription period。无 owner 消息不运行 Agent，也不占用任何用户额度。
+- Telegram 配置读取和 listener 每次刷新都重新解析有效套餐；套餐到期后，按用户保留优先级启动
+  额度内 monitor，超额项标记 `quota_paused` 而不删除。用户可在设置页重新选择保留群；选择写入当前
+  retention limit，升级后优先级仍保留，未来再次降级可复用。
 
 ### 回复
 

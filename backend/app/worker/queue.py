@@ -15,7 +15,13 @@ class CeleryTaskQueue:
     def notify_reviewers(self, opportunity_id: UUID) -> None:
         logger.info("opportunity.pending_review", opportunity_id=str(opportunity_id))
 
-    def enqueue_agent_analysis(self, message_id: UUID, *, force: bool = False) -> bool:
+    def enqueue_agent_analysis(
+        self,
+        message_id: UUID,
+        *,
+        force: bool = False,
+        usage_ledger_id: UUID | None = None,
+    ) -> bool:
         settings = get_settings()
         if not settings.pi_agent_enabled:
             return False
@@ -27,7 +33,10 @@ class CeleryTaskQueue:
             )
             return False
         try:
-            celery_app.send_task("agent.analyze_message", args=[str(message_id), force])
+            celery_app.send_task(
+                "agent.analyze_message",
+                args=[str(message_id), force, str(usage_ledger_id) if usage_ledger_id else None],
+            )
         except Exception:
             logger.exception("agent.analysis_enqueue_failed", message_id=str(message_id))
             return False

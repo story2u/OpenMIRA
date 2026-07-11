@@ -18,19 +18,18 @@ ADR-0002 为降低首次上线风险，将 `PI_AGENT_ENABLED` 设计为默认关
   `deepseek-v4-flash`；需要更强推理时可配置 `deepseek-v4-pro`。
 - 缺少 key 时不入队并记录非敏感配置告警；无效 key 的任务安全失败。不允许静默切换 provider、
   使用匿名服务或 mock。
-- 免费用户额度和订阅 entitlement 在独立执行计划中实现；在完成前，默认开启不等于已经具备用量
-  限制或付费隔离。
+- 免费用户额度和订阅 entitlement 由后续 ADR-0004 定义；默认开启不等于绕过套餐额度。
 
 ## 后果
 
 正面影响：部署只需提供 provider 配置即可自动处理新消息；本地、生产和文档默认值一致；仍保留
 全局 kill switch。
 
-风险与成本：订阅计量上线前，有效 key 会允许所有可归属消息消耗模型额度；provider 故障会形成
-失败/重试流量。生产负责人应设置 provider 预算告警，并在成本异常时把 GitHub Variable
+风险与成本：provider 故障会形成失败/重试流量；用量账本限制分析任务数，但不能代替 provider
+token/金额预算。生产负责人应设置 provider 预算告警，并在成本异常时把 GitHub Variable
 `PI_AGENT_ENABLED` 设为 `false` 后通过正常 release 流程部署。
 
 ## 后续
 
-实施 `docs/plans/active/2026-07-11-subscriptions-and-agent-quotas.md`，在 enqueue 之前增加原子额度预留、
-订阅 entitlement、usage ledger、升级入口和账单 webhook。完成前不得声称非订阅用户已经受限。
+继续实施 `docs/plans/active/2026-07-11-subscriptions-and-agent-quotas.md` 中尚未完成的支付 webhook、
+企微用户级群配置、降级选群和账单管理。

@@ -14,6 +14,7 @@ from app.infrastructure.db.repositories import (
     ConfigRepository,
     MessageRepository,
     OpportunityRepository,
+    SubscriptionRepository,
 )
 from app.infrastructure.db.session import AsyncSessionLocal
 from app.infrastructure.im.base import AdapterRegistry
@@ -37,16 +38,28 @@ def generate_and_send_reply(opportunity_id: str) -> None:
 
 
 @celery_app.task(
+    bind=True,
     name="agent.analyze_message",
     queue="agent",
-    autoretry_for=(Exception,),
-    retry_backoff=True,
-    retry_kwargs={"max_retries": 3},
+    max_retries=3,
     soft_time_limit=135,
     time_limit=150,
 )
-def analyze_message(message_id: str, force: bool = False) -> None:
-    asyncio.run(_analyze_message(UUID(message_id), force=force))
+def analyze_message(
+    task,
+    message_id: str,
+    force: bool = False,
+    usage_ledger_id: str | None = None,
+) -> None:
+    ledger_id = UUID(usage_ledger_id) if usage_ledger_id else None
+    try:
+        asyncio.run(_analyze_message(UUID(message_id), force=force, usage_ledger_id=ledger_id))
+    except Exception as exc:
+        if task.request.retries >= task.max_retries:
+            if ledger_id:
+                asyncio.run(_release_agent_usage(ledger_id, "pi agent analysis failed after retries"))
+            raise
+        raise task.retry(exc=exc, countdown=min(2 ** (task.request.retries + 1), 30)) from exc
 
 
 @celery_app.task(name="opportunity.sweep_pending_for_ai", queue="default")
@@ -84,10 +97,25 @@ async def _generate_and_send_reply(opportunity_id: UUID) -> None:
         await use_case.execute(opportunity)
 
 
-async def _analyze_message(message_id: UUID, *, force: bool) -> None:
+async def _analyze_message(
+    message_id: UUID,
+    *,
+    force: bool,
+    usage_ledger_id: UUID | None,
+) -> None:
     settings = get_settings()
     if not settings.pi_agent_enabled:
         logger.info("agent.analysis_disabled", message_id=str(message_id))
+        async with AsyncSessionLocal() as session:
+            await MessageRepository(session).fail_agent_analysis(
+                message_id,
+                "pi agent was disabled before execution",
+            )
+            if usage_ledger_id:
+                await SubscriptionRepository(session).release_usage(
+                    usage_ledger_id,
+                    "pi agent was disabled before execution",
+                )
         return
 
     async with AsyncSessionLocal() as session:
@@ -115,11 +143,18 @@ async def _analyze_message(message_id: UUID, *, force: bool) -> None:
             max_links=settings.pi_agent_max_links,
         )
         opportunity = await use_case.execute(message_id, force=force)
+        if usage_ledger_id:
+            await SubscriptionRepository(session).consume_usage(usage_ledger_id)
         logger.info(
             "agent.analysis_completed",
             message_id=str(message_id),
             opportunity_id=str(opportunity.id) if opportunity else None,
         )
+
+
+async def _release_agent_usage(ledger_id: UUID, reason: str) -> None:
+    async with AsyncSessionLocal() as session:
+        await SubscriptionRepository(session).release_usage(ledger_id, reason)
 
 
 async def _sweep_pending_for_ai() -> None:

@@ -110,6 +110,15 @@ export function StepDiscovery({ opportunity }: { opportunity: Opportunity }) {
         </div>
       )}
 
+      {opportunity.agentAnalysisStatus === 'quota_exceeded' && (
+        <div role="alert" className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3">
+          <p className="text-sm font-medium text-amber-700 dark:text-amber-400">本月 AI 分析额度已用完</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            可在“设置 → 套餐与用量”查看当前额度；升级功能将在支付接入后开放。
+          </p>
+        </div>
+      )}
+
       {opportunity.agentActions.length > 0 && (
         <div className="rounded-lg border bg-primary/5 p-3">
           <p className="mb-2 text-xs font-medium text-muted-foreground">pi Agent 后续行动建议</p>

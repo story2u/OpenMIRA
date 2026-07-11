@@ -11,12 +11,14 @@ from app.core.config import Settings, get_settings
 from app.core.security import decrypt_secret
 from app.core.time_window import WorkTimeConfig, WorkTimeService
 from app.domain.services.detection_policy import OpportunityDetector
+from app.domain.services.subscription_policy import telegram_group_capacity
 from app.infrastructure.ai.litellm_client import LiteLLMOpportunityClassifier
 from app.infrastructure.db.repositories import (
     ConfigRepository,
     MessageRepository,
     OpportunityRepository,
     RuleRepository,
+    SubscriptionRepository,
     TelegramUserConfigRepository,
 )
 from app.infrastructure.db.session import AsyncSessionLocal
@@ -44,6 +46,7 @@ async def ingest(inbound) -> None:
             detector=OpportunityDetector(ai_classifier=LiteLLMOpportunityClassifier(settings)),
             work_time=WorkTimeService(work_time_config),
             task_queue=CeleryTaskQueue(),
+            subscription_repo=SubscriptionRepository(session),
         )
         result = await use_case.execute(inbound)
         logger.info(
@@ -65,29 +68,42 @@ async def load_enabled_client_configs(
     configs: dict[UUID, tuple[datetime, TelegramUserClientConfig]] = {}
     async with AsyncSessionLocal() as session:
         repo = TelegramUserConfigRepository(session)
-        for db_config, monitor in await repo.list_enabled_monitors():
-            if (
-                not db_config.api_id
-                or not db_config.api_hash_encrypted
-                or not db_config.session_encrypted
-                or not monitor.chat_id
-            ):
-                await repo.record_monitor_error(monitor.id, "enabled monitor config is incomplete")
-                continue
-            try:
-                configs[monitor.id] = (
-                    max(db_config.updated_at, monitor.updated_at),
-                    TelegramUserClientConfig(
-                        user_id=db_config.user_id,
-                        api_id=db_config.api_id,
-                        api_hash=decrypt_secret(db_config.api_hash_encrypted, settings),
-                        session_string=decrypt_secret(db_config.session_encrypted, settings),
-                        chats=[monitor.chat_id],
-                        backfill_limit=monitor.backfill_limit,
-                    ),
-                )
-            except ValueError as exc:
-                await repo.record_monitor_error(monitor.id, str(exc))
+        subscription_repo = SubscriptionRepository(session)
+        for user_id in await repo.list_enabled_user_ids():
+            snapshot = await subscription_repo.get_snapshot(user_id)
+            active_monitors = await repo.reconcile_monitor_quota_for_user(
+                user_id=user_id,
+                capacity=telegram_group_capacity(snapshot.entitlements),
+            )
+            for db_config, monitor in active_monitors:
+                if (
+                    not db_config.api_id
+                    or not db_config.api_hash_encrypted
+                    or not db_config.session_encrypted
+                    or not monitor.chat_id
+                ):
+                    await repo.record_monitor_error(
+                        monitor.id,
+                        "enabled monitor config is incomplete",
+                    )
+                    continue
+                try:
+                    configs[monitor.id] = (
+                        max(db_config.updated_at, monitor.updated_at),
+                        TelegramUserClientConfig(
+                            user_id=db_config.user_id,
+                            api_id=db_config.api_id,
+                            api_hash=decrypt_secret(db_config.api_hash_encrypted, settings),
+                            session_string=decrypt_secret(
+                                db_config.session_encrypted,
+                                settings,
+                            ),
+                            chats=[monitor.chat_id],
+                            backfill_limit=monitor.backfill_limit,
+                        ),
+                    )
+                except ValueError as exc:
+                    await repo.record_monitor_error(monitor.id, str(exc))
     return configs
 
 

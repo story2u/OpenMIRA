@@ -121,6 +121,8 @@ def to_telegram_monitor_read(monitor: TelegramMonitor) -> TelegramMonitorRead:
         chatId=monitor.chat_id,
         chatTitle=monitor.chat_title,
         backfillLimit=monitor.backfill_limit,
+        quotaPaused=monitor.quota_paused,
+        quotaReason=monitor.quota_reason,
         lastError=monitor.last_error,
         updatedAt=monitor.updated_at,
     )
@@ -132,11 +134,19 @@ def to_telegram_user_config_read(
     monitor_limit: int = 1,
 ) -> TelegramUserConfigRead:
     monitor_reads = [to_telegram_monitor_read(monitor) for monitor in monitors or []]
+    enabled_monitors = [monitor for monitor in monitors or [] if monitor.enabled]
+    active_monitor_count = sum(not monitor.quota_paused for monitor in enabled_monitors)
+    retention_selection_required = len(enabled_monitors) > monitor_limit and (
+        not config or config.retention_limit != monitor_limit
+    )
     if not config:
         return TelegramUserConfigRead(
             monitors=monitor_reads,
             monitorLimit=monitor_limit,
-            canCreateMore=len(monitor_reads) < monitor_limit,
+            canCreateMore=len(enabled_monitors) < monitor_limit,
+            activeMonitorCount=active_monitor_count,
+            storedMonitorCount=len(monitor_reads),
+            retentionSelectionRequired=retention_selection_required,
         )
     return TelegramUserConfigRead(
         apiId=config.api_id,
@@ -144,6 +154,10 @@ def to_telegram_user_config_read(
         sessionConfigured=bool(config.session_encrypted),
         monitors=monitor_reads,
         monitorLimit=monitor_limit,
-        canCreateMore=len(monitor_reads) < monitor_limit,
+        canCreateMore=len(enabled_monitors) < monitor_limit,
+        activeMonitorCount=active_monitor_count,
+        storedMonitorCount=len(monitor_reads),
+        retentionSelectionRequired=retention_selection_required,
+        retentionSelectedAt=config.retention_selected_at,
         updatedAt=config.updated_at,
     )

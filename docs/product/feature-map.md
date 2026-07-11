@@ -1,6 +1,6 @@
 # 功能地图
 
-> 状态：当前事实 · 最后核验：2026-07-10
+> 状态：当前事实 · 最后核验：2026-07-11
 
 本地图用成熟度区分“仓库里有 UI/数据结构”和“用户端到端可用”。AI 开发前必须先确认目标
 能力所在行，避免沿着 mock 或占位 DTO 继续实现。
@@ -25,14 +25,15 @@
 | 商机状态更新/认领 | 看板/详情部分交互 | `PATCH .../status`、`POST .../claim` | 部分实现 | 后端已实现；前端状态动作多为本地更新 |
 | 回复模板读取 | `/templates` | `GET /templates` | 已实现 | 登录后加载；空结果会回退到 mock 模板，应在生产化时移除静默回退 |
 | 回复模板编辑 | `/templates` | `POST/PATCH /templates` | 部分实现 | 后端 admin API 已有；前端新增/编辑只改本地 store |
-| Telegram 普通账号配置 | `/settings/telegram` | `/integrations/telegram-user/*` | 已实现 | 登录码、2FA、会话、dialogs、monitor 均连接后端 |
+| Telegram 普通账号配置 | `/settings/telegram` | `/integrations/telegram-user/*` | 已实现 | 登录码、2FA、会话、dialogs、monitor 均连接后端；数量按套餐限制，降级后可选择保留群且不删除暂停配置 |
 | Telegram Bot webhook | 无 | `POST /webhooks/telegram` | 已实现 | 验签、规范化、摄取；bot 必须在目标群中 |
 | Telegram MTProto 监听 | 配置页 | 独立 listener | 已实现 | 每用户监听已授权会话；默认只摄取，不用个人账号发送 |
 | 企业微信 webhook | 设置页显示绑定卡 | `GET/POST /webhooks/wecom` | 已实现 | 后端验签/解密/摄取；前端绑定状态目前是静态展示 |
 | 规则管理 | `/settings` | CRUD `/rules` | 部分实现 | 后端 admin API 已有；前端关键词与 AI 开关仅本地状态 |
 | 工作时间配置 | `/settings/working-hours` | `/configs/work-mode`、`PATCH /configs/{key}` | 部分实现 | 后端可读写；前端编辑只在本地状态 |
 | 统计摘要 | 无独立展示 | `GET /stats/summary` | 部分实现 | API 已有，前端未消费 |
-| pi Agent 消息后处理 | 看板提醒、详情页 SOP | Celery `agent.analyze_message`、`POST .../agent-analysis` | 部分实现 | 新消息异步分析、补判商机、结构化建议；默认开启，依赖有效 provider key，订阅额度尚未实施 |
+| pi Agent 消息后处理 | 看板提醒、详情页 SOP | Celery `agent.analyze_message`、`POST .../agent-analysis` | 部分实现 | 新消息异步分析、补判商机、结构化建议；默认开启，依赖有效 provider key，并执行套餐月额度 |
+| 订阅套餐与用量 | `/settings/subscription` | `GET /subscriptions/plans`、`GET /subscriptions/me` | 部分实现 | Free/Plus/Pro/Max entitlement、AI 账本、TG 限额和降级保留选择已实现；尚无支付/升级和用户级企微群配置 |
 | 链接安全核验 | 详情页 SOP | SafeLinkInspector + pi Agent | 已实现 | 公网/重定向/大小限制、结果持久化、可重跑；不是恶意软件扫描器，生产需受控 egress |
 | 联系方式提取 | 详情页 SOP | pi Agent 结果投影 | 部分实现 | 消息/公开网页中的联系方式可持久化；详情页手工编辑仍只更新浏览器状态 |
 | 后续行动建议 | 详情页发现步骤 | pi Agent 结构化 actions | 已实现 | 可建议邮件、加好友、私信和内部提醒；外部动作强制标记需人工批准，不会自动执行 |
@@ -54,6 +55,7 @@
 | AI 分类/回复 | `backend/app/infrastructure/ai/litellm_client.py` |
 | 异步任务 | `backend/app/worker/tasks.py`、`queue.py` |
 | pi Agent 后处理 | `backend/app/application/use_cases/analyze_message.py`、`infrastructure/agent/`、`pi-agent-runtime/` |
+| 订阅与额度 | `backend/app/domain/services/subscription_policy.py`、`application/use_cases/schedule_agent_analysis.py` |
 | 持久化 | `backend/app/infrastructure/db/models.py`、`repositories.py` |
 
 ## 扩展功能时的同步清单

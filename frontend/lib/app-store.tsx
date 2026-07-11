@@ -105,19 +105,24 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
         await new Promise((resolve) => setTimeout(resolve, 2000))
         const updated = await fetchOpportunity(id)
         setOpportunities((prev) => prev.map((item) => (item.id === id ? updated : item)))
-        if (updated.agentAnalysisStatus === 'completed' || updated.agentAnalysisStatus === 'failed') {
+        if (
+          updated.agentAnalysisStatus === 'completed' ||
+          updated.agentAnalysisStatus === 'failed' ||
+          updated.agentAnalysisStatus === 'quota_exceeded'
+        ) {
           return
         }
       }
       throw new Error('Agent analysis did not finish within the polling window.')
     } catch (error) {
       console.warn('Failed to run pi agent analysis.', error)
+      const quotaExceeded = error instanceof Error && error.message.includes('monthly pi agent quota exceeded')
       setOpportunities((prev) =>
         prev.map((item) =>
           item.id === id
             ? {
                 ...item,
-                agentAnalysisStatus: 'failed',
+                agentAnalysisStatus: quotaExceeded ? 'quota_exceeded' : 'failed',
                 agentAnalysisError: error instanceof Error ? error.message : 'Agent analysis failed.',
                 linkVerification: { ...item.linkVerification, status: 'unverified' },
               }
