@@ -441,7 +441,7 @@ jobs:
 
           api_container="$(docker compose --env-file .env ps -q api || true)"
           if [ -n "$api_container" ]; then
-            docker compose --env-file .env exec -T api python scripts/register_telegram_webhook.py
+            docker compose --env-file .env exec -T api python -m scripts.register_telegram_webhook
           fi
 
           echo "Cleaning up dangling images..."
