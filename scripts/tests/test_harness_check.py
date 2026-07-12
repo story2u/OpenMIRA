@@ -112,6 +112,37 @@ class HarnessCheckTests(unittest.TestCase):
             self.assertIn("deploy workflow must be triggered directly by CI", errors)
             self.assertIn("deploy workflow must not chain workflow_run from Build Images", errors)
 
+    def test_release_workflow_requires_module_webhook_registration(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            workflow_path = Path(directory) / "deploy.yml"
+            workflow_path.write_text(
+                "on:\n"
+                "  workflow_run:\n"
+                '    workflows: ["CI"]\n'
+                "jobs:\n"
+                "  build:\n"
+                "    steps:\n"
+                "      - uses: docker/build-push-action@v7\n"
+                "  deploy:\n"
+                "    needs: build\n"
+                "    steps:\n"
+                "      - run: docker compose --env-file .env stop $database_client_services\n"
+                "      - run: docker compose --env-file .env up --no-deps --force-recreate --exit-code-from migrate migrate\n"
+                "      - run: docker compose exec -T api python scripts/register_telegram_webhook.py\n"
+                "env:\n"
+                "  DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}\n"
+                "database_client_services=api\n",
+                encoding="utf-8",
+            )
+            errors: list[str] = []
+            harness_check.check_release_workflow(errors, workflow_path)
+            self.assertIn(
+                "deploy workflow must register the Telegram webhook as a Python module", errors
+            )
+            self.assertIn(
+                "deploy workflow must not execute the Telegram webhook script by file path", errors
+            )
+
     def test_release_workflow_stops_database_clients_before_migration(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             workflow_path = Path(directory) / "deploy.yml"
