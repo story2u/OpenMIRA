@@ -471,7 +471,7 @@ class TelegramConnectionAttempt(TimestampMixin, table=True):
             "uq_telegram_connection_attempts_owner_pending_mtproto_qr",
             "owner_user_id",
             unique=True,
-            postgresql_where=text("connection_type = 'mtproto_qr' AND status = 'pending'"),
+            postgresql_where=text("connection_type = 'MTPROTO_QR' AND status = 'PENDING'"),
         ),
     )
 
