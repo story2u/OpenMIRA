@@ -1,6 +1,8 @@
 export type Platform = 'telegram' | 'wecom'
 export type PlanCode = 'free' | 'plus' | 'pro' | 'max'
 export type SubscriptionStatus = 'active' | 'trialing' | 'past_due' | 'canceled' | 'inactive'
+export type BillingStore = 'app_store' | 'play_store' | 'paddle' | 'test_store' | 'unknown'
+export type BillingInterval = 'monthly' | 'annual' | 'unknown'
 export type OpportunityStatus = 'pending' | 'replied' | 'ignored'
 export type Priority = 'low' | 'normal' | 'high' | 'urgent'
 export type MessageSource = 'human' | 'ai' | null
@@ -242,4 +244,32 @@ export interface SubscriptionUsage {
   aiAnalysesConsumed: number
   aiAnalysesReserved: number
   aiAnalysesRemaining: number
+  effectiveStore: BillingStore | null
+  billingInterval: BillingInterval | null
+  billingPeriodStart: string | null
+  billingPeriodEnd: string | null
+  usagePeriodStart: string
+  usagePeriodEnd: string
+  entitlementExpiresAt: string | null
+  willRenew: boolean
+  billingIssue: boolean
+  multipleActiveSubscriptions: boolean
+  managementUrl: string | null
+  lastSyncedAt: string | null
+}
+
+export interface SubscriptionCatalogPlan {
+  planCode: PlanCode
+  displayName: string
+  rank: number
+  entitlements: PlanEntitlements
+  availableIntervals: BillingInterval[]
+  revenuecatPackageIdentifiers: string[]
+}
+
+export interface SubscriptionManagement {
+  store: BillingStore | null
+  managementUrl: string | null
+  instruction: string
+  canOpenInCurrentClient: boolean
 }
