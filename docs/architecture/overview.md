@@ -32,7 +32,8 @@ flowchart LR
 | Celery worker | `backend/app/worker/celery_app.py` | AI 回复与超时任务的异步执行 |
 | Celery beat | 同上 | 周期调度待人工商机超时检查 |
 | pi Agent runner | `backend/pi-agent-runtime/src/index.mjs` | 由 worker 按消息启动；只提交结构化分析，不持有业务动作权限 |
-| Telegram listener | `backend/app/worker/telegram_listener.py` | 按用户启动 MTProto 监听器并复用消息摄取用例 |
+| Telegram listener | `backend/app/worker/telegram_listener.py` | 保持旧 MTProto session 的兼容监听 |
+| Telegram QR worker / listener | `backend/app/worker/telegram_mtproto_qr_worker.py`、`telegram_mtproto_listener.py` | 平台凭据二维码登录、加密 session 与普通账号来源的只读监听 |
 | PostgreSQL | SQLModel + Alembic | 用户、订阅/用量账本、消息、商机、规则、配置、模板、Telegram 配置 |
 | Redis | DB 0/1/2 | 应用临时状态、Celery broker、Celery result backend |
 

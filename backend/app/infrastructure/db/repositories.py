@@ -1104,6 +1104,28 @@ class TelegramConnectionRepository:
         await self.session.refresh(attempt)
         return attempt
 
+    async def get_pending_attempt_for_owner(
+        self,
+        *,
+        owner_user_id: UUID,
+        connection_type: TelegramConnectionType,
+    ) -> TelegramConnectionAttempt | None:
+        statement = (
+            select(TelegramConnectionAttempt)
+            .where(
+                TelegramConnectionAttempt.owner_user_id == owner_user_id,
+                TelegramConnectionAttempt.connection_type == connection_type,
+                TelegramConnectionAttempt.status == TelegramConnectionAttemptStatus.PENDING,
+            )
+            .order_by(col(TelegramConnectionAttempt.created_at).desc())
+        )
+        result = await self.session.exec(statement)
+        for attempt in result.all():
+            await self._expire_attempt_if_needed(attempt)
+            if attempt.status == TelegramConnectionAttemptStatus.PENDING:
+                return attempt
+        return None
+
     async def get_attempt_for_owner(
         self,
         *,
@@ -1116,6 +1138,12 @@ class TelegramConnectionRepository:
         )
         result = await self.session.exec(statement)
         attempt = result.first()
+        if attempt:
+            await self._expire_attempt_if_needed(attempt)
+        return attempt
+
+    async def get_attempt(self, attempt_id: UUID) -> TelegramConnectionAttempt | None:
+        attempt = await self.session.get(TelegramConnectionAttempt, attempt_id)
         if attempt:
             await self._expire_attempt_if_needed(attempt)
         return attempt
@@ -1164,6 +1192,125 @@ class TelegramConnectionRepository:
             await self.session.commit()
             await self.session.refresh(attempt)
         return attempt
+
+    async def list_pending_mtproto_qr_attempts(self) -> list[TelegramConnectionAttempt]:
+        statement = select(TelegramConnectionAttempt).where(
+            TelegramConnectionAttempt.connection_type == TelegramConnectionType.MTPROTO_QR,
+            TelegramConnectionAttempt.status == TelegramConnectionAttemptStatus.PENDING,
+            TelegramConnectionAttempt.expires_at > utc_now(),
+        )
+        result = await self.session.exec(statement)
+        return list(result.all())
+
+    async def set_qr_url_encrypted(
+        self, *, attempt_id: UUID, qr_url_encrypted: str
+    ) -> TelegramConnectionAttempt | None:
+        attempt = await self.session.get(TelegramConnectionAttempt, attempt_id)
+        if not attempt or attempt.status != TelegramConnectionAttemptStatus.PENDING:
+            return None
+        attempt.qr_url_encrypted = qr_url_encrypted
+        attempt.updated_at = utc_now()
+        self.session.add(attempt)
+        await self.session.commit()
+        await self.session.refresh(attempt)
+        return attempt
+
+    async def complete_mtproto_qr_attempt(
+        self,
+        *,
+        attempt_id: UUID,
+        telegram_account_id: str,
+        label: str,
+        credential_encrypted: str,
+    ) -> TelegramConnection | None:
+        attempt = await self.session.get(TelegramConnectionAttempt, attempt_id, with_for_update=True)
+        if not attempt or attempt.status != TelegramConnectionAttemptStatus.PENDING:
+            return None
+        existing_result = await self.session.exec(
+            select(TelegramConnection).where(
+                TelegramConnection.owner_user_id == attempt.owner_user_id,
+                TelegramConnection.connection_type == TelegramConnectionType.MTPROTO_QR,
+            )
+        )
+        connection = existing_result.first()
+        now = utc_now()
+        if not connection:
+            connection = TelegramConnection(
+                owner_user_id=attempt.owner_user_id,
+                connection_type=TelegramConnectionType.MTPROTO_QR,
+                label=label,
+            )
+        connection.telegram_account_id = telegram_account_id
+        connection.credential_encrypted = credential_encrypted
+        connection.capabilities = {"receive_group_messages": True, "receive_channel_posts": True}
+        connection.status = TelegramConnectionStatus.CONNECTED
+        connection.enabled = True
+        connection.last_error = None
+        connection.last_checked_at = now
+        connection.updated_at = now
+        self.session.add(connection)
+        await self.session.flush()
+        attempt.status = TelegramConnectionAttemptStatus.COMPLETED
+        attempt.connection_id = connection.id
+        attempt.qr_url_encrypted = None
+        attempt.completed_at = now
+        attempt.updated_at = now
+        self.session.add(attempt)
+        await self.session.commit()
+        await self.session.refresh(connection)
+        return connection
+
+    async def add_mtproto_source(
+        self,
+        *,
+        owner_user_id: UUID,
+        connection_id: UUID,
+        external_chat_id: str,
+        source_type: TelegramSourceType,
+        display_name: str,
+        username: str | None,
+        entitlements: PlanEntitlements,
+        legacy_active_count: int,
+    ) -> TelegramSource:
+        connection = await self.get_connection_for_owner(
+            owner_user_id=owner_user_id, connection_id=connection_id
+        )
+        if not connection or connection.connection_type != TelegramConnectionType.MTPROTO_QR:
+            raise ValueError("MTProto connection not found")
+        result = await self.session.exec(
+            select(TelegramSource).where(
+                TelegramSource.connection_id == connection_id,
+                TelegramSource.external_chat_id == external_chat_id,
+            )
+        )
+        source = result.first()
+        if not source:
+            ensure_group_quota(
+                entitlements=entitlements,
+                telegram_groups=legacy_active_count + await self.count_active_sources_by_user(owner_user_id) + 1,
+                wecom_groups=0,
+            )
+            source = TelegramSource(
+                owner_user_id=owner_user_id,
+                connection_id=connection_id,
+                external_chat_id=external_chat_id,
+                source_type=source_type,
+                display_name=display_name,
+                username=username,
+            )
+        else:
+            source.source_type = source_type
+            source.display_name = display_name
+            source.username = username
+            source.enabled = True
+            source.quota_paused = False
+            source.quota_reason = None
+            source.last_error = None
+            source.updated_at = utc_now()
+        self.session.add(source)
+        await self.session.commit()
+        await self.session.refresh(source)
+        return source
 
     async def get_attempt_by_request_id(self, request_id: int) -> TelegramConnectionAttempt | None:
         statement = select(TelegramConnectionAttempt).where(
@@ -1223,6 +1370,36 @@ class TelegramConnectionRepository:
         )
         result = await self.session.exec(statement)
         return list(result.all())
+
+    async def list_listenable_mtproto_connections(
+        self,
+    ) -> list[tuple[TelegramConnection, list[TelegramSource]]]:
+        result = await self.session.exec(
+            select(TelegramConnection, TelegramSource)
+            .join(TelegramSource, TelegramSource.connection_id == TelegramConnection.id)
+            .where(
+                TelegramConnection.connection_type == TelegramConnectionType.MTPROTO_QR,
+                TelegramConnection.status == TelegramConnectionStatus.CONNECTED,
+                TelegramConnection.enabled.is_(True),
+                TelegramConnection.credential_encrypted.is_not(None),
+                TelegramSource.enabled.is_(True),
+                TelegramSource.quota_paused.is_(False),
+            )
+        )
+        grouped: dict[UUID, tuple[TelegramConnection, list[TelegramSource]]] = {}
+        for connection, source in result.all():
+            grouped.setdefault(connection.id, (connection, []))[1].append(source)
+        return list(grouped.values())
+
+    async def record_connection_error(self, connection_id: UUID, error: str | None) -> None:
+        connection = await self.session.get(TelegramConnection, connection_id)
+        if not connection:
+            return
+        connection.last_error = error[:1000] if error else None
+        connection.last_checked_at = utc_now()
+        connection.updated_at = utc_now()
+        self.session.add(connection)
+        await self.session.commit()
 
     async def list_active_sources_for_chat(
         self,

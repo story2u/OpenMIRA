@@ -97,7 +97,7 @@ jobs:
       VPS_USER: ${{ vars.VPS_USER || secrets.VPS_USER }}
       VPS_PORT: ${{ vars.VPS_PORT || secrets.VPS_PORT || '22' }}
       VPS_DEPLOY_DIR: ${{ vars.VPS_DEPLOY_DIR || secrets.VPS_DEPLOY_DIR || '/opt/im' }}
-      VPS_COMPOSE_SERVICES: ${{ vars.VPS_COMPOSE_SERVICES || 'postgres redis migrate api celery_worker celery_beat telegram_listener frontend cloudflared' }}
+      VPS_COMPOSE_SERVICES: ${{ vars.VPS_COMPOSE_SERVICES || 'postgres redis migrate api celery_worker celery_beat telegram_listener telegram_mtproto_qr_worker telegram_mtproto_listener frontend cloudflared' }}
       RELEASE_BRANCH: ${{ github.event.workflow_run.head_branch }}
       DEPLOY_ENVIRONMENT: production
       GHCR_USERNAME: ${{ vars.GHCR_USERNAME || github.actor }}
@@ -418,7 +418,7 @@ jobs:
               *)
                 runtime_services="$runtime_services $service"
                 case "$service" in
-                  api|celery_worker|celery_beat|telegram_listener)
+                  api|celery_worker|celery_beat|telegram_listener|telegram_mtproto_qr_worker|telegram_mtproto_listener)
                     database_client_services="$database_client_services $service"
                     ;;
                 esac

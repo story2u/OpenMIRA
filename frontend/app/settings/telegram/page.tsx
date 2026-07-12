@@ -15,6 +15,7 @@ import {
   Unplug,
 } from 'lucide-react'
 import Link from 'next/link'
+import { QRCodeSVG } from 'qrcode.react'
 import { useCallback, useEffect, useState } from 'react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -22,19 +23,23 @@ import { Card } from '@/components/ui/card'
 import { Switch } from '@/components/ui/switch'
 import {
   cancelTelegramConnectionAttempt,
+  addTelegramMtprotoSource,
   deleteTelegramConnection,
   deleteTelegramConnectionSource,
   fetchTelegramConnectionAttempt,
   fetchTelegramConnectionHealth,
   fetchTelegramConnections,
+  fetchTelegramMtprotoDialogs,
   startTelegramBotChatConnection,
   startTelegramBusinessConnection,
+  startTelegramMtprotoQrConnection,
   updateTelegramConnection,
 } from '@/lib/api'
 import type {
   TelegramConnection,
   TelegramConnectionAttempt,
   TelegramConnectionHealth,
+  TelegramMtprotoDialog,
   TelegramConnectionStatus,
 } from '@/lib/types'
 
@@ -66,7 +71,8 @@ export default function TelegramSettingsPage() {
   const [connections, setConnections] = useState<TelegramConnection[]>([])
   const [attempt, setAttempt] = useState<TelegramConnectionAttempt | null>(null)
   const [loading, setLoading] = useState(true)
-  const [action, setAction] = useState<'bot' | 'business' | 'refresh' | string | null>(null)
+  const [dialogs, setDialogs] = useState<Record<string, TelegramMtprotoDialog[]>>({})
+  const [action, setAction] = useState<'bot' | 'business' | 'qr' | 'refresh' | string | null>(null)
   const [error, setError] = useState('')
 
   const load = useCallback(async () => {
@@ -101,7 +107,8 @@ export default function TelegramSettingsPage() {
         if (!active) return
         setAttempt((current) => current ? {
           ...nextAttempt,
-          telegramUrl: current.telegramUrl,
+          telegramUrl: nextAttempt.telegramUrl ?? current.telegramUrl,
+          qrCodeUrl: nextAttempt.qrCodeUrl ?? current.qrCodeUrl,
           instructions: current.instructions,
           localMock: current.localMock,
         } : nextAttempt)
@@ -153,6 +160,44 @@ export default function TelegramSettingsPage() {
       setAttempt(await startTelegramBusinessConnection())
     } catch (exc) {
       setError(exc instanceof Error ? exc.message : '无法开始 Business 连接')
+    } finally {
+      setAction(null)
+    }
+  }, [])
+
+  const startMtprotoQr = useCallback(async () => {
+    setError('')
+    setAction('qr')
+    try {
+      setAttempt(await startTelegramMtprotoQrConnection())
+    } catch (exc) {
+      setError(exc instanceof Error ? exc.message : '无法启动二维码登录')
+    } finally {
+      setAction(null)
+    }
+  }, [])
+
+  const loadMtprotoDialogs = useCallback(async (connectionId: string) => {
+    setError('')
+    setAction(`dialogs-${connectionId}`)
+    try {
+      const nextDialogs = await fetchTelegramMtprotoDialogs(connectionId)
+      setDialogs((current) => ({ ...current, [connectionId]: nextDialogs }))
+    } catch (exc) {
+      setError(exc instanceof Error ? exc.message : '无法读取可监听群组')
+    } finally {
+      setAction(null)
+    }
+  }, [])
+
+  const addMtprotoSource = useCallback(async (connectionId: string, chatId: string) => {
+    setError('')
+    setAction(`dialog-${chatId}`)
+    try {
+      const updated = await addTelegramMtprotoSource(connectionId, chatId)
+      setConnections((current) => current.map((item) => item.id === updated.id ? updated : item))
+    } catch (exc) {
+      setError(exc instanceof Error ? exc.message : '添加监听来源失败')
     } finally {
       setAction(null)
     }
@@ -263,7 +308,7 @@ export default function TelegramSettingsPage() {
         <div className="mb-3 flex items-center justify-between gap-3">
           <div>
             <h2 id="connection-methods" className="text-base font-semibold">选择连接方式</h2>
-            <p className="mt-0.5 text-sm text-muted-foreground">不会在网页中输入 Telegram API Hash、手机号或 Session。</p>
+            <p className="mt-0.5 text-sm text-muted-foreground">不会在网页中输入 Telegram API Hash、手机号、验证码或 Session。</p>
           </div>
           <Badge variant="outline">{health?.listenerMode || '加载中'}</Badge>
         </div>
@@ -302,18 +347,18 @@ export default function TelegramSettingsPage() {
             </div>
           </Card>
 
-          <Card className="gap-4 p-5 opacity-75 shadow-sm">
+          <Card className="gap-4 p-5 shadow-sm">
             <div className="flex items-start justify-between gap-3">
               <span className="flex size-10 items-center justify-center rounded-xl bg-muted text-muted-foreground"><QrCode className="size-5" /></span>
-              <Badge variant="outline">P2 · 未启用</Badge>
+              <Badge variant="outline">P2 · QR</Badge>
             </div>
             <div>
               <h3 className="font-semibold">普通账号 QR</h3>
-              <p className="mt-1 text-sm leading-5 text-muted-foreground">将使用平台统一配置和常驻 worker；此环境尚未部署该能力。</p>
+              <p className="mt-1 text-sm leading-5 text-muted-foreground">使用平台统一配置扫码登录普通账号，再选择你已加入的群组或频道监听。</p>
             </div>
-            <Button className="mt-auto w-full" variant="outline" disabled>
-              <QrCode className="size-4" />
-              等待平台启用
+            <Button className="mt-auto w-full" variant="outline" onClick={startMtprotoQr} disabled={!health?.mtprotoQrAvailable || action === 'qr'}>
+              {action === 'qr' ? <Loader2 className="size-4 animate-spin" /> : <QrCode className="size-4" />}
+              {health?.mtprotoQrAvailable ? '显示登录二维码' : '管理员尚未配置'}
             </Button>
           </Card>
         </div>
@@ -333,6 +378,11 @@ export default function TelegramSettingsPage() {
             <ol className="list-decimal space-y-1 pl-5 text-sm text-muted-foreground">
               {attempt.instructions.map((instruction) => <li key={instruction}>{instruction}</li>)}
             </ol>
+          ) : null}
+          {attempt.qrCodeUrl && attempt.status === 'pending' ? (
+            <div className="mx-auto rounded-xl bg-white p-3 w-fit" aria-label="Telegram 登录二维码">
+              <QRCodeSVG value={attempt.qrCodeUrl} size={192} level="M" includeMargin />
+            </div>
           ) : null}
           <div className="flex flex-wrap gap-2">
             {attempt.telegramUrl ? (
@@ -400,6 +450,24 @@ export default function TelegramSettingsPage() {
                     ))}
                   </div>
                 ) : <p className="border-t pt-3 text-sm text-muted-foreground">尚未添加来源。</p>}
+                {connection.connectionType === 'mtproto_qr' ? (
+                  <div className="border-t pt-3">
+                    <Button variant="outline" size="sm" onClick={() => void loadMtprotoDialogs(connection.id)} disabled={action === `dialogs-${connection.id}`}>
+                      {action === `dialogs-${connection.id}` ? <Loader2 className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />}
+                      选择要监听的群
+                    </Button>
+                    {dialogs[connection.id]?.length ? (
+                      <div className="mt-3 grid gap-2">
+                        {dialogs[connection.id].map((dialog) => (
+                          <div key={dialog.id} className="flex items-center justify-between gap-3 rounded-lg bg-muted/45 px-3 py-2">
+                            <span className="min-w-0 truncate text-sm">{dialog.displayName}{dialog.username ? ` · @${dialog.username}` : ''}</span>
+                            <Button size="sm" variant="ghost" onClick={() => void addMtprotoSource(connection.id, dialog.id)} disabled={action === `dialog-${dialog.id}`}>监听</Button>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
               </Card>
             ))}
           </div>

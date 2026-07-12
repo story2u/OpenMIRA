@@ -134,6 +134,24 @@ services:
       migrate:
         condition: service_completed_successfully
 
+  telegram_mtproto_qr_worker:
+    image: ${BACKEND_IMAGE:-ghcr.io/story2u/im-backend:latest}
+    restart: unless-stopped
+    command: python -m app.worker.telegram_mtproto_qr_worker
+    environment: *app-env
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  telegram_mtproto_listener:
+    image: ${BACKEND_IMAGE:-ghcr.io/story2u/im-backend:latest}
+    restart: unless-stopped
+    command: python -m app.worker.telegram_mtproto_listener
+    environment: *app-env
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
   frontend:
     image: ${FRONTEND_IMAGE:-ghcr.io/story2u/im-frontend:latest}
     restart: unless-stopped

@@ -209,8 +209,16 @@ export interface TelegramConnectionAttempt {
   connectionId: string | null
   error: string | null
   telegramUrl: string | null
+  qrCodeUrl: string | null
   instructions: string[]
   localMock: boolean
+}
+
+export interface TelegramMtprotoDialog {
+  id: string
+  sourceType: Extract<TelegramSourceType, 'group' | 'channel'>
+  displayName: string
+  username: string | null
 }
 
 export interface PlanEntitlements {

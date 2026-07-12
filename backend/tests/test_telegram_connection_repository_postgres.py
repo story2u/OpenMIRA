@@ -5,6 +5,7 @@ from uuid import uuid4
 
 import pytest
 from sqlalchemy import delete
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -89,3 +90,37 @@ async def test_connection_attempt_is_owner_scoped(connection_subject) -> None:
 
         assert await repo.get_attempt_for_owner(owner_user_id=user.id, attempt_id=attempt.id)
         assert await repo.get_attempt_for_owner(owner_user_id=uuid4(), attempt_id=attempt.id) is None
+
+
+async def test_mtproto_qr_pending_attempt_is_reused_and_owner_scoped(connection_subject) -> None:
+    session_factory, user, _ = connection_subject
+    async with session_factory() as session:
+        repo = TelegramConnectionRepository(session)
+        attempt = await repo.create_attempt(
+            owner_user_id=user.id,
+            connection_type=TelegramConnectionType.MTPROTO_QR,
+            token_hash=os.urandom(32).hex(),
+            expires_at=datetime.now(UTC) + timedelta(minutes=10),
+        )
+
+        assert (
+            await repo.get_pending_attempt_for_owner(
+                owner_user_id=user.id,
+                connection_type=TelegramConnectionType.MTPROTO_QR,
+            )
+        ).id == attempt.id
+        assert (
+            await repo.get_pending_attempt_for_owner(
+                owner_user_id=uuid4(),
+                connection_type=TelegramConnectionType.MTPROTO_QR,
+            )
+            is None
+        )
+
+        with pytest.raises(IntegrityError):
+            await repo.create_attempt(
+                owner_user_id=user.id,
+                connection_type=TelegramConnectionType.MTPROTO_QR,
+                token_hash=os.urandom(32).hex(),
+                expires_at=datetime.now(UTC) + timedelta(minutes=10),
+            )

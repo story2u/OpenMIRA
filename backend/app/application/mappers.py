@@ -207,6 +207,7 @@ def to_telegram_connection_attempt_read(
     attempt: TelegramConnectionAttempt,
     *,
     telegram_url: str | None = None,
+    qr_code_url: str | None = None,
     instructions: list[str] | None = None,
     local_mock: bool = False,
 ) -> TelegramConnectionAttemptRead:
@@ -218,6 +219,7 @@ def to_telegram_connection_attempt_read(
         connectionId=attempt.connection_id,
         error=attempt.error,
         telegramUrl=telegram_url,
+        qrCodeUrl=qr_code_url,
         instructions=instructions or [],
         localMock=local_mock,
     )

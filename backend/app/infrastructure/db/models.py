@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import BigInteger, CheckConstraint, Column, DateTime, Index, UniqueConstraint
+from sqlalchemy import BigInteger, CheckConstraint, Column, DateTime, Index, UniqueConstraint, text
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlmodel import Field, SQLModel
@@ -467,6 +467,12 @@ class TelegramConnectionAttempt(TimestampMixin, table=True):
             "status",
             "expires_at",
         ),
+        Index(
+            "uq_telegram_connection_attempts_owner_pending_mtproto_qr",
+            "owner_user_id",
+            unique=True,
+            postgresql_where=text("connection_type = 'mtproto_qr' AND status = 'pending'"),
+        ),
     )
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
@@ -499,6 +505,8 @@ class TelegramConnectionAttempt(TimestampMixin, table=True):
         default_factory=dict,
         sa_column=Column(JSONB, nullable=False),
     )
+    # QR URLs are bearer login grants. Keep them encrypted and only reveal them to the owner.
+    qr_url_encrypted: str | None = None
     expires_at: datetime = Field(
         sa_column=Column(DateTime(timezone=True), nullable=False, index=True)
     )

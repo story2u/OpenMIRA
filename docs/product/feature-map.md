@@ -25,11 +25,11 @@
 | 商机状态更新/认领 | 看板/详情部分交互 | `PATCH .../status`、`POST .../claim` | 部分实现 | 后端已实现；前端状态动作多为本地更新 |
 | 回复模板读取 | `/templates` | `GET /templates` | 已实现 | 登录后加载；空结果会回退到 mock 模板，应在生产化时移除静默回退 |
 | 回复模板编辑 | `/templates` | `POST/PATCH /templates` | 部分实现 | 后端 admin API 已有；前端新增/编辑只改本地 store |
-| Telegram 原生连接中心 | `/settings/telegram` | `/integrations/telegram/*` | 部分实现 | P0 Bot 群/频道有真实连接、来源、验签和 webhook 幂等；Business 需平台配置；QR worker 未部署 |
+| Telegram 原生连接中心 | `/settings/telegram` | `/integrations/telegram/*` | 部分实现 | P0 Bot 群/频道有真实连接、来源、验签和 webhook 幂等；Business 需平台配置；P2 依赖平台 MTProto 凭据 |
 | Telegram Bot 群组/频道 | `/settings/telegram` | `POST /integrations/telegram/connect/bot-chat`、`POST /webhooks/telegram` | 已实现 | 使用短期 token 和 `request_chat`，回调后验证 chat/Bot membership；未配置来源的 chat 不摄取 |
 | Telegram Business 私聊 | `/settings/telegram` | `POST /integrations/telegram/connect/business`、`POST /webhooks/telegram` | 部分实现 | 私聊确认后按 Business connection owner 路由；需可用的平台 Bot 和 Telegram Business 权限 |
-| Telegram 普通账号 QR | `/settings/telegram` | `POST /integrations/telegram/connect/mtproto-qr` | 未实现 | 已明确平台全局凭据/worker 前置条件；当前安全拒绝，不收集用户秘密 |
-| Telegram 旧 MTProto 监听 | 无默认表单入口 | 旧 `/integrations/telegram-user/*`、独立 listener | 已实现（兼容） | 已授权 session 继续监听；新页面不显示或迁移秘密，直至单独迁移计划 |
+| Telegram 普通账号 QR | `/settings/telegram` | `POST /integrations/telegram/connect/mtproto-qr`、dialogs/sources API | 部分实现 | 平台统一凭据、二维码、加密 session、独立 QR worker 和只读 listener；需生产 Telegram 隔离冒烟 |
+| Telegram 旧 MTProto 监听 | 无默认表单入口 | 独立 legacy listener | 已实现（兼容） | 已授权 session 继续监听；旧用户凭据采集 API 已删除，新页面不展示或迁移秘密 |
 | 企业微信 webhook | 设置页显示绑定卡 | `GET/POST /webhooks/wecom` | 已实现 | 后端验签/解密/摄取；前端绑定状态目前是静态展示 |
 | 规则管理 | `/settings` | CRUD `/rules` | 部分实现 | 后端 admin API 已有；前端关键词与 AI 开关仅本地状态 |
 | 工作时间配置 | `/settings/working-hours` | `/configs/work-mode`、`PATCH /configs/{key}` | 部分实现 | 后端可读写；前端编辑只在本地状态 |

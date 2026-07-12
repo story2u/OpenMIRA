@@ -1,6 +1,6 @@
 # Telegram 原生连接
 
-> 状态：部分实现（P0 可用，P1 需平台配置，P2 未部署） · 最后核验：2026-07-11
+> 状态：部分实现（P0 可用，P1 需平台配置，P2 需生产凭据验证） · 最后核验：2026-07-12
 
 ## 用户可见连接方式
 
@@ -11,10 +11,10 @@
 | --- | --- | --- | --- |
 | Bot 群组/频道 | P0 | 已实现 | 选择并监听已添加平台 Bot 的群组或频道 |
 | Telegram Business | P1 | 部分实现 | 通过 Business connection 接收授权范围内的私聊 |
-| 普通账号 QR | P2 | 未部署 | 未来使用平台统一 MTProto 凭据和常驻 QR worker |
+| 普通账号 QR | P2 | 已实现 | 平台统一 MTProto 凭据、用户扫码、选择群组/频道并只读监听 |
 
-旧 `TelegramUserConfig` / `TelegramMonitor` 仍由现有 listener 读取。它们不会被本次迁移解密、
-复制或删除；新页面只显示非敏感的“旧监听仍在运行”提示。
+旧 `TelegramUserConfig` / `TelegramMonitor` 仍由兼容 listener 读取，旧用户配置 API 暂时保留用于管理既有连接；
+它们不会被本次迁移解密、复制或删除。
 
 ## P0：Bot 群组/频道流程
 
@@ -43,21 +43,25 @@ connection 不会被任意用户认领。`business_message` 按 business connect
 
 ## P2：普通账号 QR
 
-QR 登录需要平台全局 `TELEGRAM_MTPROTO_API_ID` / `TELEGRAM_MTPROTO_API_HASH`，加密 session 存储和
-常驻 worker 来维持 QR 状态及后续监听。当前 VPS 尚未部署专用 QR worker，因此 API 与 UI 明确返回
-“未启用”，不会退回到手填 API Hash/Session 表单。
+QR 登录使用平台全局 `TELEGRAM_MTPROTO_API_ID` / `TELEGRAM_MTPROTO_API_HASH`。`telegram_mtproto_qr_worker`
+仅在服务端生成、等待和刷新 QR 登录；`telegram_mtproto_listener` 用加密 session 对用户已选择的群组/频道
+做只读监听。页面只会展示二维码、连接状态和可选群组，绝不采集或显示用户 API Hash、手机号、验证码、
+两步验证密码或 Session。
+
+如账号启用了两步验证，当前流程会明确失败而不索取密码；用户可关闭该账号的两步验证后重新扫码。QR URL 是
+短期登录凭据，以加密形式存储且只在所属用户的轮询响应中返回；取消、过期或 worker 重启都会使其失效，需重新生成。
 
 ## 生产配置与发布
 
 GitHub **Secrets**：
 
 - `TELEGRAM_BOT_TOKEN`
-- `TELEGRAM_MTPROTO_API_HASH`（仅未来 P2）
+- `TELEGRAM_MTPROTO_API_HASH`（P2，平台凭据）
 
 GitHub **Variables**：
 
 - `TELEGRAM_BOT_USERNAME`（不含 `@`）
-- `TELEGRAM_MTPROTO_QR_ENABLED`、`TELEGRAM_MTPROTO_QR_WORKER_ENABLED`、`TELEGRAM_MTPROTO_API_ID`（仅未来 P2）
+- `TELEGRAM_MTPROTO_QR_ENABLED=true`、`TELEGRAM_MTPROTO_QR_WORKER_ENABLED=true`、`TELEGRAM_MTPROTO_API_ID`（P2）
 
 webhook secret 不需要 GitHub Secret：release 工作流会在服务器首次发布时生成随机值（1–256 位，仅
 `A-Z a-z 0-9 _ -`）并持久化在运行时 `.env`，后续发布保持不变。生产 compose 默认使用
@@ -73,5 +77,6 @@ release 部署会在 Bot token、secret 与 webhook URL 全部存在时注册 `s
 - 健康/能力状态：`GET /api/v1/integrations/telegram/health`（需登录，不返回秘密）。
 - 用户连接：`GET /api/v1/integrations/telegram/connections`。
 - webhook 返回 `duplicate: true` 表示 update 已完成，不会重复连接或摄取。
-- 连接失败时检查 Bot username、webhook URL/secret、Bot 是否在目标 chat、Privacy Mode/权限，以及套餐群额度。
+- QR 连接失败时检查 P2 三项平台配置、`telegram_mtproto_qr_worker` / `telegram_mtproto_listener` 是否运行、
+账号是否启用两步验证以及套餐群额度。不要在服务器或浏览器中填入用户 API Hash、手机号、验证码或 Session。
 - 删除连接只删除本系统连接与来源记录；用户需在 Telegram 内自行移除 Business Bot 或群成员。

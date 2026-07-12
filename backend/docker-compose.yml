@@ -139,6 +139,26 @@ services:
       migrate:
         condition: service_completed_successfully
 
+  telegram_mtproto_qr_worker:
+    build: .
+    command: python -m app.worker.telegram_mtproto_qr_worker
+    environment: *app-env
+    volumes:
+      - .:/app
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  telegram_mtproto_listener:
+    build: .
+    command: python -m app.worker.telegram_mtproto_listener
+    environment: *app-env
+    volumes:
+      - .:/app
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
 volumes:
   postgres_data:
   redis_data:
