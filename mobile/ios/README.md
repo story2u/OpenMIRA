@@ -28,6 +28,7 @@ Swift 6 + SwiftUI 原生 app，作为现有后端 v1 REST API 的瘦客户端。
 | `Core/Network/Endpoints.swift` | 各资源方法，路径参数以 `backend/app/api/v1/routes/` 为准 |
 | `Core/Auth/Keychain.swift` | JWT 的 Keychain 读写清 |
 | `Core/Auth/SessionStore.swift` | `/auth/me` 会话恢复、邮箱密码/Apple 登录、登出 |
+| `Features/Auth/RadarLogoView.swift` | 应用内品牌 Logo；不依赖系统管理的 AppIcon 运行时读取 |
 | `Features/Auth/LoginView.swift` | 邮箱密码登录 + Sign in with Apple |
 | `Features/Inbox/InboxView.swift` | 收件箱：筛选、分页、30s 轮询 |
 | `Features/Opportunity/OpportunityDetailView.swift` | 详情、消息历史、Agent 发现、回复、状态流转 |

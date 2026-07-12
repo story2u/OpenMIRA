@@ -34,9 +34,7 @@ struct LoginView: View {
     var body: some View {
         VStack(spacing: 24) {
             Spacer()
-            Image(systemName: "dot.radiowaves.left.and.right")
-                .font(.system(size: 56))
-                .foregroundStyle(.tint)
+            RadarLogoView()
             Text("商机雷达")
                 .font(.largeTitle.bold())
             Text("Telegram / 企业微信商机，推送到手，随手处理")
