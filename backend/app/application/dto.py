@@ -214,6 +214,12 @@ class OAuthAuthorizeRead(BaseModel):
     authorizationUrl: str
 
 
+class NativeLoginRequest(BaseModel):
+    """移动端原生登录：App 用系统 SDK 取得 provider id_token 后换取本服务 JWT。"""
+
+    idToken: str = Field(min_length=16, max_length=8192)
+
+
 class TelegramMonitorRead(BaseModel):
     id: UUID
     enabled: bool

@@ -12,7 +12,7 @@ from fastapi.responses import HTMLResponse
 from sqlalchemy.exc import DBAPIError, IntegrityError, OperationalError, ProgrammingError, SQLAlchemyError
 
 from app.api.deps import get_user_repo, require_user
-from app.application.dto import AuthTokenRead, AuthUserRead, OAuthAuthorizeRead
+from app.application.dto import AuthTokenRead, AuthUserRead, NativeLoginRequest, OAuthAuthorizeRead
 from app.application.mappers import to_auth_user_read
 from app.core.config import Settings, get_settings
 from app.core.security import (
@@ -133,6 +133,68 @@ def oauth_persistence_error_detail(exc: SQLAlchemyError) -> str:
     return f"OAuth user persistence failed: {exc.__class__.__name__}"
 
 
+async def fetch_provider_jwks(
+    provider: str,
+    jwks_url: str,
+    client: httpx.AsyncClient,
+) -> dict[str, Any]:
+    try:
+        jwks_response = await client.get(jwks_url, headers={"Accept": "application/json"})
+    except httpx.RequestError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"{provider} JWKS endpoint is unavailable",
+        ) from exc
+    if jwks_response.status_code >= 400:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"{provider} JWKS endpoint returned {jwks_response.status_code}",
+        )
+    try:
+        return jwks_response.json()
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"{provider} JWKS endpoint returned invalid JSON",
+        ) from exc
+
+
+def profile_from_id_token_claims(provider: str, claims: dict[str, Any]) -> dict[str, Any]:
+    subject = claims.get("sub")
+    if not subject:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="OAuth subject is missing")
+    return {
+        "provider": provider,
+        "subject": str(subject),
+        "email": claims.get("email"),
+        "email_verified": claims.get("email_verified") in {True, "true", "1"},
+        "name": claims.get("name") or "",
+        "avatar_url": claims.get("picture") or "",
+    }
+
+
+async def resolve_profile_user(
+    provider: str,
+    profile: dict[str, Any],
+    repo: UserRepository,
+) -> User:
+    email = profile.get("email")
+    if email:
+        if not profile.get("email_verified"):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="OAuth email is not verified")
+        return await repo.get_or_create_oauth_user(
+            provider=provider,
+            provider_subject=profile["subject"],
+            email=email,
+            display_name=profile.get("name") or email.split("@", 1)[0],
+            avatar_url=profile.get("avatar_url") or "",
+        )
+    existing_user = await repo.get_by_auth_account(provider, profile["subject"])
+    if not existing_user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="OAuth email is missing")
+    return await repo.mark_login(existing_user)
+
+
 async def exchange_code_for_profile(
     provider: str,
     code: str,
@@ -180,25 +242,7 @@ async def exchange_code_for_profile(
         if not id_token:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="OAuth id_token missing")
 
-        try:
-            jwks_response = await client.get(config.jwks_url, headers={"Accept": "application/json"})
-        except httpx.RequestError as exc:
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail=f"{provider} JWKS endpoint is unavailable",
-            ) from exc
-        if jwks_response.status_code >= 400:
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail=f"{provider} JWKS endpoint returned {jwks_response.status_code}",
-            )
-        try:
-            jwks = jwks_response.json()
-        except ValueError as exc:
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail=f"{provider} JWKS endpoint returned invalid JSON",
-            ) from exc
+        jwks = await fetch_provider_jwks(provider, config.jwks_url, client)
 
     try:
         claims = verify_rs256_jwt(
@@ -210,18 +254,7 @@ async def exchange_code_for_profile(
     except (KeyError, TypeError, ValueError) as exc:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc)) from exc
 
-    subject = claims.get("sub")
-    if not subject:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="OAuth subject is missing")
-
-    return {
-        "provider": provider,
-        "subject": str(subject),
-        "email": claims.get("email"),
-        "email_verified": claims.get("email_verified") in {True, "true", "1"},
-        "name": claims.get("name") or "",
-        "avatar_url": claims.get("picture") or "",
-    }
+    return profile_from_id_token_claims(provider, claims)
 
 
 async def complete_oauth_login(
@@ -237,22 +270,7 @@ async def complete_oauth_login(
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="OAuth state mismatch")
 
         profile = await exchange_code_for_profile(provider, code, settings)
-        email = profile.get("email")
-        if email:
-            if not profile.get("email_verified"):
-                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="OAuth email is not verified")
-            user = await repo.get_or_create_oauth_user(
-                provider=provider,
-                provider_subject=profile["subject"],
-                email=email,
-                display_name=profile.get("name") or email.split("@", 1)[0],
-                avatar_url=profile.get("avatar_url") or "",
-            )
-        else:
-            existing_user = await repo.get_by_auth_account(provider, profile["subject"])
-            if not existing_user:
-                raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="OAuth email is missing")
-            user = await repo.mark_login(existing_user)
+        user = await resolve_profile_user(provider, profile, repo)
 
         return frontend_login_response(settings, create_access_token(subject=user.id, settings=settings))
     except HTTPException:
@@ -320,6 +338,74 @@ async def apple_oauth_form_post_callback(
     if not code or not state_value:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="OAuth callback is missing code or state")
     return await complete_oauth_login("apple", code, state_value, settings, repo)
+
+
+# 原生登录只做 id_token 验签，不走 code 交换；audience 是移动端凭据（非 Web client id）。
+NATIVE_ID_TOKEN_PROVIDERS: dict[str, tuple[str, str]] = {
+    "google": ("https://www.googleapis.com/oauth2/v3/certs", "https://accounts.google.com"),
+    "apple": ("https://appleid.apple.com/auth/keys", "https://appleid.apple.com"),
+}
+
+
+def native_login_audiences(provider: str, settings: Settings) -> list[str]:
+    raw = {
+        "google": settings.google_native_client_ids,
+        "apple": settings.apple_native_client_ids,
+    }[provider]
+    audiences = [item.strip() for item in raw.split(",") if item.strip()]
+    if not audiences:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"{provider} native login is not configured",
+        )
+    return audiences
+
+
+@router.post("/oauth/{provider}/native", response_model=AuthTokenRead)
+async def oauth_native_login(
+    provider: str,
+    payload: NativeLoginRequest,
+    settings: Settings = Depends(get_settings),
+    repo: UserRepository = Depends(get_user_repo),
+) -> AuthTokenRead:
+    if provider not in NATIVE_ID_TOKEN_PROVIDERS:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="unsupported OAuth provider")
+    audiences = native_login_audiences(provider, settings)
+    jwks_url, issuer = NATIVE_ID_TOKEN_PROVIDERS[provider]
+
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        jwks = await fetch_provider_jwks(provider, jwks_url, client)
+
+    claims: dict[str, Any] | None = None
+    last_error: Exception | None = None
+    for audience in audiences:
+        try:
+            claims = verify_rs256_jwt(payload.idToken, jwks=jwks, issuer=issuer, audience=audience)
+            break
+        except (KeyError, TypeError, ValueError) as exc:
+            last_error = exc
+    if claims is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=str(last_error) if last_error else "invalid id token",
+        )
+
+    profile = profile_from_id_token_claims(provider, claims)
+    try:
+        user = await resolve_profile_user(provider, profile, repo)
+    except HTTPException:
+        raise
+    except SQLAlchemyError as exc:
+        logger.exception(
+            "oauth.native_user_persistence_failed",
+            provider=provider,
+            error_class=exc.__class__.__name__,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=oauth_persistence_error_detail(exc),
+        ) from exc
+    return auth_token_response(user, settings)
 
 
 @router.get("/me", response_model=AuthUserRead)

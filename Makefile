@@ -1,4 +1,4 @@
-.PHONY: harness-check backend-sync backend-check pi-agent-sync pi-agent-check frontend-check check
+.PHONY: harness-check backend-sync backend-check pi-agent-sync pi-agent-check frontend-check ios-check check
 
 PYTHON ?= python3
 UV ?= uv
@@ -26,5 +26,12 @@ frontend-check:
 	cd frontend && pnpm lint
 	cd frontend && pnpm typecheck
 	cd frontend && pnpm build
+
+# 需要 macOS + Xcode + xcodegen（brew install xcodegen）；CI 用 macOS runner。
+ios-check:
+	cd mobile/ios && xcodegen generate
+	cd mobile/ios && xcodebuild -project OpportunityRadar.xcodeproj -scheme OpportunityRadar \
+		-destination 'generic/platform=iOS Simulator' -derivedDataPath .build/DerivedData \
+		CODE_SIGNING_ALLOWED=NO build
 
 check: harness-check backend-check pi-agent-check frontend-check

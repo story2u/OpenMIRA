@@ -1,6 +1,6 @@
 # 开发命令
 
-> 状态：当前事实 · 最后核验：2026-07-10
+> 状态：当前事实 · 最后核验：2026-07-12
 
 命令默认从仓库根目录执行。根 `Makefile` 是 AI 和 CI 的稳定入口；子项目原生命令用于缩小反馈。
 后端统一由 uv 管理 Python、`.venv`、依赖声明和锁文件；不要使用 `pip install -r` 或手工修改环境。
@@ -70,6 +70,19 @@ cd frontend && pnpm dev
 `frontend-check` 运行 ESLint、独立 `tsc --noEmit` 和 production build。独立 typecheck 是必须项，
 因为当前 `next.config.mjs` 的 build 兼容设置会跳过 TypeScript 错误。
 
+## iOS App
+
+需要 macOS + Xcode 和 xcodegen（`brew install xcodegen`）；`.xcodeproj` 是生成产物不入库：
+
+```bash
+make ios-check
+cd mobile/ios && xcodegen generate && open OpportunityRadar.xcodeproj
+```
+
+`ios-check` 用 xcodegen 生成工程并对 iOS Simulator 目标做完整编译（不签名）。单元测试
+（`xcodebuild test`）需要本机可用的模拟器，暂未纳入 `ios-check`，接入 CI macOS runner 时一并
+处理（见活动计划）。`make check` 不包含 `ios-check`，因为 Linux CI 无法执行。
+
 ## 完整本地检查
 
 ```bash
@@ -90,6 +103,15 @@ docker compose run --rm migrate
 docker compose run --rm api python scripts/seed_demo.py
 docker compose up api celery_worker celery_beat telegram_listener
 ```
+
+移动端/本地联调需要带 owner 的数据和 JWT 时（seed 数据默认无主，登录用户看不到）：
+
+```bash
+docker compose run --rm api python scripts/dev_login.py
+```
+
+创建/复用 `demo@local.dev` 演示用户、把无主商机认领给他，并打印可粘贴进 iOS DEBUG
+登录通道的 JWT。仅限本地开发环境。
 
 - API 文档：`http://localhost:8000/docs`
 - 根健康检查：`http://localhost:8000/healthz`

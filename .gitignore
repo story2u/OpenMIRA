@@ -6,3 +6,7 @@ __pycache__/
 .ruff_cache/
 .mypy_cache/
 node_modules/
+
+# xcodegen 产物（源是 mobile/ios/project.yml）
+mobile/ios/*.xcodeproj/
+mobile/ios/.build/
