@@ -26,6 +26,7 @@ import androidx.lifecycle.ViewModelProvider
 import com.codeiy.im.core.auth.SessionState
 import com.codeiy.im.core.auth.SessionStore
 import com.codeiy.im.core.auth.TokenStore
+import com.codeiy.im.core.billing.RevenueCatBillingService
 import com.codeiy.im.feature.inbox.InboxScreen
 import com.codeiy.im.feature.login.LoginScreen
 
@@ -34,7 +35,7 @@ class MainActivity : ComponentActivity() {
         object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T =
-                SessionStore(TokenStore(applicationContext)) as T
+                SessionStore(TokenStore(applicationContext), RevenueCatBillingService(applicationContext)) as T
         }
     }
 

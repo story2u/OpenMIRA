@@ -46,6 +46,7 @@ import androidx.lifecycle.viewModelScope
 import com.codeiy.im.core.auth.SessionStore
 import com.codeiy.im.core.network.api
 import com.codeiy.im.feature.opportunity.OpportunityDetailScreen
+import com.codeiy.im.feature.subscription.SubscriptionScreen
 import com.codeiy.im.model.FrontendOpportunityStatus
 import com.codeiy.im.model.IMChannel
 import com.codeiy.im.model.Opportunity
@@ -135,6 +136,12 @@ fun InboxScreen(session: SessionStore) {
     var selectedId by remember { mutableStateOf<String?>(null) }
     var showChannelMenu by remember { mutableStateOf(false) }
     var showAccountMenu by remember { mutableStateOf(false) }
+    var showSubscription by remember { mutableStateOf(false) }
+
+    if (showSubscription) {
+        SubscriptionScreen(session = session, onBack = { showSubscription = false })
+        return
+    }
 
     val currentSelectedId = selectedId
     if (currentSelectedId != null) {
@@ -169,6 +176,7 @@ fun InboxScreen(session: SessionStore) {
                             onClick = {},
                             enabled = false,
                         )
+                        DropdownMenuItem(text = { Text("套餐与用量") }, onClick = { showAccountMenu = false; showSubscription = true })
                         DropdownMenuItem(text = { Text("退出登录") }, onClick = { session.logout() })
                     }
                 },

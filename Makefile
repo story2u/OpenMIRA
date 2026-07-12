@@ -2,6 +2,7 @@
 
 PYTHON ?= python3
 UV ?= uv
+PNPM ?= corepack pnpm@10.25.0
 
 harness-check:
 	$(PYTHON) scripts/harness_check.py
@@ -23,19 +24,20 @@ pi-agent-check: pi-agent-sync
 	cd backend/pi-agent-runtime && npm test
 
 frontend-check:
-	cd frontend && pnpm lint
-	cd frontend && pnpm typecheck
-	cd frontend && pnpm build
+	cd frontend && $(PNPM) lint
+	cd frontend && $(PNPM) typecheck
+	cd frontend && $(PNPM) test
+	cd frontend && $(PNPM) build
 
 # 需要 macOS + Xcode + xcodegen（brew install xcodegen）；CI 用 macOS runner。
 ios-check:
 	cd mobile/ios && xcodegen generate
-	cd mobile/ios && xcodebuild -project OpportunityRadar.xcodeproj -scheme OpportunityRadar \
-		-destination 'generic/platform=iOS Simulator' -derivedDataPath .build/DerivedData \
-		CODE_SIGNING_ALLOWED=NO build
+	cd mobile/ios && xcodebuild test -project OpportunityRadar.xcodeproj -scheme OpportunityRadar \
+		-destination 'platform=iOS Simulator,OS=latest,name=iPhone 16' \
+		-derivedDataPath .build/DerivedData CODE_SIGNING_ALLOWED=NO
 
 # 需要 JDK 17 + Android SDK；首次运行 `cd mobile/android && gradle wrapper` 生成 wrapper。
 android-check:
-	cd mobile/android && ./gradlew lintDebug testDebugUnitTest
+	cd mobile/android && ./gradlew --no-daemon lintDebug testDebugUnitTest assembleDebug
 
 check: harness-check backend-check pi-agent-check frontend-check

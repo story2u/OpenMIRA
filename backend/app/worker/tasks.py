@@ -5,17 +5,23 @@ import structlog
 
 from app.application.use_cases.ai_reply import AIAutoReplyUseCase, transition_pending_to_ai
 from app.application.use_cases.analyze_message import AnalyzeMessageUseCase
+from app.application.use_cases.sync_revenuecat_customer import SyncRevenueCatCustomer
 from app.core.config import get_settings
 from app.core.time_window import WorkTimeConfig, WorkTimeService
 from app.infrastructure.agent.link_inspector import SafeLinkInspector
 from app.infrastructure.agent.pi_client import PiAgentClient
 from app.infrastructure.ai.litellm_client import LiteLLMReplyGenerator
 from app.infrastructure.db.repositories import (
+    BillingEventRepository,
     ConfigRepository,
     MessageRepository,
     OpportunityRepository,
     SubscriptionRepository,
+    TelegramConnectionRepository,
+    TelegramUserConfigRepository,
+    UserRepository,
 )
+from app.infrastructure.billing.revenuecat_client import RevenueCatClient
 from app.infrastructure.db.session import AsyncSessionLocal
 from app.infrastructure.im.base import AdapterRegistry
 from app.infrastructure.im.telegram import TelegramAdapter
@@ -65,6 +71,31 @@ def analyze_message(
 @celery_app.task(name="opportunity.sweep_pending_for_ai", queue="default")
 def sweep_pending_for_ai() -> None:
     asyncio.run(_sweep_pending_for_ai())
+
+
+@celery_app.task(
+    bind=True,
+    name="billing.process_revenuecat_event",
+    queue="default",
+    max_retries=3,
+)
+def process_revenuecat_event(task, event_id: str) -> None:
+    try:
+        asyncio.run(_process_revenuecat_event(UUID(event_id)))
+    except Exception as exc:
+        if task.request.retries >= task.max_retries:
+            raise
+        raise task.retry(exc=exc, countdown=min(2 ** (task.request.retries + 1), 30)) from exc
+
+
+@celery_app.task(name="billing.sync_revenuecat_customer", queue="default")
+def sync_revenuecat_customer(user_id: str) -> None:
+    asyncio.run(_sync_revenuecat_user(UUID(user_id)))
+
+
+@celery_app.task(name="billing.reconcile_revenuecat_subscriptions", queue="default")
+def reconcile_revenuecat_subscriptions() -> None:
+    asyncio.run(_enqueue_revenuecat_reconciliation())
 
 
 async def _generate_and_send_reply(opportunity_id: UUID) -> None:
@@ -155,6 +186,78 @@ async def _analyze_message(
 async def _release_agent_usage(ledger_id: UUID, reason: str) -> None:
     async with AsyncSessionLocal() as session:
         await SubscriptionRepository(session).release_usage(ledger_id, reason)
+
+
+async def _sync_revenuecat_user(user_id: UUID) -> None:
+    settings = get_settings()
+    if not settings.revenuecat_server_available:
+        raise RuntimeError("RevenueCat server integration is not configured")
+    client = RevenueCatClient(
+        secret_api_key=settings.revenuecat_secret_api_key,
+        timeout_seconds=settings.revenuecat_sync_timeout_seconds,
+    )
+    try:
+        async with AsyncSessionLocal() as session:
+            await SyncRevenueCatCustomer(
+                settings=settings,
+                provider=client,
+                user_repo=UserRepository(session),
+                subscription_repo=SubscriptionRepository(session),
+                telegram_repo=TelegramUserConfigRepository(session),
+                telegram_connection_repo=TelegramConnectionRepository(session),
+            ).execute(user_id)
+    finally:
+        await client.aclose()
+
+
+async def _process_revenuecat_event(event_id: UUID) -> None:
+    async with AsyncSessionLocal() as session:
+        event_repo = BillingEventRepository(session)
+        event = await event_repo.begin_processing(event_id)
+        if not event:
+            return
+        raw_user_ids = event.app_user_id.split(",") if event.app_user_id else []
+        local_user_ids: list[UUID] = []
+        user_repo = UserRepository(session)
+        for raw_user_id in raw_user_ids:
+            try:
+                user_id = UUID(raw_user_id)
+            except ValueError:
+                continue
+            user = await user_repo.get(user_id)
+            if user and user.is_active:
+                local_user_ids.append(user_id)
+        if not local_user_ids:
+            await event_repo.finish(event_id, orphaned=True)
+            return
+    try:
+        for user_id in local_user_ids:
+            await _sync_revenuecat_user(user_id)
+    except Exception as exc:
+        async with AsyncSessionLocal() as session:
+            await BillingEventRepository(session).fail(
+                event_id,
+                f"RevenueCat synchronization failed: {exc.__class__.__name__}",
+            )
+        raise
+    async with AsyncSessionLocal() as session:
+        await BillingEventRepository(session).finish(event_id)
+
+
+async def _enqueue_revenuecat_reconciliation() -> None:
+    settings = get_settings()
+    if not settings.revenuecat_reconcile_enabled or not settings.revenuecat_server_available:
+        return
+    async with AsyncSessionLocal() as session:
+        user_ids = await BillingEventRepository(session).reconciliation_user_ids(
+            limit=settings.revenuecat_reconcile_batch_size
+        )
+    for index, user_id in enumerate(user_ids):
+        celery_app.send_task(
+            "billing.sync_revenuecat_customer",
+            args=[str(user_id)],
+            countdown=index,
+        )
 
 
 async def _sweep_pending_for_ai() -> None:

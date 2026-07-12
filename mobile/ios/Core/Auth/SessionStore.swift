@@ -14,6 +14,7 @@ final class SessionStore {
 
     private(set) var state: State = .restoring
     let api: APIClient
+    let billing: BillingService
 
     private enum PasswordLoginError: LocalizedError {
         case invalidCredentials
@@ -26,8 +27,12 @@ final class SessionStore {
         return nil
     }
 
-    init(api: APIClient = APIClient(baseURL: AppConfig.apiBaseURL, tokenProvider: { Keychain.token() })) {
+    init(
+        api: APIClient = APIClient(baseURL: AppConfig.apiBaseURL, tokenProvider: { Keychain.token() }),
+        billing: BillingService = RevenueCatBillingService()
+    ) {
         self.api = api
+        self.billing = billing
     }
 
     /// 冷启动恢复：无 token 直接登出态；401 清 token；网络错误保留 token 允许重试。
@@ -37,7 +42,9 @@ final class SessionStore {
             return
         }
         do {
-            state = .active(try await api.me())
+            let user = try await api.me()
+            state = .active(user)
+            await identifyBilling(user)
         } catch APIError.unauthorized {
             Keychain.clearToken()
             state = .loggedOut
@@ -52,6 +59,7 @@ final class SessionStore {
         let token = try await api.nativeLogin(provider: "apple", idToken: idToken)
         Keychain.saveToken(token.accessToken)
         state = .active(token.user)
+        await identifyBilling(token.user)
     }
 
     /// 已有密码账户用邮箱和密码换取 JWT；凭据本身不落盘。
@@ -63,6 +71,7 @@ final class SessionStore {
             )
             Keychain.saveToken(token.accessToken)
             state = .active(token.user)
+            await identifyBilling(token.user)
         } catch APIError.unauthorized {
             throw PasswordLoginError.invalidCredentials
         }
@@ -71,5 +80,11 @@ final class SessionStore {
     func logout() {
         Keychain.clearToken()
         state = .loggedOut
+        Task { await billing.clearIdentity() }
+    }
+
+    private func identifyBilling(_ user: AuthUser) async {
+        guard billing.isConfigured else { return }
+        try? await billing.identify(userID: user.id)
     }
 }

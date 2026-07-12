@@ -21,6 +21,8 @@ flowchart LR
     CELERY --> WEBLINK["公开网页 / 安全链接读取器"]
     CELERY --> TG
     CELERY --> WC
+    RC["RevenueCat / Paddle / App Stores"] --> API
+    API --> RC
 ```
 
 ## 部署单元
@@ -83,7 +85,8 @@ ADR 和迁移计划，不要在单个功能中半途改造。
 | 模型 | 作用 | 关键关系/约束 |
 | --- | --- | --- |
 | `User` / `AuthAccount` | 本地用户与 OAuth 身份 | provider + subject 唯一；资源按 `user_id` 隔离 |
-| `SubscriptionAccount` | 用户付费状态与当前 billing period | user 唯一；只有 active/trialing 且在周期内的付费套餐生效 |
+| `SubscriptionAccount` | 用户有效权益投影 | user 唯一；受限 API 的最终权限来源；旧 provider ID 字段仅兼容保留 |
+| `BillingSubscription` / `BillingEvent` / `BillingProduct` | RevenueCat 渠道事实、幂等事件与产品映射审计 | 多渠道订阅；provider external key 与 event ID 唯一；不长期保存 raw webhook |
 | `UsageLedger` | AI 功能额度的可审计账本 | user + feature + idempotency key 唯一；reserved/consumed/released |
 | `Message` | 收发消息审计记录 | channel + external_message_id 幂等；保存 pi 分析状态/结果；可关联 opportunity |
 | `Opportunity` | 商机聚合根 | 持有来源、检测结果、Agent 投影、状态、草稿与最终回复；source_message 唯一 |
@@ -191,12 +194,22 @@ sequenceDiagram
 - Agent 高置信补判商机时只创建 `PENDING_HUMAN`，不能让模型把自己路由到自动回复。
 - 自动分析使用 message 级幂等键，手工重跑接受 `Idempotency-Key`；两条路径都在 enqueue 前通过
   `SubscriptionRepository` 预留额度。worker 成功结算，最终失败释放；Free 使用 UTC 自然月，付费
-  用户使用有效 subscription period。无 owner 消息不运行 Agent，也不占用任何用户额度。
+  用户也始终使用 UTC 自然月 usage period；monthly/annual billing period 只描述续费和到期。无 owner
+  消息不运行 Agent，也不占用任何用户额度。
 - Telegram 配置读取和 listener 每次刷新都重新解析有效套餐；套餐到期后，按用户保留优先级启动
   额度内 monitor，超额项标记 `quota_paused` 而不删除。用户可在设置页重新选择保留群；选择写入当前
   retention limit，升级后优先级仍保留，未来再次降级可复用。
 - 新版 Bot 来源与旧 MTProto monitor 在 Telegram 套餐额度中合计统计。新来源创建时先检查总额；
   webhook 只会摄取已启用且未被额度暂停的 `TelegramSource`。
+
+### 统一订阅同步
+
+- 三端登录后以 `users.id` UUID 绑定 RevenueCat，客户端购买成功只触发当前用户 `/subscriptions/sync`，
+  不能提交 plan、entitlement 或 purchase token。
+- RevenueCat webhook 在 JSON parse 前校验固定 Authorization、raw-body HMAC 与 timestamp，按 event ID
+  幂等落库后交 Celery。worker 总是重新查询 Customer，再在一个事务中更新渠道记录与权益投影。
+- 同时存在多个渠道时取 `max > pro > plus > free`，投影标记重复付费；不会自动取消、退款或迁移。
+- provider 网络失败不写 Free 覆盖快照。每日 reconcile 修复漏事件；降级只暂停超额 Source，不删数据。
 
 ### 回复
 

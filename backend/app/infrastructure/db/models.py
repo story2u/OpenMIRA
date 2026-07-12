@@ -2,13 +2,18 @@ from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import BigInteger, CheckConstraint, Column, DateTime, Index, UniqueConstraint, text
+from sqlalchemy import BigInteger, CheckConstraint, Column, DateTime, Index, Text, UniqueConstraint, text
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlmodel import Field, SQLModel
 
 from app.domain.enums import (
     AgentAnalysisStatus,
+    BillingEventStatus,
+    BillingInterval,
+    BillingProvider,
+    BillingStore,
+    BillingSubscriptionStatus,
     IMChannel,
     MessageDirection,
     MessageSource,
@@ -91,6 +96,20 @@ class SubscriptionAccount(TimestampMixin, table=True):
         sa_column=Column(SAEnum(SubscriptionStatus, native_enum=False), nullable=False, index=True),
     )
     billing_provider: str | None = Field(default=None, max_length=32)
+    effective_store: BillingStore | None = Field(
+        default=None,
+        sa_column=Column(SAEnum(BillingStore, native_enum=False), nullable=True, index=True),
+    )
+    billing_interval: BillingInterval | None = Field(
+        default=None,
+        sa_column=Column(SAEnum(BillingInterval, native_enum=False), nullable=True),
+    )
+    entitlement_started_at: datetime | None = Field(
+        default=None, sa_column=Column(DateTime(timezone=True), nullable=True)
+    )
+    entitlement_expires_at: datetime | None = Field(
+        default=None, sa_column=Column(DateTime(timezone=True), nullable=True, index=True)
+    )
     provider_customer_id: str | None = Field(default=None, max_length=255, index=True)
     provider_subscription_id: str | None = Field(default=None, max_length=255, index=True)
     current_period_start: datetime | None = Field(
@@ -102,7 +121,112 @@ class SubscriptionAccount(TimestampMixin, table=True):
         sa_column=Column(DateTime(timezone=True), nullable=True),
     )
     cancel_at_period_end: bool = Field(default=False)
+    will_renew: bool = Field(default=False)
+    billing_issue: bool = Field(default=False)
+    multiple_active_subscriptions: bool = Field(default=False)
+    last_synced_at: datetime | None = Field(
+        default=None, sa_column=Column(DateTime(timezone=True), nullable=True, index=True)
+    )
+    management_url_encrypted: str | None = None
     provider_event_version: str | None = Field(default=None, max_length=255)
+
+
+class BillingProduct(TimestampMixin, table=True):
+    __tablename__ = "billing_products"
+    __table_args__ = (
+        Index(
+            "uq_billing_products_store_product_base_plan",
+            "store",
+            "external_product_id",
+            text("COALESCE(external_base_plan_id, '')"),
+            unique=True,
+        ),
+    )
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    plan_code: PlanCode = Field(sa_column=Column(SAEnum(PlanCode, native_enum=False), nullable=False, index=True))
+    billing_interval: BillingInterval = Field(
+        sa_column=Column(SAEnum(BillingInterval, native_enum=False), nullable=False, index=True)
+    )
+    store: BillingStore = Field(sa_column=Column(SAEnum(BillingStore, native_enum=False), nullable=False, index=True))
+    external_product_id: str = Field(max_length=255, index=True)
+    external_base_plan_id: str | None = Field(default=None, max_length=255)
+    revenuecat_entitlement_id: str = Field(max_length=64, index=True)
+    revenuecat_package_id: str = Field(max_length=64, index=True)
+    active: bool = Field(default=True, index=True)
+    metadata_json: dict[str, Any] = Field(
+        default_factory=dict,
+        sa_column=Column("metadata", JSONB, nullable=False),
+    )
+
+
+class BillingSubscription(TimestampMixin, table=True):
+    __tablename__ = "billing_subscriptions"
+    __table_args__ = (
+        UniqueConstraint("provider", "external_key", name="uq_billing_subscriptions_provider_external_key"),
+        Index("ix_billing_subscriptions_user_status_end", "user_id", "status", "current_period_end"),
+    )
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    user_id: UUID = Field(foreign_key="users.id", index=True)
+    provider: BillingProvider = Field(
+        default=BillingProvider.REVENUECAT,
+        sa_column=Column(SAEnum(BillingProvider, native_enum=False), nullable=False, index=True),
+    )
+    store: BillingStore = Field(sa_column=Column(SAEnum(BillingStore, native_enum=False), nullable=False, index=True))
+    environment: str = Field(default="production", max_length=32, index=True)
+    external_key: str = Field(min_length=1, max_length=512)
+    external_product_id: str = Field(max_length=255, index=True)
+    external_transaction_id: str | None = Field(default=None, max_length=255)
+    external_original_transaction_id: str | None = Field(default=None, max_length=255)
+    external_subscription_id: str | None = Field(default=None, max_length=255)
+    revenuecat_entitlement_id: str | None = Field(default=None, max_length=64, index=True)
+    plan_code: PlanCode = Field(sa_column=Column(SAEnum(PlanCode, native_enum=False), nullable=False, index=True))
+    billing_interval: BillingInterval = Field(
+        default=BillingInterval.UNKNOWN,
+        sa_column=Column(SAEnum(BillingInterval, native_enum=False), nullable=False),
+    )
+    status: BillingSubscriptionStatus = Field(
+        default=BillingSubscriptionStatus.UNKNOWN,
+        sa_column=Column(SAEnum(BillingSubscriptionStatus, native_enum=False), nullable=False, index=True),
+    )
+    current_period_start: datetime | None = Field(default=None, sa_column=Column(DateTime(timezone=True), nullable=True))
+    current_period_end: datetime | None = Field(default=None, sa_column=Column(DateTime(timezone=True), nullable=True))
+    grace_period_end: datetime | None = Field(default=None, sa_column=Column(DateTime(timezone=True), nullable=True))
+    will_renew: bool = Field(default=False)
+    cancel_at_period_end: bool = Field(default=False)
+    billing_issue_detected_at: datetime | None = Field(default=None, sa_column=Column(DateTime(timezone=True), nullable=True))
+    last_provider_event_at: datetime | None = Field(default=None, sa_column=Column(DateTime(timezone=True), nullable=True))
+    last_synced_at: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True), nullable=False, index=True))
+    metadata_json: dict[str, Any] = Field(default_factory=dict, sa_column=Column("metadata", JSONB, nullable=False))
+
+
+class BillingEvent(TimestampMixin, table=True):
+    __tablename__ = "billing_events"
+    __table_args__ = (
+        UniqueConstraint("provider", "provider_event_id", name="uq_billing_events_provider_event_id"),
+        Index("ix_billing_events_status_received", "status", "received_at"),
+    )
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    provider: BillingProvider = Field(
+        default=BillingProvider.REVENUECAT,
+        sa_column=Column(SAEnum(BillingProvider, native_enum=False), nullable=False, index=True),
+    )
+    provider_event_id: str = Field(max_length=255)
+    event_type: str = Field(max_length=128, index=True)
+    app_user_id: str | None = Field(default=None, sa_column=Column(Text(), nullable=True, index=True))
+    environment: str | None = Field(default=None, max_length=32)
+    payload_hash: str = Field(min_length=64, max_length=64)
+    status: BillingEventStatus = Field(
+        default=BillingEventStatus.RECEIVED,
+        sa_column=Column(SAEnum(BillingEventStatus, native_enum=False), nullable=False, index=True),
+    )
+    attempt_count: int = Field(default=0, ge=0)
+    received_at: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True), nullable=False))
+    queued_at: datetime | None = Field(default=None, sa_column=Column(DateTime(timezone=True), nullable=True))
+    processed_at: datetime | None = Field(default=None, sa_column=Column(DateTime(timezone=True), nullable=True))
+    processing_error: str | None = Field(default=None, max_length=1000)
 
 
 class Opportunity(TimestampMixin, table=True):

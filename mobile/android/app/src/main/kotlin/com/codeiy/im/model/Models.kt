@@ -86,6 +86,41 @@ enum class AgentActionType(val label: String) {
     UNKNOWN("未知动作"),
 }
 
+@Serializable
+enum class PlanCode(val label: String) {
+    @SerialName("free") FREE("Free"),
+    @SerialName("plus") PLUS("Plus"),
+    @SerialName("pro") PRO("Pro"),
+    @SerialName("max") MAX("Max"),
+    UNKNOWN("未知"),
+}
+
+@Serializable
+enum class BillingStore(val label: String) {
+    @SerialName("app_store") APP_STORE("Apple App Store"),
+    @SerialName("play_store") PLAY_STORE("Google Play"),
+    @SerialName("paddle") PADDLE("Web / Paddle"),
+    @SerialName("test_store") TEST_STORE("测试商店"),
+    UNKNOWN("未知渠道"),
+}
+
+@Serializable
+enum class BillingInterval {
+    @SerialName("monthly") MONTHLY,
+    @SerialName("annual") ANNUAL,
+    UNKNOWN,
+}
+
+@Serializable
+enum class SubscriptionStatus {
+    @SerialName("active") ACTIVE,
+    @SerialName("trialing") TRIALING,
+    @SerialName("past_due") PAST_DUE,
+    @SerialName("canceled") CANCELED,
+    @SerialName("inactive") INACTIVE,
+    UNKNOWN,
+}
+
 // MARK: DTO
 
 @Serializable
@@ -164,6 +199,61 @@ data class AuthToken(
     val accessToken: String,
     val tokenType: String = "bearer",
     val user: AuthUser,
+)
+
+@Serializable
+data class PlanEntitlements(
+    val planCode: PlanCode = PlanCode.UNKNOWN,
+    val telegramGroupLimit: Int? = null,
+    val wecomGroupLimit: Int? = null,
+    val combinedGroupLimit: Int = 0,
+    val piAgentAnalysisMonthlyLimit: Int = 0,
+)
+
+@Serializable
+data class SubscriptionUsage(
+    val planCode: PlanCode = PlanCode.UNKNOWN,
+    val subscriptionStatus: SubscriptionStatus = SubscriptionStatus.UNKNOWN,
+    val periodStart: String = "",
+    val periodEnd: String = "",
+    val cancelAtPeriodEnd: Boolean = false,
+    val entitlements: PlanEntitlements,
+    val telegramGroupsUsed: Int = 0,
+    val wecomGroupsUsed: Int = 0,
+    val combinedGroupsUsed: Int = 0,
+    val aiAnalysesConsumed: Int = 0,
+    val aiAnalysesReserved: Int = 0,
+    val aiAnalysesRemaining: Int = 0,
+    val effectiveStore: BillingStore? = null,
+    val billingInterval: BillingInterval? = null,
+    val billingPeriodStart: String? = null,
+    val billingPeriodEnd: String? = null,
+    val usagePeriodStart: String = "",
+    val usagePeriodEnd: String = "",
+    val entitlementExpiresAt: String? = null,
+    val willRenew: Boolean = false,
+    val billingIssue: Boolean = false,
+    val multipleActiveSubscriptions: Boolean = false,
+    val managementUrl: String? = null,
+    val lastSyncedAt: String? = null,
+)
+
+@Serializable
+data class SubscriptionCatalogPlan(
+    val planCode: PlanCode = PlanCode.UNKNOWN,
+    val displayName: String,
+    val rank: Int,
+    val entitlements: PlanEntitlements,
+    val availableIntervals: List<BillingInterval>,
+    val revenuecatPackageIdentifiers: List<String>,
+)
+
+@Serializable
+data class SubscriptionManagement(
+    val store: BillingStore? = null,
+    val managementUrl: String? = null,
+    val instruction: String,
+    val canOpenInCurrentClient: Boolean,
 )
 
 @Serializable

@@ -14,6 +14,7 @@ from app.infrastructure.ai.litellm_client import LiteLLMOpportunityClassifier, L
 from app.infrastructure.db.models import Opportunity, User
 from app.infrastructure.db.repositories import (
     ConfigRepository,
+    BillingEventRepository,
     MessageRepository,
     OpportunityRepository,
     ReplyTemplateRepository,
@@ -100,6 +101,10 @@ def get_user_repo(session: AsyncSession = Depends(get_session)) -> UserRepositor
 
 def get_subscription_repo(session: AsyncSession = Depends(get_session)) -> SubscriptionRepository:
     return SubscriptionRepository(session)
+
+
+def get_billing_event_repo(session: AsyncSession = Depends(get_session)) -> BillingEventRepository:
+    return BillingEventRepository(session)
 
 
 def get_telegram_user_config_repo(

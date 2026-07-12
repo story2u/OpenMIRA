@@ -12,6 +12,11 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.domain.enums import (
     AgentAnalysisStatus,
+    BillingEventStatus,
+    BillingProvider,
+    BillingInterval,
+    BillingStore,
+    BillingSubscriptionStatus,
     FrontendOpportunityStatus,
     IMChannel,
     MessageDirection,
@@ -39,6 +44,8 @@ from app.domain.services.subscription_policy import (
 from app.infrastructure.db.models import (
     AppConfig,
     AuthAccount,
+    BillingSubscription,
+    BillingEvent,
     Message,
     Opportunity,
     ReplyTemplate,
@@ -217,9 +224,35 @@ class UserRepository:
 class SubscriptionSnapshot:
     plan_code: PlanCode
     subscription_status: SubscriptionStatus
-    period: BillingPeriod
+    billing_period_start: datetime | None
+    billing_period_end: datetime | None
+    usage_period_start: datetime
+    usage_period_end: datetime
     entitlements: PlanEntitlements
     cancel_at_period_end: bool
+    effective_store: BillingStore | None
+    billing_interval: BillingInterval | None
+    entitlement_expires_at: datetime | None
+    will_renew: bool
+    billing_issue: bool
+    multiple_active_subscriptions: bool
+    last_synced_at: datetime | None
+    management_url_encrypted: str | None
+
+    @property
+    def billing_period(self) -> BillingPeriod | None:
+        if self.billing_period_start is None or self.billing_period_end is None:
+            return None
+        return BillingPeriod(start=self.billing_period_start, end=self.billing_period_end)
+
+    @property
+    def usage_period(self) -> BillingPeriod:
+        return BillingPeriod(start=self.usage_period_start, end=self.usage_period_end)
+
+    @property
+    def period(self) -> BillingPeriod:
+        """Backward-compatible alias; usage accounting must always use the UTC month."""
+        return self.usage_period
 
 
 @dataclass(frozen=True, slots=True)
@@ -231,6 +264,164 @@ class UsageReservation:
     allocated: int
 
 
+@dataclass(frozen=True, slots=True)
+class BillingSubscriptionWrite:
+    external_key: str
+    store: BillingStore
+    environment: str
+    external_product_id: str
+    external_transaction_id: str | None
+    revenuecat_entitlement_id: str | None
+    plan_code: PlanCode
+    billing_interval: BillingInterval
+    status: BillingSubscriptionStatus
+    current_period_start: datetime | None
+    current_period_end: datetime | None
+    grace_period_end: datetime | None
+    will_renew: bool
+    cancel_at_period_end: bool
+    billing_issue_detected_at: datetime | None
+    last_synced_at: datetime
+    metadata: dict
+
+
+@dataclass(frozen=True, slots=True)
+class BillingEventReservation:
+    event: BillingEvent
+    should_enqueue: bool
+    duplicate: bool
+
+
+class BillingEventRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self.session = session
+
+    async def reserve_revenuecat_event(
+        self,
+        *,
+        provider_event_id: str,
+        event_type: str,
+        app_user_ids: list[UUID],
+        environment: str | None,
+        payload_hash: str,
+    ) -> BillingEventReservation:
+        joined_user_ids = ",".join(str(item) for item in app_user_ids) or None
+        event = BillingEvent(
+            provider=BillingProvider.REVENUECAT,
+            provider_event_id=provider_event_id,
+            event_type=event_type[:128],
+            app_user_id=joined_user_ids,
+            environment=environment[:32] if environment else None,
+            payload_hash=payload_hash,
+            status=BillingEventStatus.QUEUED,
+            queued_at=utc_now(),
+        )
+        self.session.add(event)
+        try:
+            await self.session.commit()
+            await self.session.refresh(event)
+            return BillingEventReservation(event=event, should_enqueue=True, duplicate=False)
+        except IntegrityError:
+            await self.session.rollback()
+        result = await self.session.exec(
+            select(BillingEvent).where(
+                BillingEvent.provider == BillingProvider.REVENUECAT,
+                BillingEvent.provider_event_id == provider_event_id,
+            )
+        )
+        existing = result.first()
+        if not existing:
+            raise RuntimeError("billing event reservation conflict could not be recovered")
+        if existing.payload_hash != payload_hash:
+            raise ValueError("provider event ID was reused with a different payload")
+        if existing.status == BillingEventStatus.FAILED:
+            existing.status = BillingEventStatus.QUEUED
+            existing.queued_at = utc_now()
+            existing.processing_error = None
+            existing.updated_at = utc_now()
+            self.session.add(existing)
+            await self.session.commit()
+            await self.session.refresh(existing)
+            return BillingEventReservation(event=existing, should_enqueue=True, duplicate=True)
+        return BillingEventReservation(event=existing, should_enqueue=False, duplicate=True)
+
+    async def begin_processing(self, event_id: UUID) -> BillingEvent | None:
+        event = await self.session.get(BillingEvent, event_id, with_for_update=True)
+        if not event or event.status in {
+            BillingEventStatus.COMPLETED,
+            BillingEventStatus.ORPHANED,
+            BillingEventStatus.PROCESSING,
+        }:
+            # End the read transaction without expiring objects returned by an earlier
+            # successful transition on this session.
+            await self.session.commit()
+            return None
+        event.status = BillingEventStatus.PROCESSING
+        event.attempt_count += 1
+        event.updated_at = utc_now()
+        self.session.add(event)
+        await self.session.commit()
+        await self.session.refresh(event)
+        return event
+
+    async def finish(self, event_id: UUID, *, orphaned: bool = False) -> None:
+        event = await self.session.get(BillingEvent, event_id)
+        if not event:
+            return
+        event.status = BillingEventStatus.ORPHANED if orphaned else BillingEventStatus.COMPLETED
+        event.processed_at = utc_now()
+        event.processing_error = None
+        event.updated_at = utc_now()
+        self.session.add(event)
+        await self.session.commit()
+
+    async def fail(self, event_id: UUID, error: str) -> None:
+        event = await self.session.get(BillingEvent, event_id)
+        if not event:
+            return
+        event.status = BillingEventStatus.FAILED
+        event.processing_error = error[:1000]
+        event.updated_at = utc_now()
+        self.session.add(event)
+        await self.session.commit()
+
+    async def reconciliation_user_ids(self, *, limit: int, now: datetime | None = None) -> list[UUID]:
+        current = now or utc_now()
+        statement = (
+            select(SubscriptionAccount.user_id)
+            .where(
+                SubscriptionAccount.billing_provider == BillingProvider.REVENUECAT.value,
+                (
+                    SubscriptionAccount.status.in_([SubscriptionStatus.ACTIVE, SubscriptionStatus.TRIALING])
+                    | (SubscriptionAccount.entitlement_expires_at <= current + timedelta(hours=48))
+                    | SubscriptionAccount.billing_issue.is_(True)
+                ),
+            )
+            .order_by(col(SubscriptionAccount.last_synced_at).asc().nullsfirst())
+            .limit(limit)
+        )
+        result = await self.session.exec(statement)
+        user_ids = list(result.all())
+        failed_result = await self.session.exec(
+            select(BillingEvent.app_user_id).where(
+                BillingEvent.status == BillingEventStatus.FAILED,
+                BillingEvent.received_at >= current - timedelta(hours=48),
+                BillingEvent.app_user_id.is_not(None),
+            )
+        )
+        seen = set(user_ids)
+        for joined in failed_result.all():
+            for raw_user_id in joined.split(",") if joined else []:
+                try:
+                    user_id = UUID(raw_user_id)
+                except ValueError:
+                    continue
+                if user_id not in seen and len(user_ids) < limit:
+                    user_ids.append(user_id)
+                    seen.add(user_id)
+        return user_ids
+
+
 class SubscriptionRepository:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
@@ -239,6 +430,97 @@ class SubscriptionRepository:
         statement = select(SubscriptionAccount).where(SubscriptionAccount.user_id == user_id)
         result = await self.session.exec(statement)
         return result.first()
+
+    async def project_revenuecat_customer(
+        self,
+        *,
+        user_id: UUID,
+        subscriptions: list[BillingSubscriptionWrite],
+        effective_plan: PlanCode,
+        effective_store: BillingStore | None,
+        billing_interval: BillingInterval | None,
+        entitlement_started_at: datetime | None,
+        entitlement_expires_at: datetime | None,
+        billing_period_start: datetime | None,
+        billing_period_end: datetime | None,
+        will_renew: bool,
+        cancel_at_period_end: bool,
+        billing_issue: bool,
+        multiple_active_subscriptions: bool,
+        last_synced_at: datetime,
+        management_url_encrypted: str | None,
+    ) -> SubscriptionAccount:
+        existing_result = await self.session.exec(
+            select(BillingSubscription).where(
+                BillingSubscription.user_id == user_id,
+                BillingSubscription.provider == BillingProvider.REVENUECAT,
+            )
+        )
+        existing = {item.external_key: item for item in existing_result.all()}
+        current_keys: set[str] = set()
+        for item in subscriptions:
+            current_keys.add(item.external_key)
+            record = existing.get(item.external_key)
+            if not record:
+                record = BillingSubscription(
+                    user_id=user_id,
+                    provider=BillingProvider.REVENUECAT,
+                    store=item.store,
+                    environment=item.environment,
+                    external_key=item.external_key,
+                    external_product_id=item.external_product_id,
+                    plan_code=item.plan_code,
+                )
+            record.store = item.store
+            record.environment = item.environment
+            record.external_product_id = item.external_product_id
+            record.external_transaction_id = item.external_transaction_id
+            record.revenuecat_entitlement_id = item.revenuecat_entitlement_id
+            record.plan_code = item.plan_code
+            record.billing_interval = item.billing_interval
+            record.status = item.status
+            record.current_period_start = item.current_period_start
+            record.current_period_end = item.current_period_end
+            record.grace_period_end = item.grace_period_end
+            record.will_renew = item.will_renew
+            record.cancel_at_period_end = item.cancel_at_period_end
+            record.billing_issue_detected_at = item.billing_issue_detected_at
+            record.last_synced_at = item.last_synced_at
+            record.metadata_json = item.metadata
+            record.updated_at = last_synced_at
+            self.session.add(record)
+
+        for external_key, record in existing.items():
+            if external_key not in current_keys:
+                record.status = BillingSubscriptionStatus.INACTIVE
+                record.will_renew = False
+                record.last_synced_at = last_synced_at
+                record.updated_at = last_synced_at
+                self.session.add(record)
+
+        account = await self.get_account(user_id)
+        if not account:
+            account = SubscriptionAccount(user_id=user_id)
+        account.plan_code = effective_plan
+        account.status = SubscriptionStatus.ACTIVE if effective_plan != PlanCode.FREE else SubscriptionStatus.INACTIVE
+        account.billing_provider = BillingProvider.REVENUECAT.value
+        account.effective_store = effective_store
+        account.billing_interval = billing_interval
+        account.entitlement_started_at = entitlement_started_at
+        account.entitlement_expires_at = entitlement_expires_at
+        account.current_period_start = billing_period_start
+        account.current_period_end = billing_period_end
+        account.will_renew = will_renew
+        account.cancel_at_period_end = cancel_at_period_end
+        account.billing_issue = billing_issue
+        account.multiple_active_subscriptions = multiple_active_subscriptions
+        account.last_synced_at = last_synced_at
+        account.management_url_encrypted = management_url_encrypted
+        account.updated_at = last_synced_at
+        self.session.add(account)
+        await self.session.commit()
+        await self.session.refresh(account)
+        return account
 
     async def get_snapshot(
         self,
@@ -255,24 +537,24 @@ class SubscriptionRepository:
             period_end=account.current_period_end if account else None,
             now=current,
         )
-        if (
-            account
-            and plan_code != PlanCode.FREE
-            and account.current_period_start
-            and account.current_period_end
-        ):
-            period = BillingPeriod(
-                start=account.current_period_start,
-                end=account.current_period_end,
-            )
-        else:
-            period = utc_calendar_month(current)
+        usage_period = utc_calendar_month(current)
         return SubscriptionSnapshot(
             plan_code=plan_code,
             subscription_status=(account.status if account else SubscriptionStatus.INACTIVE),
-            period=period,
+            billing_period_start=(account.current_period_start if account else None),
+            billing_period_end=(account.current_period_end if account else None),
+            usage_period_start=usage_period.start,
+            usage_period_end=usage_period.end,
             entitlements=get_plan_entitlements(plan_code),
             cancel_at_period_end=bool(account and account.cancel_at_period_end),
+            effective_store=(account.effective_store if account else None),
+            billing_interval=(account.billing_interval if account else None),
+            entitlement_expires_at=(account.entitlement_expires_at if account else None),
+            will_renew=bool(account and account.will_renew),
+            billing_issue=bool(account and account.billing_issue),
+            multiple_active_subscriptions=bool(account and account.multiple_active_subscriptions),
+            last_synced_at=(account.last_synced_at if account else None),
+            management_url_encrypted=(account.management_url_encrypted if account else None),
         )
 
     async def reserve_agent_analysis(
@@ -303,7 +585,7 @@ class SubscriptionRepository:
         existing = existing_result.first()
         snapshot = await self.get_snapshot(user_id, now=current)
         limit = snapshot.entitlements.pi_agent_analysis_monthly_limit
-        allocated = await self._allocated_usage(user_id, snapshot.period)
+        allocated = await self._allocated_usage(user_id, snapshot.usage_period)
         if existing:
             reservation = UsageReservation(
                 allowed=existing.status in {UsageStatus.RESERVED, UsageStatus.CONSUMED},
@@ -322,8 +604,8 @@ class SubscriptionRepository:
             user_id=user_id,
             feature=UsageFeature.PI_AGENT_ANALYSIS,
             quantity=1,
-            period_start=snapshot.period.start,
-            period_end=snapshot.period.end,
+            period_start=snapshot.usage_period_start,
+            period_end=snapshot.usage_period_end,
             idempotency_key=normalized_key,
             source_message_id=message_id,
             status=UsageStatus.RESERVED,

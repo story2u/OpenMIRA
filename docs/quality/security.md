@@ -5,7 +5,8 @@
 ## 数据分类
 
 - **秘密**：OAuth client secret、JWT key、admin token、Telegram api_hash/session、IM token/AES key、
-  OpenAI key、VPS/GHCR/Cloudflare 凭据。只允许在环境变量、GitHub Secrets 或经应用加密的数据库字段。
+  OpenAI key、RevenueCat server/webhook key、VPS/GHCR/Cloudflare 凭据。只允许在环境变量、GitHub
+  Secrets 或经应用加密的数据库字段。Paddle API Key 只允许进入 RevenueCat Dashboard。
 - **个人/通信数据**：邮箱、手机号、聊天内容、外部用户 ID、群信息。日志和测试 fixture 最小化、脱敏。
 - **公开配置**：client ID、redirect URI、镜像标签等可进入变量，但仍需防止环境混淆。
 
@@ -24,6 +25,8 @@
 - 对文本、列表、回填数量、ID 和 payload 大小设上限；不要无界存储或查询外部 JSON。
 - HTML、Markdown、URL 和模型输出在最终展示/发送边界按目标上下文处理，避免注入。
 - 外部消息幂等键和数据库唯一约束必须同时存在，防止重放造成重复商机/回复。
+- RevenueCat webhook 必须在 JSON 解析前用原始 bytes 验证固定 Authorization、HMAC 和 timestamp；
+  event ID 幂等后异步全量查询 Customer。客户端不能提交 plan/entitlement/token 解锁后端权限。
 
 ## IM 与 AI 动作
 

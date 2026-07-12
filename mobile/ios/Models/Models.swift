@@ -130,6 +130,24 @@ enum AgentActionType: String, TolerantEnum {
     }
 }
 
+enum PlanCode: String, TolerantEnum, CaseIterable {
+    case free, plus, pro, max, unknown
+}
+
+enum BillingStore: String, TolerantEnum {
+    case appStore = "app_store"
+    case playStore = "play_store"
+    case paddle, testStore = "test_store", unknown
+}
+
+enum BillingInterval: String, TolerantEnum {
+    case monthly, annual, unknown
+}
+
+enum SubscriptionStatus: String, TolerantEnum {
+    case active, trialing, pastDue = "past_due", canceled, inactive, unknown
+}
+
 // MARK: - 通用 JSON 值
 // linkVerification / extractedContacts 在后端是无固定 schema 的 dict，按通用 JSON 渲染。
 
@@ -257,6 +275,58 @@ struct AuthToken: Codable, Sendable {
     var accessToken: String
     var tokenType: String
     var user: AuthUser
+}
+
+struct PlanEntitlements: Codable, Sendable, Hashable {
+    var planCode: PlanCode
+    var telegramGroupLimit: Int?
+    var wecomGroupLimit: Int?
+    var combinedGroupLimit: Int
+    var piAgentAnalysisMonthlyLimit: Int
+}
+
+struct SubscriptionUsage: Codable, Sendable, Hashable {
+    var planCode: PlanCode
+    var subscriptionStatus: SubscriptionStatus
+    var periodStart: Date
+    var periodEnd: Date
+    var cancelAtPeriodEnd: Bool
+    var entitlements: PlanEntitlements
+    var telegramGroupsUsed: Int
+    var wecomGroupsUsed: Int
+    var combinedGroupsUsed: Int
+    var aiAnalysesConsumed: Int
+    var aiAnalysesReserved: Int
+    var aiAnalysesRemaining: Int
+    var effectiveStore: BillingStore?
+    var billingInterval: BillingInterval?
+    var billingPeriodStart: Date?
+    var billingPeriodEnd: Date?
+    var usagePeriodStart: Date
+    var usagePeriodEnd: Date
+    var entitlementExpiresAt: Date?
+    var willRenew: Bool
+    var billingIssue: Bool
+    var multipleActiveSubscriptions: Bool
+    var managementUrl: URL?
+    var lastSyncedAt: Date?
+}
+
+struct SubscriptionCatalogPlan: Codable, Sendable, Hashable, Identifiable {
+    var id: PlanCode { planCode }
+    var planCode: PlanCode
+    var displayName: String
+    var rank: Int
+    var entitlements: PlanEntitlements
+    var availableIntervals: [BillingInterval]
+    var revenuecatPackageIdentifiers: [String]
+}
+
+struct SubscriptionManagement: Codable, Sendable, Hashable {
+    var store: BillingStore?
+    var managementUrl: URL?
+    var instruction: String
+    var canOpenInCurrentClient: Bool
 }
 
 struct AIDraft: Codable, Sendable {

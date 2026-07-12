@@ -10,6 +10,8 @@ import type {
   ReplyTemplate,
   PlanEntitlements,
   SubscriptionUsage,
+  SubscriptionCatalogPlan,
+  SubscriptionManagement,
   TelegramDialog,
   TelegramConnection,
   TelegramConnectionAttempt,
@@ -171,6 +173,18 @@ export async function fetchSubscriptionPlans(): Promise<PlanEntitlements[]> {
 
 export async function fetchMySubscription(): Promise<SubscriptionUsage> {
   return fetchJson<SubscriptionUsage>('/api/v1/subscriptions/me')
+}
+
+export async function fetchSubscriptionCatalog(): Promise<SubscriptionCatalogPlan[]> {
+  return fetchJson<SubscriptionCatalogPlan[]>('/api/v1/subscriptions/catalog')
+}
+
+export async function syncMySubscription(): Promise<SubscriptionUsage> {
+  return fetchJson<SubscriptionUsage>('/api/v1/subscriptions/sync', { method: 'POST' })
+}
+
+export async function fetchSubscriptionManagement(): Promise<SubscriptionManagement> {
+  return fetchJson<SubscriptionManagement>('/api/v1/subscriptions/management?client=web')
 }
 
 export async function fetchReplyTemplates(): Promise<ReplyTemplate[]> {

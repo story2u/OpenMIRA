@@ -3,6 +3,7 @@ package com.codeiy.im.core.auth
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.codeiy.im.core.network.ApiClient
+import com.codeiy.im.core.billing.BillingService
 import com.codeiy.im.core.network.ApiError
 import com.codeiy.im.core.network.api
 import com.codeiy.im.model.AuthUser
@@ -19,7 +20,7 @@ sealed interface SessionState {
     data class Active(val user: AuthUser) : SessionState
 }
 
-class SessionStore(private val tokens: TokenStore) : ViewModel() {
+class SessionStore(private val tokens: TokenStore, val billing: BillingService) : ViewModel() {
     val api = ApiClient { tokens.token }
 
     private val _state = MutableStateFlow<SessionState>(SessionState.Restoring)
@@ -41,7 +42,9 @@ class SessionStore(private val tokens: TokenStore) : ViewModel() {
         _state.value = SessionState.Restoring
         viewModelScope.launch {
             try {
-                _state.value = SessionState.Active(api { api.service.me() })
+                val user = api { api.service.me() }
+                _state.value = SessionState.Active(user)
+                identifyBilling(user)
             } catch (e: ApiError.Unauthorized) {
                 tokens.token = null
                 _state.value = SessionState.LoggedOut
@@ -60,11 +63,17 @@ class SessionStore(private val tokens: TokenStore) : ViewModel() {
         }
         tokens.token = token.accessToken
         _state.value = SessionState.Active(token.user)
+        identifyBilling(token.user)
     }
 
     /** 401 时由界面调用：清 token 回登录页（对齐验收「会话过期处理」）。 */
     fun logout() {
         tokens.token = null
         _state.value = SessionState.LoggedOut
+        viewModelScope.launch { billing.clearIdentity() }
+    }
+
+    private suspend fun identifyBilling(user: AuthUser) {
+        if (billing.isConfigured) runCatching { billing.identify(user.id) }
     }
 }

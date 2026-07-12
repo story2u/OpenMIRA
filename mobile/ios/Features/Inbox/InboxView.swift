@@ -67,6 +67,13 @@ struct InboxView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
+                        if let user = session.currentUser {
+                            NavigationLink {
+                                SubscriptionView(api: session.api, billing: session.billing, userID: user.id)
+                            } label: {
+                                Label("套餐与用量", systemImage: "creditcard")
+                            }
+                        }
                         Button("退出登录", role: .destructive) { session.logout() }
                     } label: {
                         Label(session.currentUser?.displayName ?? "我", systemImage: "person.circle")

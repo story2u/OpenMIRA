@@ -37,7 +37,7 @@
 | 工作时间配置 | `/settings/working-hours` | `/configs/work-mode`、`PATCH /configs/{key}` | 部分实现 | 后端可读写；前端编辑只在本地状态 |
 | 统计摘要 | 无独立展示 | `GET /stats/summary` | 部分实现 | API 已有，前端未消费 |
 | pi Agent 消息后处理 | 看板提醒、详情页 SOP | Celery `agent.analyze_message`、`POST .../agent-analysis` | 部分实现 | 新消息异步分析、补判商机、结构化建议；默认开启，依赖有效 provider key，并执行套餐月额度 |
-| 订阅套餐与用量 | `/settings/subscription` | `GET /subscriptions/plans`、`GET /subscriptions/me` | 部分实现 | Free/Plus/Pro/Max entitlement、AI 账本、TG 限额和降级保留选择已实现；尚无支付/升级和用户级企微群配置 |
+| 统一订阅、购买与用量 | `/settings/subscription`、iOS/Android 套餐页 | `/subscriptions/{plans,catalog,me,sync,management}`、RevenueCat webhook | 部分实现 | RevenueCat 聚合 Paddle/App Store/Play，本地投影执行权益；三端 Offering/购买/恢复代码和 webhook 已实现。外部 Dashboard、真实 Sandbox E2E 与用户级企微群配置仍待完成，不能视作生产支付已开通 |
 | 链接安全核验 | 详情页 SOP | SafeLinkInspector + pi Agent | 已实现 | 公网/重定向/大小限制、结果持久化、可重跑；不是恶意软件扫描器，生产需受控 egress |
 | 联系方式提取 | 详情页 SOP | pi Agent 结果投影 | 部分实现 | 消息/公开网页中的联系方式可持久化；详情页手工编辑仍只更新浏览器状态 |
 | 后续行动建议 | 详情页发现步骤 | pi Agent 结构化 actions | 已实现 | 可建议邮件、加好友、私信和内部提醒；外部动作强制标记需人工批准，不会自动执行 |
@@ -59,7 +59,7 @@
 | AI 分类/回复 | `backend/app/infrastructure/ai/litellm_client.py` |
 | 异步任务 | `backend/app/worker/tasks.py`、`queue.py` |
 | pi Agent 后处理 | `backend/app/application/use_cases/analyze_message.py`、`infrastructure/agent/`、`pi-agent-runtime/` |
-| 订阅与额度 | `backend/app/domain/services/subscription_policy.py`、`application/use_cases/schedule_agent_analysis.py` |
+| 订阅与额度 | `backend/app/domain/services/subscription_policy.py`、`application/use_cases/sync_revenuecat_customer.py`、`infrastructure/billing/` |
 | 持久化 | `backend/app/infrastructure/db/models.py`、`repositories.py` |
 
 ## 扩展功能时的同步清单

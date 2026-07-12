@@ -8,6 +8,10 @@ settings:
   base:
     SWIFT_VERSION: "6.0"
     TARGETED_DEVICE_FAMILY: "1"
+packages:
+  RevenueCat:
+    url: https://github.com/RevenueCat/purchases-ios-spm.git
+    from: 5.43.0
 targets:
   OpportunityRadar:
     type: application
@@ -18,6 +22,8 @@ targets:
       - Features
       - Models
       - Assets.xcassets
+    dependencies:
+      - package: RevenueCat
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.codeiy.im
@@ -27,6 +33,7 @@ targets:
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         MARKETING_VERSION: "1.0.0"
         CURRENT_PROJECT_VERSION: "2026071202"
+        REVENUECAT_IOS_PUBLIC_API_KEY: ""
         GENERATE_INFOPLIST_FILE: NO
   OpportunityRadarTests:
     type: bundle.unit-test
