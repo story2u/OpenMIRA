@@ -141,6 +141,7 @@ jobs:
       RUNTIME_PI_AGENT_MIN_OPPORTUNITY_CONFIDENCE: ${{ vars.PI_AGENT_MIN_OPPORTUNITY_CONFIDENCE }}
       RUNTIME_REVENUECAT_SECRET_API_KEY: ${{ secrets.REVENUECAT_SECRET_API_KEY }}
       RUNTIME_REVENUECAT_PROJECT_ID: ${{ vars.REVENUECAT_PROJECT_ID }}
+      RUNTIME_REVENUECAT_WEBHOOK_HMAC_SECRET: ${{ secrets.REVENUECAT_WEBHOOK_HMAC_SECRET }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -191,6 +192,7 @@ jobs:
               ;;
           esac
           test -n "$RUNTIME_REVENUECAT_SECRET_API_KEY" || { echo "REVENUECAT_SECRET_API_KEY secret is required"; exit 1; }
+          test -n "$RUNTIME_REVENUECAT_WEBHOOK_HMAC_SECRET" || { echo "REVENUECAT_WEBHOOK_HMAC_SECRET secret is required"; exit 1; }
           case "$VPS_DEPLOY_DIR" in
             *"'"*) echo "VPS_DEPLOY_DIR must not contain single quotes"; exit 1 ;;
           esac
@@ -268,6 +270,7 @@ jobs:
           append_env REVENUECAT_ENABLED "true"
           append_env REVENUECAT_SECRET_API_KEY "$RUNTIME_REVENUECAT_SECRET_API_KEY"
           append_env REVENUECAT_PROJECT_ID "$RUNTIME_REVENUECAT_PROJECT_ID"
+          append_env REVENUECAT_WEBHOOK_HMAC_SECRET "$RUNTIME_REVENUECAT_WEBHOOK_HMAC_SECRET"
           append_env REVENUECAT_RECONCILE_ENABLED "true"
           append_env CLOUDFLARE_TUNNEL_TOKEN "$CLOUDFLARE_TUNNEL_TOKEN"
 

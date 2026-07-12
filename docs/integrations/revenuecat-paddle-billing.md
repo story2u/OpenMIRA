@@ -14,6 +14,7 @@ transaction 的 `environment` 区分 Sandbox/Production，但 Customer identity 
 GitHub **Secrets**：
 
 - `REVENUECAT_SECRET_API_KEY`：服务端 Secret，供 Customer API 使用。
+- `REVENUECAT_WEBHOOK_HMAC_SECRET`：RevenueCat 开启 HMAC signing 时生成的 signing secret。
 
 GitHub **Variables**：
 
@@ -22,8 +23,8 @@ GitHub **Variables**：
 - `REVENUECAT_IOS_PUBLIC_API_KEY`、`REVENUECAT_ANDROID_PUBLIC_API_KEY`：进入对应平台构建配置。
 
 `REVENUECAT_ENABLED=true` 与 `REVENUECAT_RECONCILE_ENABLED=true` 由部署工作流直接写入 VPS `.env`，
-不使用 GitHub Variables。Webhook Authorization 和 RevenueCat 生成的 HMAC signing secret 也只保存在
-VPS `.env`，部署不会覆盖。Public SDK Key 不是 Secret，但必须使用对应平台的 Key。Paddle API Key、
+不使用 GitHub Variables。Webhook Authorization 只保存在 VPS `.env`；HMAC signing secret 从 GitHub
+Secret 同步。Public SDK Key 不是 Secret，但必须使用对应平台的 Key。Paddle API Key、
 App Store private key和 Google service-account JSON 不进入应用环境；Paddle Key 只粘贴到 RevenueCat。
 
 ## 2. RevenueCat Project 与目录
@@ -90,7 +91,8 @@ App Store private key和 Google service-account JSON 不进入应用环境；Pad
    文档当前标为 Pro integration），购买前确认账号套餐。
 2. URL：`https://im.story2u.xyz/api/v1/webhooks/revenuecat`；选择 Sandbox + Production lifecycle events。
 3. Authorization Header 填与 VPS `.env` 的 `REVENUECAT_WEBHOOK_AUTH_TOKEN` 完全一致的固定值。
-4. 开启 HMAC signing，把 RevenueCat 一次性显示的 secret 存入 VPS `.env`。服务校验
+4. 开启 HMAC signing，把 RevenueCat 一次性显示的 secret 存入 GitHub Secret
+   `REVENUECAT_WEBHOOK_HMAC_SECRET`，由部署同步到 VPS。服务校验
    `X-RevenueCat-Webhook-Signature: t=...,v1=...`、原始 body 和 300 秒容差。
 5. 部署会默认启用 RevenueCat 与 reconcile。确认 `/healthz` 后发送 Dashboard 测试事件，确认 API
    快速 200、Celery event

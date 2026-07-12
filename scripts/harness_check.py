@@ -473,11 +473,11 @@ def check_ci_and_commands(errors: list[str]) -> None:
                     errors.append(f"client source must not reference server payment secret {secret_name}: {relative(path)}")
 
     deploy_text = deploy_path.read_text(encoding="utf-8")
-    if "secrets.REVENUECAT_SECRET_API_KEY" not in deploy_text:
-        errors.append("deploy workflow must source REVENUECAT_SECRET_API_KEY from GitHub Secrets")
-    for vps_only_secret in ("REVENUECAT_WEBHOOK_AUTH_TOKEN", "REVENUECAT_WEBHOOK_HMAC_SECRET"):
-        if f"secrets.{vps_only_secret}" in deploy_text:
-            errors.append(f"deploy workflow must preserve VPS-only {vps_only_secret} instead of sourcing GitHub")
+    for github_secret in ("REVENUECAT_SECRET_API_KEY", "REVENUECAT_WEBHOOK_HMAC_SECRET"):
+        if f"secrets.{github_secret}" not in deploy_text:
+            errors.append(f"deploy workflow must source {github_secret} from GitHub Secrets")
+    if "secrets.REVENUECAT_WEBHOOK_AUTH_TOKEN" in deploy_text:
+        errors.append("deploy workflow must preserve VPS-only REVENUECAT_WEBHOOK_AUTH_TOKEN instead of sourcing GitHub")
     for enabled_setting in (
         'append_env REVENUECAT_ENABLED "true"',
         'append_env REVENUECAT_RECONCILE_ENABLED "true"',
