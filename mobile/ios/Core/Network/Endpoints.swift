@@ -78,4 +78,22 @@ extension APIClient {
     func templates() async throws -> [ReplyTemplate] {
         try await get("templates")
     }
+
+    // MARK: Subscriptions
+
+    func subscription() async throws -> SubscriptionUsage {
+        try await get("subscriptions/me")
+    }
+
+    func subscriptionCatalog() async throws -> [SubscriptionCatalogPlan] {
+        try await get("subscriptions/catalog")
+    }
+
+    func syncSubscription() async throws -> SubscriptionUsage {
+        try await post("subscriptions/sync")
+    }
+
+    func subscriptionManagement() async throws -> SubscriptionManagement {
+        try await get("subscriptions/management", query: [URLQueryItem(name: "client", value: "ios")])
+    }
 }

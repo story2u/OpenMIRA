@@ -13,6 +13,9 @@
 	<!-- 生产/TestFlight API 根地址；DEBUG 未注入时回落到本地后端。 -->
 	<key>RadarAPIBaseURL</key>
 	<string>https://im.story2u.xyz/api/v1</string>
+	<!-- RevenueCat iOS public SDK key. Inject through REVENUECAT_IOS_PUBLIC_API_KEY; never use a secret key. -->
+	<key>RevenueCatIOSPublicAPIKey</key>
+	<string>$(REVENUECAT_IOS_PUBLIC_API_KEY)</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
