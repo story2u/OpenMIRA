@@ -25,6 +25,8 @@ class Settings(BaseSettings):
     admin_api_token: str
     jwt_secret_key: str = ""
     access_token_expire_minutes: int = 60 * 24 * 7
+    password_login_max_attempts: int = Field(default=5, ge=1, le=100)
+    password_login_window_seconds: int = Field(default=300, ge=10, le=3600)
     frontend_base_url: str = "http://localhost:3000"
     cors_origins: list[AnyHttpUrl | str] = Field(default_factory=list)
 

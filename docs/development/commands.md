@@ -104,14 +104,14 @@ docker compose run --rm api python scripts/seed_demo.py
 docker compose up api celery_worker celery_beat telegram_listener
 ```
 
-移动端/本地联调需要带 owner 的数据和 JWT 时（seed 数据默认无主，登录用户看不到）：
+移动端/本地联调需要带 owner 的数据和演示账户时（seed 数据默认无主，登录用户看不到）：
 
 ```bash
 docker compose run --rm api python scripts/dev_login.py
 ```
 
-创建/复用 `demo@local.dev` 演示用户、把无主商机认领给他，并打印可粘贴进 iOS DEBUG
-登录通道的 JWT。仅限本地开发环境。
+创建/复用 `demo@local.dev` 演示用户、把无主商机认领给他，并打印本次生成的临时密码；再次运行
+会重置密码。使用 iOS 正式邮箱密码表单登录，仅限本地开发环境。
 
 - API 文档：`http://localhost:8000/docs`
 - 根健康检查：`http://localhost:8000/healthz`

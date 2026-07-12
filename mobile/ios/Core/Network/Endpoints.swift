@@ -13,6 +13,13 @@ extension APIClient {
         try await post("auth/oauth/\(provider)/native", body: NativeLoginRequest(idToken: idToken))
     }
 
+    func passwordLogin(email: String, password: String) async throws -> AuthToken {
+        try await post(
+            "auth/password/login",
+            body: PasswordLoginRequest(email: email, password: password)
+        )
+    }
+
     // MARK: Opportunities
 
     func opportunities(

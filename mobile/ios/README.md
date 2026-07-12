@@ -27,8 +27,8 @@ Swift 6 + SwiftUI 原生 app，作为现有后端 v1 REST API 的瘦客户端。
 | `Core/Network/APIClient.swift` | 唯一 HTTP 边界：JWT 注入、ISO8601（含小数秒）解码、错误映射 |
 | `Core/Network/Endpoints.swift` | 各资源方法，路径参数以 `backend/app/api/v1/routes/` 为准 |
 | `Core/Auth/Keychain.swift` | JWT 的 Keychain 读写清 |
-| `Core/Auth/SessionStore.swift` | `/auth/me` 会话恢复、Apple 登录、登出、DEBUG token 通道 |
-| `Features/Auth/LoginView.swift` | Sign in with Apple + DEBUG 调试登录 |
+| `Core/Auth/SessionStore.swift` | `/auth/me` 会话恢复、邮箱密码/Apple 登录、登出 |
+| `Features/Auth/LoginView.swift` | 邮箱密码登录 + Sign in with Apple |
 | `Features/Inbox/InboxView.swift` | 收件箱：筛选、分页、30s 轮询 |
 | `Features/Opportunity/OpportunityDetailView.swift` | 详情、消息历史、Agent 发现、回复、状态流转 |
 | `Models/Models.swift` | DTO 镜像 + 容错枚举 + JSONValue |
@@ -37,8 +37,9 @@ Swift 6 + SwiftUI 原生 app，作为现有后端 v1 REST API 的瘦客户端。
 
 ## 已实现（P0，iOS 侧）
 
-- **登录**：Sign in with Apple → `POST /auth/oauth/apple/native` 换 JWT；`/auth/me` 冷启动
-  恢复会话；登出清 Keychain。DEBUG 构建额外提供手动粘贴 JWT 的调试登录。
+- **登录**：已有密码账户通过 `POST /auth/password/login` 登录；Sign in with Apple 通过
+  `POST /auth/oauth/apple/native` 换 JWT；`/auth/me` 冷启动恢复会话；登出清 Keychain。
+  DEBUG 与 Release 均不提供粘贴 JWT 的旁路入口。
 - **收件箱**：`GET /opportunities`，状态/渠道筛选、分页、下拉刷新、30s 轮询。
 - **详情**：`GET /opportunities/{id}` + `GET /messages`，展示概要、检测依据、Agent 发现
   （链接核验、联系方式、动作建议、attention 标记）、消息历史。
@@ -67,8 +68,8 @@ make ios-check                                                          # 生成
 ```
 
 DEBUG 默认连本地后端 `http://127.0.0.1:8000/api/v1`；要连线上联调，在 scheme 里设环境变量
-`RADAR_API_URL=https://im.story2u.xyz/api/v1`。本地拿调试 JWT：起后端后
-`docker compose run --rm api python scripts/dev_login.py`（详见
+`RADAR_API_URL=https://im.story2u.xyz/api/v1`。本地创建演示账户密码：起后端后运行
+`docker compose run --rm api python scripts/dev_login.py`，再用脚本输出的邮箱和临时密码登录（详见
 [开发命令](../../docs/development/commands.md)）。
 
 ## 发布到 TestFlight / App Store
@@ -86,6 +87,6 @@ Release 构建已就绪：生产 API 地址烧进 Info.plist（`RadarAPIBaseURL`
 
 线上后端 `APPLE_NATIVE_CLIENT_IDS` 默认已是 `com.codeiy.im`（与 bundle id 一致），真机
 Apple 登录直连线上后端；若报 401，检查 Apple 开发者后台该 App ID 是否开启 Sign in with
-Apple。真机 Release 构建不含 DEBUG 调试登录入口。
+Apple。邮箱密码登录只适用于已有 `password_hash` 的账户。
 
 版本号在 `project.yml` 的 `MARKETING_VERSION` / `CURRENT_PROJECT_VERSION`，每次上传按需 bump。

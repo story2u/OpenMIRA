@@ -80,7 +80,7 @@
 - 2026-07-12：iOS 端先行落地（步骤 1/3/4/5/6/7 的 iOS 侧）：`mobile/ios/` 工程
   （xcodegen `project.yml` + 手写 Info.plist/entitlements）、Models 全量 DTO 镜像（容错枚举 +
   JSONValue）、APIClient/Endpoints、Keychain + SessionStore、登录页（Sign in with Apple +
-  DEBUG token 通道）、收件箱（筛选/分页/30s 轮询）、详情页（消息历史、Agent 发现、手动回复、
+  邮箱密码登录）、收件箱（筛选/分页/30s 轮询）、详情页（消息历史、Agent 发现、手动回复、
   AI 草稿、模板、状态流转/认领）、`Tests/ModelsDecodingTests`；`make ios-check` 入 Makefile 与
   commands.md。Android 仅占位 README（步骤 1 Android 子任务待做）；CI macOS runner 待接。
   Google Sign-In（需 SPM 依赖）为登录切片余项；端到端联调依赖步骤 2 的后端原生登录端点。

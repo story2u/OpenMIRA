@@ -292,3 +292,8 @@ struct OpportunityStatusUpdate: Encodable, Sendable {
 struct NativeLoginRequest: Encodable, Sendable {
     var idToken: String
 }
+
+struct PasswordLoginRequest: Encodable, Sendable {
+    var email: String
+    var password: String
+}

@@ -16,6 +16,7 @@
 | 能力 | 前端入口 | 后端/API | 成熟度 | 备注 |
 | --- | --- | --- | --- | --- |
 | Google / Apple OAuth 登录 | `/login` | `/api/v1/auth/oauth/*`、`/auth/me` | 部分实现 | 真实 OAuth 与 JWT；依赖外部 provider 配置，缺少端到端 OAuth 测试。移动端原生登录 `POST /auth/oauth/{google\|apple}/native`（id_token 换 JWT）已实现并有路由测试，audience 经 `GOOGLE/APPLE_NATIVE_CLIENT_IDS` 配置，为空即关闭 |
+| iOS 邮箱密码登录 | iOS 登录页 | `POST /auth/password/login`、`/auth/me` | 已实现 | 仅登录已有密码账户，不含注册/重置；PBKDF2 校验、统一失败响应、Redis 登录限流、JWT 存 Keychain；DEBUG/Release 均无粘贴 token 旁路 |
 | 商机列表、筛选、分页 | `/` | `GET /opportunities` | 已实现 | 登录后每 30 秒轮询；查询按 owner 隔离 |
 | 商机详情 | `/opportunity/[id]` | `GET /opportunities/{id}` | 部分实现 | 页面从列表 store 查找，未独立请求详情，刷新/深链能力有限 |
 | 消息历史 | 详情页 SOP | `GET /messages` | 部分实现 | API 已有；前端未调用，后端数据加载后消息 store 为空 |

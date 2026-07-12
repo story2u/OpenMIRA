@@ -1,15 +1,35 @@
 import AuthenticationServices
 import SwiftUI
 
-/// P0 登录页：Sign in with Apple。
-/// Google Sign-In 需要引入官方 SPM 依赖，作为登录切片的后续子任务（见 P0 计划步骤 3）。
+/// 登录页：邮箱密码和 Sign in with Apple。
 struct LoginView: View {
     @Environment(SessionStore.self) private var session
+    @State private var email = ""
+    @State private var password = ""
     @State private var errorMessage: String?
-    @State private var isSigningIn = false
-    #if DEBUG
-    @State private var debugToken = ""
-    #endif
+    @State private var activeLoginMethod: LoginMethod?
+    @FocusState private var focusedField: Field?
+
+    private enum LoginMethod {
+        case password
+        case apple
+    }
+
+    private enum Field {
+        case email
+        case password
+    }
+
+    private var canSubmitPassword: Bool {
+        let normalizedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines)
+        let emailParts = normalizedEmail.split(separator: "@", omittingEmptySubsequences: false)
+        let emailLooksValid = emailParts.count == 2 && emailParts[1].contains(".")
+        return emailLooksValid
+            && normalizedEmail.count <= 320
+            && !password.isEmpty
+            && password.count <= 128
+            && activeLoginMethod == nil
+    }
 
     var body: some View {
         VStack(spacing: 24) {
@@ -24,25 +44,59 @@ struct LoginView: View {
                 .foregroundStyle(.secondary)
             Spacer()
 
+            VStack(spacing: 14) {
+                TextField("邮箱", text: $email)
+                    .textContentType(.username)
+                    .keyboardType(.emailAddress)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .submitLabel(.next)
+                    .focused($focusedField, equals: .email)
+                    .onSubmit { focusedField = .password }
+                    .textFieldStyle(.roundedBorder)
+
+                SecureField("密码", text: $password)
+                    .textContentType(.password)
+                    .submitLabel(.go)
+                    .focused($focusedField, equals: .password)
+                    .onSubmit { submitPasswordLogin() }
+                    .textFieldStyle(.roundedBorder)
+
+                Button(action: submitPasswordLogin) {
+                    Group {
+                        if activeLoginMethod == .password {
+                            ProgressView()
+                                .tint(.white)
+                        } else {
+                            Text("使用邮箱登录")
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                .disabled(!canSubmitPassword)
+            }
+
+            HStack {
+                Rectangle()
+                    .frame(height: 1)
+                    .foregroundStyle(.tertiary)
+                Text("或")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                Rectangle()
+                    .frame(height: 1)
+                    .foregroundStyle(.tertiary)
+            }
+
             SignInWithAppleButton(.signIn) { request in
                 request.requestedScopes = [.fullName, .email]
             } onCompletion: { result in
                 handleApple(result)
             }
             .frame(height: 50)
-            .disabled(isSigningIn)
-
-            #if DEBUG
-            DisclosureGroup("开发调试登录") {
-                SecureField("粘贴后端签发的 JWT", text: $debugToken)
-                    .textFieldStyle(.roundedBorder)
-                Button("使用该 token 登录") {
-                    Task { await session.debugLogin(rawToken: debugToken) }
-                }
-                .disabled(debugToken.trimmingCharacters(in: .whitespaces).isEmpty)
-            }
-            .font(.footnote)
-            #endif
+            .disabled(activeLoginMethod != nil)
         }
         .padding(24)
         .alert("登录失败", isPresented: .init(
@@ -52,6 +106,20 @@ struct LoginView: View {
             Button("好", role: .cancel) {}
         } message: {
             Text(errorMessage ?? "")
+        }
+    }
+
+    private func submitPasswordLogin() {
+        guard canSubmitPassword else { return }
+        focusedField = nil
+        activeLoginMethod = .password
+        Task {
+            defer { activeLoginMethod = nil }
+            do {
+                try await session.signIn(email: email, password: password)
+            } catch {
+                errorMessage = error.localizedDescription
+            }
         }
     }
 
@@ -69,9 +137,9 @@ struct LoginView: View {
                 errorMessage = "未取得 Apple 身份令牌"
                 return
             }
-            isSigningIn = true
+            activeLoginMethod = .apple
             Task {
-                defer { isSigningIn = false }
+                defer { activeLoginMethod = nil }
                 do {
                     try await session.signInWithApple(idToken: idToken)
                 } catch {

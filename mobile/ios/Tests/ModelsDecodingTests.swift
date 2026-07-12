@@ -74,4 +74,13 @@ final class ModelsDecodingTests: XCTestCase {
         XCTAssertEqual(token.accessToken, "jwt")
         XCTAssertEqual(token.user.displayName, "Bruce")
     }
+
+    func testPasswordLoginRequestEncoding() throws {
+        let request = PasswordLoginRequest(email: "member@example.com", password: "secret")
+        let data = try JSONEncoder().encode(request)
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: String])
+
+        XCTAssertEqual(object["email"], "member@example.com")
+        XCTAssertEqual(object["password"], "secret")
+    }
 }

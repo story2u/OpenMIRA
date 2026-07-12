@@ -15,6 +15,12 @@ final class SessionStore {
     private(set) var state: State = .restoring
     let api: APIClient
 
+    private enum PasswordLoginError: LocalizedError {
+        case invalidCredentials
+
+        var errorDescription: String? { "邮箱或密码错误" }
+    }
+
     var currentUser: AuthUser? {
         if case .active(let user) = state { return user }
         return nil
@@ -48,18 +54,22 @@ final class SessionStore {
         state = .active(token.user)
     }
 
+    /// 已有密码账户用邮箱和密码换取 JWT；凭据本身不落盘。
+    func signIn(email: String, password: String) async throws {
+        do {
+            let token = try await api.passwordLogin(
+                email: email.trimmingCharacters(in: .whitespacesAndNewlines),
+                password: password
+            )
+            Keychain.saveToken(token.accessToken)
+            state = .active(token.user)
+        } catch APIError.unauthorized {
+            throw PasswordLoginError.invalidCredentials
+        }
+    }
+
     func logout() {
         Keychain.clearToken()
         state = .loggedOut
     }
-
-    #if DEBUG
-    /// ponytail: DEBUG-only 开发通道——后端原生登录端点落地前用手工签发的 JWT 调试，
-    /// 不进入 Release 构建。
-    func debugLogin(rawToken: String) async {
-        Keychain.saveToken(rawToken.trimmingCharacters(in: .whitespacesAndNewlines))
-        state = .restoring
-        await restore()
-    }
-    #endif
 }

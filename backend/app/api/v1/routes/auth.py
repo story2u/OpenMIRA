@@ -1,7 +1,8 @@
-from dataclasses import dataclass
-from datetime import timedelta
+import hashlib
 import html
 import json
+from dataclasses import dataclass
+from datetime import timedelta
 from typing import Any
 from urllib.parse import parse_qs, urlencode
 
@@ -9,10 +10,24 @@ import httpx
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import HTMLResponse
-from sqlalchemy.exc import DBAPIError, IntegrityError, OperationalError, ProgrammingError, SQLAlchemyError
+from redis.asyncio import Redis
+from redis.exceptions import RedisError
+from sqlalchemy.exc import (
+    DBAPIError,
+    IntegrityError,
+    OperationalError,
+    ProgrammingError,
+    SQLAlchemyError,
+)
 
-from app.api.deps import get_user_repo, require_user
-from app.application.dto import AuthTokenRead, AuthUserRead, NativeLoginRequest, OAuthAuthorizeRead
+from app.api.deps import get_redis_client, get_user_repo, require_user
+from app.application.dto import (
+    AuthTokenRead,
+    AuthUserRead,
+    NativeLoginRequest,
+    OAuthAuthorizeRead,
+    PasswordLoginRequest,
+)
 from app.application.mappers import to_auth_user_read
 from app.core.config import Settings, get_settings
 from app.core.security import (
@@ -20,6 +35,7 @@ from app.core.security import (
     create_apple_client_secret,
     create_signed_token,
     decode_signed_token,
+    verify_password,
     verify_rs256_jwt,
 )
 from app.infrastructure.db.models import User
@@ -27,6 +43,13 @@ from app.infrastructure.db.repositories import UserRepository
 
 router = APIRouter()
 logger = structlog.get_logger(__name__)
+
+# 未知邮箱和无密码账户也执行一次完整 PBKDF2 校验，避免凭响应耗时直接判断账户是否存在。
+_DUMMY_PASSWORD_HASH = (
+    "pbkdf2_sha256$390000$NTnntWml3AR2p5wJY4xhDA=="
+    "$X0fRTAj7lhHyrGHXyPeC7DgIaE9Tk6KkwbIppJAYC5k="
+)
+_INVALID_CREDENTIALS_DETAIL = "邮箱或密码错误"
 
 
 @dataclass(frozen=True)
@@ -48,6 +71,36 @@ def auth_token_response(user: User, settings: Settings) -> AuthTokenRead:
         accessToken=create_access_token(subject=user.id, settings=settings),
         user=to_auth_user_read(user),
     )
+
+
+async def enforce_password_login_rate_limit(
+    request: Request,
+    email: str,
+    redis: Redis,
+    settings: Settings,
+) -> str:
+    """按直连客户端与规范化邮箱限流；key 不保存邮箱明文。"""
+    client_host = request.client.host if request.client else "unknown"
+    fingerprint = hashlib.sha256(f"{client_host}\0{email}".encode()).hexdigest()
+    key = f"auth:password-login:{fingerprint}"
+    try:
+        pipeline = redis.pipeline(transaction=True)
+        pipeline.incr(key)
+        pipeline.expire(key, settings.password_login_window_seconds)
+        attempts, _ = await pipeline.execute()
+    except RedisError as exc:
+        logger.warning("auth.password_login_rate_limit_unavailable")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="登录服务暂时不可用",
+        ) from exc
+    if int(attempts) > settings.password_login_max_attempts:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="登录尝试过多，请稍后再试",
+            headers={"Retry-After": str(settings.password_login_window_seconds)},
+        )
+    return key
 
 
 def frontend_login_redirect(settings: Settings, token: str) -> str:
@@ -406,6 +459,51 @@ async def oauth_native_login(
             detail=oauth_persistence_error_detail(exc),
         ) from exc
     return auth_token_response(user, settings)
+
+
+@router.post("/password/login", response_model=AuthTokenRead)
+async def password_login(
+    request: Request,
+    payload: PasswordLoginRequest,
+    settings: Settings = Depends(get_settings),
+    repo: UserRepository = Depends(get_user_repo),
+    redis: Redis = Depends(get_redis_client),
+) -> AuthTokenRead:
+    """认证已有密码账户；所有凭据失败使用同一响应，避免暴露账户状态。"""
+    rate_limit_key = await enforce_password_login_rate_limit(
+        request,
+        payload.email,
+        redis,
+        settings,
+    )
+    try:
+        user = await repo.get_by_email(payload.email)
+        password_matches = verify_password(
+            payload.password,
+            user.password_hash if user and user.password_hash else _DUMMY_PASSWORD_HASH,
+        )
+        if not user or not password_matches or not user.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail=_INVALID_CREDENTIALS_DETAIL,
+            )
+        response = auth_token_response(await repo.mark_login(user), settings)
+    except HTTPException:
+        raise
+    except SQLAlchemyError as exc:
+        logger.exception(
+            "auth.password_login_persistence_failed",
+            error_class=exc.__class__.__name__,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="登录服务暂时不可用",
+        ) from exc
+    try:
+        await redis.delete(rate_limit_key)
+    except RedisError:
+        logger.warning("auth.password_login_rate_limit_reset_failed")
+    return response
 
 
 @router.get("/me", response_model=AuthUserRead)
