@@ -39,9 +39,9 @@ class Settings(BaseSettings):
     apple_oauth_private_key: str = ""
     # 移动端原生登录允许的 id_token audience，逗号分隔：
     # Google 为 iOS OAuth client id（如同时配置 server client id 也一并列出），
-    # Apple 为 app bundle id。为空表示原生登录未开放。
+    # Apple 为 app bundle id。Apple 默认填 iOS app 的 bundle id；Google 无稳定默认值。
     google_native_client_ids: str = ""
-    apple_native_client_ids: str = ""
+    apple_native_client_ids: str = "com.codeiy.im"
 
     default_timezone: str = "Asia/Shanghai"
     default_workdays: list[int] = Field(default_factory=lambda: [1, 2, 3, 4, 5])

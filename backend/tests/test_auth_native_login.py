@@ -104,6 +104,15 @@ def make_settings(**overrides: Any) -> Settings:
     return Settings(**values)
 
 
+def test_apple_native_audience_defaults_to_bundle_id() -> None:
+    settings = Settings(
+        database_url="postgresql+asyncpg://user:password@localhost:5432/im",
+        admin_api_token="admin-secret",
+        jwt_secret_key="jwt-secret",
+    )
+    assert settings.apple_native_client_ids == "com.codeiy.im"
+
+
 def make_client(monkeypatch: Any, settings: Settings, repo: FakeUserRepository) -> TestClient:
     async def fake_fetch_jwks(provider: str, jwks_url: str, client: Any) -> dict[str, Any]:
         return make_jwks()
