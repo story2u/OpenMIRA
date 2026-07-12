@@ -10,6 +10,9 @@ import com.codeiy.im.model.Opportunity
 import com.codeiy.im.model.OpportunityStatusUpdate
 import com.codeiy.im.model.PasswordLoginRequest
 import com.codeiy.im.model.ReplyTemplate
+import com.codeiy.im.model.SubscriptionCatalogPlan
+import com.codeiy.im.model.SubscriptionManagement
+import com.codeiy.im.model.SubscriptionUsage
 import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.PATCH
@@ -53,6 +56,18 @@ interface RadarApi {
 
     @GET("templates")
     suspend fun templates(): List<ReplyTemplate>
+
+    @GET("subscriptions/me")
+    suspend fun subscription(): SubscriptionUsage
+
+    @GET("subscriptions/catalog")
+    suspend fun subscriptionCatalog(): List<SubscriptionCatalogPlan>
+
+    @POST("subscriptions/sync")
+    suspend fun syncSubscription(): SubscriptionUsage
+
+    @GET("subscriptions/management")
+    suspend fun subscriptionManagement(@Query("client") client: String = "android"): SubscriptionManagement
 }
 
 val ApiBaseUrl: String get() = BuildConfig.API_BASE_URL

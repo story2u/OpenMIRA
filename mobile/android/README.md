@@ -25,10 +25,12 @@ Kotlin + Compose 原生 app，作为后端 v1 REST API 的瘦客户端，与 `mo
 | `core/network/RadarApi.kt` | 全部端点定义，路径以 `backend/app/api/v1/routes/` 为准 |
 | `core/auth/TokenStore.kt` | JWT 加密存取清 |
 | `core/auth/SessionStore.kt` | `/auth/me` 会话恢复、邮箱密码登录、登出 |
+| `core/billing/` | RevenueCat 身份、Offering、Google Play 购买与恢复协议边界 |
 | `model/Models.kt` | DTO 镜像 + 容错枚举 + `RadarJson` 配置 |
 | `feature/login/LoginScreen.kt` | 邮箱密码登录 |
 | `feature/inbox/InboxScreen.kt` | 收件箱：筛选、分页、下拉刷新、30s 轮询 |
 | `feature/opportunity/OpportunityDetailScreen.kt` | 详情、消息历史、Agent 发现、回复、状态流转 |
+| `feature/subscription/` | Google Play 套餐页；购买/恢复后由后端同步确认权益 |
 | `ui/Time.kt` | ISO8601 相对时间/短时间格式化 |
 | `../test/.../ModelsDecodingTest.kt` | 解码契约测试（与 iOS 同一夹具） |
 
@@ -39,21 +41,21 @@ Kotlin + Compose 原生 app，作为后端 v1 REST API 的瘦客户端，与 `mo
 - 详情：概要、检测依据、Agent 发现（链接核验/联系方式/动作建议/attention）、消息历史。
 - 回复：手动回复、AI 草稿（可编辑）、模板选用；失败报错不伪造已回复；额度耗尽展示后端提示。
 - 状态流转：认领/跟进/忽略/关闭，非法迁移展示后端 409 错误。
+- 订阅代码链路：登录后用后端用户 UUID 绑定 RevenueCat，加载 `default` Offering，支持
+  Google Play 月付/年付购买、用户主动恢复、后端权益同步和同渠道管理入口。未配置 Public Key
+  时保持只读且关闭购买；真实 Google Play License Tester E2E 待外部配置后验证。
 
 ## 待开发
 
 - Google 原生登录（Credential Manager + `POST /auth/oauth/google/native`，后端已就绪）。
 - 推送：后端推送通道（P0 计划步骤 8）落地后接 FCM 注册/接收/深链（步骤 9）。
-- P1：Telegram 连接引导、Agent 动作审批、订阅只读、今日概览（见蓝图）。
+- P1：Telegram 连接引导、Agent 动作审批、今日概览（见蓝图）。
 - CI：`make android-check` 接入 Linux CI。
 
 ## 本地开发
 
-首次需要生成 gradle wrapper（仓库只提交了 `gradle-wrapper.properties`，不提交二进制 jar）：
-
 ```bash
 cd mobile/android
-gradle wrapper          # 需本机 gradle（brew install gradle），或直接用 Android Studio 打开本目录
 ./gradlew assembleDebug
 make android-check      # lint + JVM 单元测试（在仓库根执行）
 ```
@@ -62,3 +64,7 @@ Android Studio（Ladybug+，JDK 17）打开 `mobile/android/` 即可运行到模
 `10.0.2.2` 指向宿主机的本地 compose 后端。本地联调账号：
 `docker compose run --rm api python scripts/dev_login.py` 会创建 `demo@local.dev`、认领无主
 商机并打印一次性密码，直接用邮箱 + 该密码登录。
+
+RevenueCat Public Android API Key 通过 Gradle property `REVENUECAT_ANDROID_PUBLIC_API_KEY` 注入，
+例如放在未提交的用户级 `~/.gradle/gradle.properties`。不得填 RevenueCat 服务端 Secret；空值时
+App 正常运行但不能购买或恢复。

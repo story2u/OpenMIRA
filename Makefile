@@ -36,6 +36,6 @@ ios-check:
 
 # 需要 JDK 17 + Android SDK；首次运行 `cd mobile/android && gradle wrapper` 生成 wrapper。
 android-check:
-	cd mobile/android && ./gradlew lintDebug testDebugUnitTest
+	cd mobile/android && ./gradlew --no-daemon lintDebug testDebugUnitTest assembleDebug
 
 check: harness-check backend-check pi-agent-check frontend-check
