@@ -595,11 +595,16 @@ class MessageRepository:
         self,
         channel: IMChannel,
         conversation_id: str,
+        owner_user_id: UUID | None,
         limit: int = 20,
     ) -> list[Message]:
         statement = (
             select(Message)
-            .where(Message.channel == channel, Message.conversation_id == conversation_id)
+            .where(
+                Message.channel == channel,
+                Message.conversation_id == conversation_id,
+                Message.owner_user_id == owner_user_id,
+            )
             .order_by(col(Message.sent_at).desc())
             .limit(limit)
         )

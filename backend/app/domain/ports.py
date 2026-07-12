@@ -1,10 +1,17 @@
 from datetime import datetime
-from typing import Any, Protocol
+from typing import Annotated, Any, Protocol
 from uuid import UUID
 
 from pydantic import BaseModel, Field
 
-from app.domain.enums import AgentActionType, IMChannel, LinkSafetyStatus, Priority, RuleType
+from app.domain.enums import (
+    AgentActionType,
+    IMChannel,
+    LinkSafetyStatus,
+    MessageDirection,
+    Priority,
+    RuleType,
+)
 
 
 class InboundMessage(BaseModel):
@@ -37,12 +44,35 @@ class DetectionRule(BaseModel):
 
 class DetectionResult(BaseModel):
     is_opportunity: bool
-    confidence: float = 0.0
-    title: str | None = None
-    summary: str | None = None
-    reason: str | None = None
-    matched_keywords: list[str] = Field(default_factory=list)
+    confidence: float = Field(default=0.0, ge=0.0, le=1.0)
+    title: str | None = Field(default=None, max_length=200)
+    summary: str | None = Field(default=None, max_length=2000)
+    reason: str | None = Field(default=None, max_length=1000)
+    matched_keywords: list[Annotated[str, Field(max_length=100)]] = Field(
+        default_factory=list,
+        max_length=20,
+    )
     priority: Priority = Priority.NORMAL
+    requires_human_review: bool = False
+
+
+class ConversationTurn(BaseModel):
+    sender_display_name: str | None = Field(default=None, max_length=256)
+    direction: MessageDirection
+    text: str = Field(max_length=1000)
+
+
+class OpportunityClassificationRequest(BaseModel):
+    text: str = Field(max_length=20000)
+    rule_score: float = Field(ge=0.0, le=1.0)
+    matched_keywords: list[Annotated[str, Field(max_length=100)]] = Field(
+        default_factory=list,
+        max_length=20,
+    )
+    ai_hints: list[str] = Field(default_factory=list, max_length=20)
+    conversation: list[ConversationTurn] = Field(default_factory=list, max_length=10)
+    source_type: str = Field(default="private", max_length=32)
+    group_name: str | None = Field(default=None, max_length=256)
 
 
 class LinkInspection(BaseModel):
@@ -123,7 +153,10 @@ class IMAdapter(Protocol):
 
 
 class OpportunityAIClassifier(Protocol):
-    async def classify(self, text: str, rule_score: float) -> DetectionResult:
+    async def classify(
+        self,
+        request: OpportunityClassificationRequest,
+    ) -> DetectionResult | None:
         ...
 
 

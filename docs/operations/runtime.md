@@ -27,11 +27,16 @@ Docker context。CI 分别验证两个锁文件。
 | 工作模式 | `DEFAULT_TIMEZONE`、`DEFAULT_WORKDAYS`、`DEFAULT_WORK_START/END`、`PENDING_HUMAN_SLA_MINUTES` | 决定人工/AI 路由与超时 |
 | Telegram | `TELEGRAM_BOT_TOKEN`、`TELEGRAM_WEBHOOK_SECRET`、`TELEGRAM_BOT_USERNAME`、`TELEGRAM_WEBHOOK_URL`、`TELEGRAM_INTEGRATION_MODE` | 原生 Bot 连接/webhook；首次 release 自动生成并持久化 secret，生产 URL/live/600 秒 TTL 均有 compose 默认值，群额度包含旧 monitor 与新 source |
 | 企业微信 | `WECOM_CORP_ID`、`WECOM_AGENT_ID`、`WECOM_SECRET`、`WECOM_TOKEN`、`WECOM_AES_KEY` | webhook 验签、解密与发送 |
-| AI/发送 | `AI_ENABLED`、`LITELLM_MODEL`、`OPENAI_API_KEY`、`IM_SEND_ENABLED` | 两个功能开关默认关闭 |
+| AI/发送 | `AI_ENABLED`、`LITELLM_MODEL`、`OPENAI_API_KEY`、`IM_SEND_ENABLED` | 两个功能开关默认关闭；启用 AI 后，规则未高置信命中的非空消息都会进行语义复核，调用量会高于旧关键词灰区模式 |
 | pi Agent | `PI_AGENT_ENABLED`、`PI_AGENT_PROVIDER`、`PI_AGENT_MODEL`、`PI_AGENT_API_KEY`、`PI_AGENT_*TIMEOUT*`、`PI_AGENT_MAX_*` | 默认开启；DeepSeek 可由 GitHub `DEEPSEEK_API_KEY` Secret 映射，OpenAI 可回退使用 `OPENAI_API_KEY` |
 
 `JWT_SECRET_KEY` 在首次 VPS 部署缺失或仍为占位值时由 workflow 生成并保留。秘密放 GitHub Secrets，
 非敏感配置放 Variables；不得把生产 `.env` 回写仓库。
+
+商机语义复核复用 `LITELLM_MODEL`，不需要独立模型服务。每次只传当前 owner 同会话最近 6 条、合计
+不超过 4000 字符的规范化历史以及最多 20 条 AI hint；模型输出非法或 provider 失败时回退到规则结果。
+模型补判不会获得自动发送权限，只创建待人工审核商机。需要控制成本时关闭 `AI_ENABLED` 即可恢复纯
+规则路径；后续应在有金标数据后增加本地语义候选层，以降低全量复核调用。
 
 ## 队列
 
