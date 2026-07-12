@@ -17,11 +17,16 @@ targets:
       - Core
       - Features
       - Models
+      - Assets.xcassets
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.codeiy.im
         INFOPLIST_FILE: Info.plist
         CODE_SIGN_ENTITLEMENTS: OpportunityRadar.entitlements
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        GENERATE_INFOPLIST_FILE: NO
   OpportunityRadarTests:
     type: bundle.unit-test
     platform: iOS
