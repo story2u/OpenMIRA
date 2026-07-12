@@ -98,6 +98,15 @@
   `ITSAppUsesNonExemptEncryption=false`、`MARKETING_VERSION`/`CURRENT_PROJECT_VERSION`。
   新增 `mobile/ios/README.md` 记录实现状态、文件地图、待办与发布流程。签名/上传需用户在
   有 Apple 开发者凭据的机器上执行。
+- 2026-07-12：Android 端落地（步骤 3/4/5/6/7 的 Android 侧，分支 `features/android-app`
+  从 `release/v2.0.0` 拉出）：`mobile/android/` Gradle 工程（Kotlin 2.1 + Compose Material3）、
+  `model/Models.kt` 全量 DTO 镜像（容错枚举 + `RadarJson`）、`core/network`（Retrofit +
+  ApiClient/ApiError）、`core/auth`（EncryptedSharedPreferences + SessionStore）、登录
+  （邮箱密码，对齐 iOS 的 `password/login`）、收件箱（筛选/分页/下拉刷新/30s 轮询）、详情
+  （消息历史、Agent 发现、手动回复、AI 草稿、模板、状态流转/认领）、`ModelsDecodingTest`
+  （与 iOS 同夹具）；`make android-check`（`./gradlew lintDebug testDebugUnitTest`）入 Makefile，
+  `mobile/android/README.md` 更新。Gradle wrapper jar 不入库，本机 `gradle wrapper` 或
+  Android Studio 生成；本会话无 Android SDK/gradle，未跑 `make android-check`。
 
 ## 发现日志
 
@@ -124,6 +133,11 @@
 - 2026-07-12：原生登录请求体契约定为 `{"idToken": "<jwt>"}`（iOS `NativeLoginRequest`），
   步骤 2 的后端实现必须按此对齐；未知枚举值在 iOS 端统一容错为 `unknown`，避免后端新增
   枚举导致旧版本 app 整个列表解码失败。
+- 2026-07-12：Android P0 登录选邮箱密码而非 Google 原生——`release/v2.0.0` 已有
+  `POST /auth/password/login` 可直接用，Google Sign-In 需引入 Credential Manager 依赖与
+  Google Cloud OAuth client 配置，列为 Android 后续切片（后端 `google/native` 端点已就绪）。
+  Android 枚举容错用 kotlinx.serialization 的 `coerceInputValues` + 每个枚举的 `UNKNOWN`
+  默认值实现，语义与 iOS TolerantEnum 一致。
 
 ## 验证记录
 
@@ -139,6 +153,7 @@
 | 后端 pytest 全量 | 通过（2026-07-12） | 47 passed / 3 skipped（Postgres 仓储测试本地跳过，CI 有服务）；含 7 个新原生登录路由测试 |
 | 后端 compileall + ruff（E,F,ASYNC） | 通过（2026-07-12） | app/tests/scripts/alembic 全部通过 |
 | `uv sync --locked` | 未运行 | 会话沙箱禁写 `~/.cache/uv`；用主仓库同锁 `.venv` 执行上述检查，CI 会跑 locked sync |
+| `make android-check`（gradle lint + 单测） | 未运行 | 本会话无 Android SDK/gradle；需在装 Android Studio 或 SDK 的机器执行；Kotlin 源码尚未编译验证 |
 
 ## 回滚与恢复
 

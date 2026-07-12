@@ -10,3 +10,13 @@ node_modules/
 # xcodegen 产物（源是 mobile/ios/project.yml）
 mobile/ios/*.xcodeproj/
 mobile/ios/.build/
+
+# Android 构建产物与本机配置
+mobile/android/.gradle/
+mobile/android/build/
+mobile/android/app/build/
+mobile/android/local.properties
+mobile/android/.idea/
+mobile/android/gradlew
+mobile/android/gradlew.bat
+mobile/android/gradle/wrapper/gradle-wrapper.jar

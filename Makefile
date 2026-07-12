@@ -1,4 +1,4 @@
-.PHONY: harness-check backend-sync backend-check pi-agent-sync pi-agent-check frontend-check ios-check check
+.PHONY: harness-check backend-sync backend-check pi-agent-sync pi-agent-check frontend-check ios-check android-check check
 
 PYTHON ?= python3
 UV ?= uv
@@ -33,5 +33,9 @@ ios-check:
 	cd mobile/ios && xcodebuild -project OpportunityRadar.xcodeproj -scheme OpportunityRadar \
 		-destination 'generic/platform=iOS Simulator' -derivedDataPath .build/DerivedData \
 		CODE_SIGNING_ALLOWED=NO build
+
+# 需要 JDK 17 + Android SDK；首次运行 `cd mobile/android && gradle wrapper` 生成 wrapper。
+android-check:
+	cd mobile/android && ./gradlew lintDebug testDebugUnitTest
 
 check: harness-check backend-check pi-agent-check frontend-check
