@@ -230,6 +230,14 @@ class SubscriptionSnapshot:
     usage_period_end: datetime
     entitlements: PlanEntitlements
     cancel_at_period_end: bool
+    effective_store: BillingStore | None
+    billing_interval: BillingInterval | None
+    entitlement_expires_at: datetime | None
+    will_renew: bool
+    billing_issue: bool
+    multiple_active_subscriptions: bool
+    last_synced_at: datetime | None
+    management_url_encrypted: str | None
 
     @property
     def billing_period(self) -> BillingPeriod | None:
@@ -537,6 +545,14 @@ class SubscriptionRepository:
             usage_period_end=usage_period.end,
             entitlements=get_plan_entitlements(plan_code),
             cancel_at_period_end=bool(account and account.cancel_at_period_end),
+            effective_store=(account.effective_store if account else None),
+            billing_interval=(account.billing_interval if account else None),
+            entitlement_expires_at=(account.entitlement_expires_at if account else None),
+            will_renew=bool(account and account.will_renew),
+            billing_issue=bool(account and account.billing_issue),
+            multiple_active_subscriptions=bool(account and account.multiple_active_subscriptions),
+            last_synced_at=(account.last_synced_at if account else None),
+            management_url_encrypted=(account.management_url_encrypted if account else None),
         )
 
     async def reserve_agent_analysis(

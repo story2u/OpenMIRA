@@ -7,6 +7,8 @@ from app.core.time_window import WorkTimeConfig
 from app.domain.enums import (
     AgentActionType,
     AgentAnalysisStatus,
+    BillingInterval,
+    BillingStore,
     FrontendOpportunityStatus,
     IMChannel,
     MessageSource,
@@ -208,6 +210,34 @@ class SubscriptionUsageRead(BaseModel):
     aiAnalysesConsumed: int
     aiAnalysesReserved: int
     aiAnalysesRemaining: int
+    effectiveStore: BillingStore | None = None
+    billingInterval: BillingInterval | None = None
+    billingPeriodStart: datetime | None = None
+    billingPeriodEnd: datetime | None = None
+    usagePeriodStart: datetime
+    usagePeriodEnd: datetime
+    entitlementExpiresAt: datetime | None = None
+    willRenew: bool = False
+    billingIssue: bool = False
+    multipleActiveSubscriptions: bool = False
+    managementUrl: str | None = None
+    lastSyncedAt: datetime | None = None
+
+
+class SubscriptionCatalogPlanRead(BaseModel):
+    planCode: PlanCode
+    displayName: str
+    rank: int
+    entitlements: PlanEntitlementsRead
+    availableIntervals: list[BillingInterval]
+    revenuecatPackageIdentifiers: list[str]
+
+
+class SubscriptionManagementRead(BaseModel):
+    store: BillingStore | None = None
+    managementUrl: str | None = None
+    instruction: str
+    canOpenInCurrentClient: bool
 
 
 class OAuthAuthorizeRead(BaseModel):
