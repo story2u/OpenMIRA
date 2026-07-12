@@ -14,6 +14,9 @@ import com.codeiy.im.model.Opportunity
 import com.codeiy.im.model.OpportunityStatusUpdate
 import com.codeiy.im.model.PasswordLoginRequest
 import com.codeiy.im.model.ReplyTemplate
+import com.codeiy.im.model.SubscriptionCatalogPlan
+import com.codeiy.im.model.SubscriptionManagement
+import com.codeiy.im.model.SubscriptionUsage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
@@ -62,6 +65,10 @@ private class FakeRadarApi : RadarApi {
     override suspend fun aiDraft(id: String): AIDraft = error("unused")
     override suspend fun updateStatus(id: String, body: OpportunityStatusUpdate): Opportunity = error("unused")
     override suspend fun claim(id: String, operatorId: String): Opportunity = error("unused")
+    override suspend fun subscription(): SubscriptionUsage = error("unused")
+    override suspend fun subscriptionCatalog(): List<SubscriptionCatalogPlan> = error("unused")
+    override suspend fun syncSubscription(): SubscriptionUsage = error("unused")
+    override suspend fun subscriptionManagement(client: String): SubscriptionManagement = error("unused")
 }
 
 /** 收件箱竞态回归：筛选切换取消在途请求，旧响应不得覆盖新筛选结果。 */
