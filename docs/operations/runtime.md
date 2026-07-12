@@ -1,6 +1,6 @@
 # 运行与运维
 
-> 状态：当前事实 · 最后核验：2026-07-11
+> 状态：当前事实 · 最后核验：2026-07-12
 
 ## 服务拓扑
 
@@ -53,7 +53,8 @@ Telegram 原生连接由 API webhook 处理：先验证 Bot secret，再按 `upd
 ## 健康与启动顺序
 
 1. PostgreSQL/Redis 通过 healthcheck。
-2. `migrate` 执行 `alembic upgrade head` 并成功退出。
+2. 发布时先停止 API、worker、beat、Telegram listener 等数据库客户端，避免旧连接耗尽 PostgreSQL
+   连接槽；`migrate` 执行 `alembic upgrade head` 并成功退出。
 3. API、worker、beat、listener 启动。
 4. frontend/cloudflared 对外提供入口。
 
@@ -70,6 +71,8 @@ Telegram 原生连接由 API webhook 处理：先验证 Bot secret，再按 `upd
 - 镜像使用去掉 `release/` 前缀的版本号（如 `v1.0.0`）和 `sha-<short-sha>` 双标签；部署使用
   版本标签，不使用含 `/` 的分支名或漂移的 `latest`。
 - schema 变更上线前评估旧/新应用兼容窗口。不可向后兼容的迁移需要分阶段 expand/migrate/contract。
+- 迁移失败时数据库客户端保持停止状态，先检查 `migrate` 日志并修复或回滚，再恢复运行服务；不要让旧
+  应用继续访问可能已部分变更的 schema。
 - 回滚应用前确认数据库仍兼容旧版本；不能安全降级时以前向修复为主并在计划写明。
 
 ## 运维缺口
