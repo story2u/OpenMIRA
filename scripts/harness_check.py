@@ -353,6 +353,19 @@ def check_release_workflow(errors: list[str], deploy_path: Path | None = None) -
         errors.append("deploy workflow must register the Telegram webhook as a Python module")
     if "exec -T api python scripts/register_telegram_webhook.py" in deploy_text:
         errors.append("deploy workflow must not execute the Telegram webhook script by file path")
+    migration_command = (
+        "docker compose --env-file .env up --no-deps --force-recreate "
+        "--exit-code-from migrate migrate"
+    )
+    database_client_stop = "docker compose --env-file .env stop $database_client_services"
+    if (
+        "database_client_services=" not in deploy_text
+        or database_client_stop not in deploy_text
+        or migration_command not in deploy_text
+    ):
+        errors.append("deploy workflow must stop database clients before migration")
+    elif deploy_text.index(database_client_stop) > deploy_text.index(migration_command):
+        errors.append("deploy workflow must stop database clients before migration")
     for expected in (
         "  build:\n",
         "docker/build-push-action@",

@@ -405,6 +405,7 @@ jobs:
 
           stateful_services=""
           runtime_services=""
+          database_client_services=""
           run_migrate=false
           for service in $COMPOSE_SERVICES; do
             case "$service" in
@@ -416,6 +417,11 @@ jobs:
                 ;;
               *)
                 runtime_services="$runtime_services $service"
+                case "$service" in
+                  api|celery_worker|celery_beat|telegram_listener)
+                    database_client_services="$database_client_services $service"
+                    ;;
+                esac
                 ;;
             esac
           done
@@ -429,6 +435,10 @@ jobs:
           fi
 
           if [ "$run_migrate" = "true" ]; then
+            if [ -n "$database_client_services" ]; then
+              echo "Stopping database clients before migrations:$database_client_services"
+              docker compose --env-file .env stop $database_client_services
+            fi
             echo "Running database migrations..."
             docker compose --env-file .env rm -f migrate >/dev/null 2>&1 || true
             docker compose --env-file .env up --no-deps --force-recreate --exit-code-from migrate migrate
