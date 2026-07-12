@@ -1,6 +1,6 @@
 # 发布迁移前收敛数据库客户端
 
-> 状态：active · Owner：Codex · 创建：2026-07-12 · 更新：2026-07-12
+> 状态：completed · Owner：Codex · 创建：2026-07-12 · 更新：2026-07-12
 
 ## 目标与用户价值
 
@@ -19,10 +19,10 @@
 
 ## 验收标准
 
-- [ ] 迁移前停止已配置的 API、Celery worker/beat、Telegram listener。
-- [ ] 迁移成功后按原有流程重建运行服务。
-- [ ] Harness 拒绝缺少或错误排序的数据库客户端停止步骤。
-- [ ] `release/v2.0.0` 的重新发布通过迁移和健康检查。
+- [x] 迁移前停止已配置的 API、Celery worker/beat、Telegram listener。
+- [x] 迁移成功后按原有流程重建运行服务。
+- [x] Harness 拒绝缺少或错误排序的数据库客户端停止步骤。
+- [x] `release/v2.0.0` 的重新发布通过迁移和健康检查。
 
 ## 影响面与风险
 
@@ -32,13 +32,14 @@
 ## 实施步骤
 
 - [x] 从失败运行日志确认 PostgreSQL 连接耗尽位置。
-- [ ] 在部署脚本中收敛数据库客户端后再执行迁移。
-- [ ] 添加 Harness 回归检查并更新运行文档。
-- [ ] 验证、同步默认分支 workflow、重新发布 release。
+- [x] 在部署脚本中收敛数据库客户端后再执行迁移。
+- [x] 添加 Harness 回归检查并更新运行文档。
+- [x] 验证、同步默认分支 workflow、重新发布 release。
 
 ## 进度日志
 
 - 2026-07-12：开始；确认 release workflow 由默认分支 `main` 定义，修复需同步两个分支。
+- 2026-07-12：`main@84135eb` 与 `release/v2.0.0@ae97fc5` 已推送；重新发布成功。
 
 ## 发现日志
 
@@ -53,9 +54,10 @@
 
 | 命令/场景 | 结果 | 证据或备注 |
 | --- | --- | --- |
-| `make harness-check` | 待运行 | |
-| `make backend-check` | 待运行 | |
-| release 部署 | 待运行 | |
+| `make harness-check` | 通过 | 7 个 Harness 测试通过 |
+| `make backend-check` | 通过 | 55 passed、5 skipped |
+| `actionlint` | 通过 | CI 与 Deploy workflow 语法通过 |
+| release 部署 | 通过 | GitHub Actions `29187300051`：迁移、Deploy services、API/前端健康检查通过 |
 
 ## 回滚与恢复
 
@@ -64,5 +66,5 @@
 
 ## 结果与剩余风险
 
-完成时补充实际发布证据。若停止客户端后仍连接耗尽，需要在 VPS 上审计 `pg_stat_activity` 与
-`max_connections`，作为独立数据库容量问题处理。
+已交付迁移前数据库客户端收敛、Harness 防回归与运维说明。若停止客户端后仍连接耗尽，需要在 VPS 上
+审计 `pg_stat_activity` 与 `max_connections`，作为独立数据库容量问题处理。
