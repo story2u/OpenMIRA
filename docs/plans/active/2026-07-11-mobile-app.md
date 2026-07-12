@@ -60,7 +60,7 @@
 
 - [ ] 1. `mobile/ios/` 与 `mobile/android/` 脚手架 + `make ios-check` / `make android-check`
        + CI 接入（iOS 用 macOS runner）。
-- [ ] 2. 后端 `POST /auth/oauth/{provider}/native`（id_token 验签复用既有 JWKS 逻辑）+ 测试。
+- [x] 2. 后端 `POST /auth/oauth/{provider}/native`（id_token 验签复用既有 JWKS 逻辑）+ 测试。
 - [ ] 3. 双端登录/会话恢复/登出（Keychain、Keystore + `/auth/me`）。
 - [ ] 4. 双端收件箱列表（轮询版）+ 筛选分页。
 - [ ] 5. 双端详情页：详情 + 消息历史 + Agent 发现展示。
@@ -84,6 +84,12 @@
   AI 草稿、模板、状态流转/认领）、`Tests/ModelsDecodingTests`；`make ios-check` 入 Makefile 与
   commands.md。Android 仅占位 README（步骤 1 Android 子任务待做）；CI macOS runner 待接。
   Google Sign-In（需 SPM 依赖）为登录切片余项；端到端联调依赖步骤 2 的后端原生登录端点。
+- 2026-07-12：步骤 2 完成——`POST /auth/oauth/{provider}/native`（google/apple）落地：
+  验签复用 `verify_rs256_jwt`，新增 `GOOGLE/APPLE_NATIVE_CLIENT_IDS` 配置（逗号分隔
+  audience，为空 503 关闭），`web` 回调的 JWKS 拉取/claims 映射/用户解析提取为共享
+  helper；7 个路由测试覆盖建号/多 audience/apple/错 audience/未验证邮箱/未配置/未知
+  provider。契约与 iOS `NativeLoginRequest` 一致（`{"idToken"}`），响应复用 `AuthTokenRead`。
+  Android 待 iOS 联调通过后开工（用户指令）。
 
 ## 发现日志
 
@@ -121,6 +127,9 @@
 | DTO 解码/编码断言 | 通过（2026-07-12） | 与测试同断言的可执行检查在 macOS 实际运行（分数秒时间、未知枚举容错、snake_case 请求体） |
 | `make ios-check`（xcodegen + xcodebuild） | 未运行 | 本会话沙箱禁止 xcodegen/xcodebuild 写 `/var/folders` 暂存目录；需在正常终端或 CI macOS runner 执行 |
 | `xcodebuild test`（模拟器跑单测） | 未运行 | 同上；接入 CI 时补 |
+| 后端 pytest 全量 | 通过（2026-07-12） | 47 passed / 3 skipped（Postgres 仓储测试本地跳过，CI 有服务）；含 7 个新原生登录路由测试 |
+| 后端 compileall + ruff（E,F,ASYNC） | 通过（2026-07-12） | app/tests/scripts/alembic 全部通过 |
+| `uv sync --locked` | 未运行 | 会话沙箱禁写 `~/.cache/uv`；用主仓库同锁 `.venv` 执行上述检查，CI 会跑 locked sync |
 
 ## 回滚与恢复
 
