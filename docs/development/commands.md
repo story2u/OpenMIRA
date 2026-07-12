@@ -83,6 +83,19 @@ cd mobile/ios && xcodegen generate && open OpportunityRadar.xcodeproj
 （`xcodebuild test`）需要本机可用的模拟器，暂未纳入 `ios-check`，接入 CI macOS runner 时一并
 处理（见活动计划）。`make check` 不包含 `ios-check`，因为 Linux CI 无法执行。
 
+## Android App
+
+需要 JDK 17 + Android SDK（装 Android Studio 即含）；gradle wrapper 的二进制 jar 不入库，
+首次先生成：
+
+```bash
+cd mobile/android && gradle wrapper   # 或直接用 Android Studio 打开 mobile/android/
+make android-check                    # ./gradlew lintDebug testDebugUnitTest
+```
+
+`android-check` 跑 Android Lint 与 JVM 单元测试（含 DTO 解码契约测试），可在 Linux CI
+执行，接入 CI 待办见活动计划。`make check` 暂不包含 `android-check`（避免无 SDK 环境阻塞）。
+
 ## 完整本地检查
 
 ```bash

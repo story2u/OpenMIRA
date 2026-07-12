@@ -66,7 +66,7 @@ mobile/
 
 | # | 模块 | 依赖 API | 后端现状 | 验收要点 |
 | --- | --- | --- | --- | --- |
-| 1 | 登录 | `POST /auth/oauth/{provider}/native`（待新增）、`GET /auth/me` | OAuth/JWT 真实；原生 id_token 端点缺失 | Sign in with Apple / Google Sign-In 原生登录；token 存 Keychain/Keystore；冷启动经 `/auth/me` 恢复会话 |
+| 1 | 登录 | `POST /auth/password/login`、`POST /auth/oauth/{provider}/native`、`GET /auth/me` | 均已实现（原生 id_token 校验 + 邮箱密码登录） | iOS：Sign in with Apple；Android：邮箱密码。token 存 Keychain/加密存储；冷启动经 `/auth/me` 恢复会话。Google 原生登录为双端后续切片 |
 | 2 | 商机收件箱 | `GET /opportunities` | 已实现，owner 隔离 | 列表、状态/渠道筛选、分页、下拉刷新；P0 先轮询，推送落地后改为推送触发刷新 |
 | 3 | 商机详情 | `GET /opportunities/{id}`、`GET /messages` | API 已实现；Web 未消费这两个端点，不得照抄 Web 本地 store 实现 | 独立请求详情与消息历史；展示检测结果与 Agent 发现（链接核验结论、联系方式、紧急标记） |
 | 4 | 回复 | `POST /opportunities/{id}/manual-reply`、`POST /opportunities/{id}/ai-draft`、`GET /templates` | 后端真实发送/生成/落库 | 手动回复真实发送；AI 草稿可编辑后发送；模板只读选用；发送失败可重试且不得伪造已回复状态 |
