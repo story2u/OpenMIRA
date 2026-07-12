@@ -13,7 +13,8 @@
 | 适配器/安全单测 | webhook 解析、签名/加密、Telegram user client | backend tests + fakes/monkeypatch |
 | pi Agent 契约 | TypeBox 工具、faux provider、子进程 JSON、SSRF/重定向与策略投影 | `backend/pi-agent-runtime/test` + backend tests |
 | 应用/API 集成 | repository、owner 隔离、用例编排、HTTP 契约 | 当前覆盖不足，新增功能应优先补齐 |
-| 前端静态 | 类型、lint、Next.js 构建 | ESLint + `pnpm typecheck` + `pnpm build` |
+| 前端静态/单元 | 类型、billing 映射、lint、Next.js 构建 | Vitest + ESLint + `pnpm typecheck` + `pnpm build` |
+| 移动端 | DTO、Billing fake、ViewModel、平台编译 | XCTest/xcodebuild；JUnit/Gradle lint + test + assemble |
 | UI/端到端 | 登录后关键旅程、真实 API 写操作 | 当前未建立，是已知技术债 |
 
 ## 按风险选择验证

@@ -83,6 +83,48 @@ class SubscriptionStatus(StrEnum):
     INACTIVE = "inactive"
 
 
+class BillingProvider(StrEnum):
+    REVENUECAT = "revenuecat"
+
+
+class BillingStore(StrEnum):
+    APP_STORE = "app_store"
+    PLAY_STORE = "play_store"
+    PADDLE = "paddle"
+    TEST_STORE = "test_store"
+    UNKNOWN = "unknown"
+
+
+class BillingInterval(StrEnum):
+    MONTHLY = "monthly"
+    ANNUAL = "annual"
+    UNKNOWN = "unknown"
+
+
+class BillingSubscriptionStatus(StrEnum):
+    TRIALING = "trialing"
+    ACTIVE = "active"
+    GRACE_PERIOD = "grace_period"
+    BILLING_RETRY = "billing_retry"
+    CANCELED = "canceled"
+    PAUSED = "paused"
+    ON_HOLD = "on_hold"
+    EXPIRED = "expired"
+    REFUNDED = "refunded"
+    REVOKED = "revoked"
+    INACTIVE = "inactive"
+    UNKNOWN = "unknown"
+
+
+class BillingEventStatus(StrEnum):
+    RECEIVED = "received"
+    QUEUED = "queued"
+    PROCESSING = "processing"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    ORPHANED = "orphaned"
+
+
 class UsageFeature(StrEnum):
     PI_AGENT_ANALYSIS = "pi_agent_analysis"
 

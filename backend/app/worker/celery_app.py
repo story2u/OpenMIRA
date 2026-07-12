@@ -23,11 +23,18 @@ celery_app.conf.update(
         "ai.generate_and_send_reply": {"queue": "ai"},
         "agent.analyze_message": {"queue": "agent"},
         "opportunity.sweep_pending_for_ai": {"queue": "default"},
+        "billing.process_revenuecat_event": {"queue": "default"},
+        "billing.sync_revenuecat_customer": {"queue": "default"},
+        "billing.reconcile_revenuecat_subscriptions": {"queue": "default"},
     },
     beat_schedule={
         "sweep-pending-human-every-5-minutes": {
             "task": "opportunity.sweep_pending_for_ai",
             "schedule": 300.0,
+        },
+        "reconcile-revenuecat-subscriptions": {
+            "task": "billing.reconcile_revenuecat_subscriptions",
+            "schedule": float(settings.revenuecat_reconcile_interval_hours * 3600),
         },
     },
 )

@@ -1,7 +1,8 @@
-from dataclasses import dataclass
-from datetime import timedelta
+import hashlib
 import html
 import json
+from dataclasses import dataclass
+from datetime import timedelta
 from typing import Any
 from urllib.parse import parse_qs, urlencode
 
@@ -9,10 +10,24 @@ import httpx
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import HTMLResponse
-from sqlalchemy.exc import DBAPIError, IntegrityError, OperationalError, ProgrammingError, SQLAlchemyError
+from redis.asyncio import Redis
+from redis.exceptions import RedisError
+from sqlalchemy.exc import (
+    DBAPIError,
+    IntegrityError,
+    OperationalError,
+    ProgrammingError,
+    SQLAlchemyError,
+)
 
-from app.api.deps import get_user_repo, require_user
-from app.application.dto import AuthTokenRead, AuthUserRead, OAuthAuthorizeRead
+from app.api.deps import get_redis_client, get_user_repo, require_user
+from app.application.dto import (
+    AuthTokenRead,
+    AuthUserRead,
+    NativeLoginRequest,
+    OAuthAuthorizeRead,
+    PasswordLoginRequest,
+)
 from app.application.mappers import to_auth_user_read
 from app.core.config import Settings, get_settings
 from app.core.security import (
@@ -20,6 +35,7 @@ from app.core.security import (
     create_apple_client_secret,
     create_signed_token,
     decode_signed_token,
+    verify_password,
     verify_rs256_jwt,
 )
 from app.infrastructure.db.models import User
@@ -27,6 +43,13 @@ from app.infrastructure.db.repositories import UserRepository
 
 router = APIRouter()
 logger = structlog.get_logger(__name__)
+
+# 未知邮箱和无密码账户也执行一次完整 PBKDF2 校验，避免凭响应耗时直接判断账户是否存在。
+_DUMMY_PASSWORD_HASH = (
+    "pbkdf2_sha256$390000$NTnntWml3AR2p5wJY4xhDA=="
+    "$X0fRTAj7lhHyrGHXyPeC7DgIaE9Tk6KkwbIppJAYC5k="
+)
+_INVALID_CREDENTIALS_DETAIL = "邮箱或密码错误"
 
 
 @dataclass(frozen=True)
@@ -48,6 +71,36 @@ def auth_token_response(user: User, settings: Settings) -> AuthTokenRead:
         accessToken=create_access_token(subject=user.id, settings=settings),
         user=to_auth_user_read(user),
     )
+
+
+async def enforce_password_login_rate_limit(
+    request: Request,
+    email: str,
+    redis: Redis,
+    settings: Settings,
+) -> str:
+    """按直连客户端与规范化邮箱限流；key 不保存邮箱明文。"""
+    client_host = request.client.host if request.client else "unknown"
+    fingerprint = hashlib.sha256(f"{client_host}\0{email}".encode()).hexdigest()
+    key = f"auth:password-login:{fingerprint}"
+    try:
+        pipeline = redis.pipeline(transaction=True)
+        pipeline.incr(key)
+        pipeline.expire(key, settings.password_login_window_seconds)
+        attempts, _ = await pipeline.execute()
+    except RedisError as exc:
+        logger.warning("auth.password_login_rate_limit_unavailable")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="登录服务暂时不可用",
+        ) from exc
+    if int(attempts) > settings.password_login_max_attempts:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="登录尝试过多，请稍后再试",
+            headers={"Retry-After": str(settings.password_login_window_seconds)},
+        )
+    return key
 
 
 def frontend_login_redirect(settings: Settings, token: str) -> str:
@@ -133,6 +186,68 @@ def oauth_persistence_error_detail(exc: SQLAlchemyError) -> str:
     return f"OAuth user persistence failed: {exc.__class__.__name__}"
 
 
+async def fetch_provider_jwks(
+    provider: str,
+    jwks_url: str,
+    client: httpx.AsyncClient,
+) -> dict[str, Any]:
+    try:
+        jwks_response = await client.get(jwks_url, headers={"Accept": "application/json"})
+    except httpx.RequestError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"{provider} JWKS endpoint is unavailable",
+        ) from exc
+    if jwks_response.status_code >= 400:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"{provider} JWKS endpoint returned {jwks_response.status_code}",
+        )
+    try:
+        return jwks_response.json()
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"{provider} JWKS endpoint returned invalid JSON",
+        ) from exc
+
+
+def profile_from_id_token_claims(provider: str, claims: dict[str, Any]) -> dict[str, Any]:
+    subject = claims.get("sub")
+    if not subject:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="OAuth subject is missing")
+    return {
+        "provider": provider,
+        "subject": str(subject),
+        "email": claims.get("email"),
+        "email_verified": claims.get("email_verified") in {True, "true", "1"},
+        "name": claims.get("name") or "",
+        "avatar_url": claims.get("picture") or "",
+    }
+
+
+async def resolve_profile_user(
+    provider: str,
+    profile: dict[str, Any],
+    repo: UserRepository,
+) -> User:
+    email = profile.get("email")
+    if email:
+        if not profile.get("email_verified"):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="OAuth email is not verified")
+        return await repo.get_or_create_oauth_user(
+            provider=provider,
+            provider_subject=profile["subject"],
+            email=email,
+            display_name=profile.get("name") or email.split("@", 1)[0],
+            avatar_url=profile.get("avatar_url") or "",
+        )
+    existing_user = await repo.get_by_auth_account(provider, profile["subject"])
+    if not existing_user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="OAuth email is missing")
+    return await repo.mark_login(existing_user)
+
+
 async def exchange_code_for_profile(
     provider: str,
     code: str,
@@ -180,25 +295,7 @@ async def exchange_code_for_profile(
         if not id_token:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="OAuth id_token missing")
 
-        try:
-            jwks_response = await client.get(config.jwks_url, headers={"Accept": "application/json"})
-        except httpx.RequestError as exc:
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail=f"{provider} JWKS endpoint is unavailable",
-            ) from exc
-        if jwks_response.status_code >= 400:
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail=f"{provider} JWKS endpoint returned {jwks_response.status_code}",
-            )
-        try:
-            jwks = jwks_response.json()
-        except ValueError as exc:
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail=f"{provider} JWKS endpoint returned invalid JSON",
-            ) from exc
+        jwks = await fetch_provider_jwks(provider, config.jwks_url, client)
 
     try:
         claims = verify_rs256_jwt(
@@ -210,18 +307,7 @@ async def exchange_code_for_profile(
     except (KeyError, TypeError, ValueError) as exc:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc)) from exc
 
-    subject = claims.get("sub")
-    if not subject:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="OAuth subject is missing")
-
-    return {
-        "provider": provider,
-        "subject": str(subject),
-        "email": claims.get("email"),
-        "email_verified": claims.get("email_verified") in {True, "true", "1"},
-        "name": claims.get("name") or "",
-        "avatar_url": claims.get("picture") or "",
-    }
+    return profile_from_id_token_claims(provider, claims)
 
 
 async def complete_oauth_login(
@@ -237,22 +323,7 @@ async def complete_oauth_login(
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="OAuth state mismatch")
 
         profile = await exchange_code_for_profile(provider, code, settings)
-        email = profile.get("email")
-        if email:
-            if not profile.get("email_verified"):
-                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="OAuth email is not verified")
-            user = await repo.get_or_create_oauth_user(
-                provider=provider,
-                provider_subject=profile["subject"],
-                email=email,
-                display_name=profile.get("name") or email.split("@", 1)[0],
-                avatar_url=profile.get("avatar_url") or "",
-            )
-        else:
-            existing_user = await repo.get_by_auth_account(provider, profile["subject"])
-            if not existing_user:
-                raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="OAuth email is missing")
-            user = await repo.mark_login(existing_user)
+        user = await resolve_profile_user(provider, profile, repo)
 
         return frontend_login_response(settings, create_access_token(subject=user.id, settings=settings))
     except HTTPException:
@@ -320,6 +391,119 @@ async def apple_oauth_form_post_callback(
     if not code or not state_value:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="OAuth callback is missing code or state")
     return await complete_oauth_login("apple", code, state_value, settings, repo)
+
+
+# 原生登录只做 id_token 验签，不走 code 交换；audience 是移动端凭据（非 Web client id）。
+NATIVE_ID_TOKEN_PROVIDERS: dict[str, tuple[str, str]] = {
+    "google": ("https://www.googleapis.com/oauth2/v3/certs", "https://accounts.google.com"),
+    "apple": ("https://appleid.apple.com/auth/keys", "https://appleid.apple.com"),
+}
+
+
+def native_login_audiences(provider: str, settings: Settings) -> list[str]:
+    raw = {
+        "google": settings.google_native_client_ids,
+        "apple": settings.apple_native_client_ids,
+    }[provider]
+    audiences = [item.strip() for item in raw.split(",") if item.strip()]
+    if not audiences:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"{provider} native login is not configured",
+        )
+    return audiences
+
+
+@router.post("/oauth/{provider}/native", response_model=AuthTokenRead)
+async def oauth_native_login(
+    provider: str,
+    payload: NativeLoginRequest,
+    settings: Settings = Depends(get_settings),
+    repo: UserRepository = Depends(get_user_repo),
+) -> AuthTokenRead:
+    if provider not in NATIVE_ID_TOKEN_PROVIDERS:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="unsupported OAuth provider")
+    audiences = native_login_audiences(provider, settings)
+    jwks_url, issuer = NATIVE_ID_TOKEN_PROVIDERS[provider]
+
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        jwks = await fetch_provider_jwks(provider, jwks_url, client)
+
+    claims: dict[str, Any] | None = None
+    last_error: Exception | None = None
+    for audience in audiences:
+        try:
+            claims = verify_rs256_jwt(payload.idToken, jwks=jwks, issuer=issuer, audience=audience)
+            break
+        except (KeyError, TypeError, ValueError) as exc:
+            last_error = exc
+    if claims is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=str(last_error) if last_error else "invalid id token",
+        )
+
+    profile = profile_from_id_token_claims(provider, claims)
+    try:
+        user = await resolve_profile_user(provider, profile, repo)
+    except HTTPException:
+        raise
+    except SQLAlchemyError as exc:
+        logger.exception(
+            "oauth.native_user_persistence_failed",
+            provider=provider,
+            error_class=exc.__class__.__name__,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=oauth_persistence_error_detail(exc),
+        ) from exc
+    return auth_token_response(user, settings)
+
+
+@router.post("/password/login", response_model=AuthTokenRead)
+async def password_login(
+    request: Request,
+    payload: PasswordLoginRequest,
+    settings: Settings = Depends(get_settings),
+    repo: UserRepository = Depends(get_user_repo),
+    redis: Redis = Depends(get_redis_client),
+) -> AuthTokenRead:
+    """认证已有密码账户；所有凭据失败使用同一响应，避免暴露账户状态。"""
+    rate_limit_key = await enforce_password_login_rate_limit(
+        request,
+        payload.email,
+        redis,
+        settings,
+    )
+    try:
+        user = await repo.get_by_email(payload.email)
+        password_matches = verify_password(
+            payload.password,
+            user.password_hash if user and user.password_hash else _DUMMY_PASSWORD_HASH,
+        )
+        if not user or not password_matches or not user.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail=_INVALID_CREDENTIALS_DETAIL,
+            )
+        response = auth_token_response(await repo.mark_login(user), settings)
+    except HTTPException:
+        raise
+    except SQLAlchemyError as exc:
+        logger.exception(
+            "auth.password_login_persistence_failed",
+            error_class=exc.__class__.__name__,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="登录服务暂时不可用",
+        ) from exc
+    try:
+        await redis.delete(rate_limit_key)
+    except RedisError:
+        logger.warning("auth.password_login_rate_limit_reset_failed")
+    return response
 
 
 @router.get("/me", response_model=AuthUserRead)

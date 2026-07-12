@@ -1,0 +1,43 @@
+name: Android
+
+on:
+  push:
+    branches: ["release/v*.*.*", "hotfix/*"]
+    paths: ["mobile/android/**", ".github/workflows/android.yml"]
+  pull_request:
+    paths: ["mobile/android/**", ".github/workflows/android.yml"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Lint, Test, Assemble
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: mobile/android
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      # ponytail: wrapper jar 尚未入库（见 mobile/android/README.md），CI 钉死 Gradle 版本
+      # 保证可复现；jar 提交后改回 ./gradlew。版本须与 gradle-wrapper.properties 一致。
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.11.1"
+
+      - name: Lint, unit test, assemble
+        run: gradle lintDebug testDebugUnitTest assembleDebug

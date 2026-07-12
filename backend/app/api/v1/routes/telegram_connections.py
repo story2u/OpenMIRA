@@ -4,6 +4,9 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import BaseModel
 from sqlalchemy.exc import IntegrityError
+from telethon import TelegramClient
+from telethon.sessions import StringSession
+from telethon.tl.types import Channel, Chat
 
 from app.api.deps import (
     get_subscription_repo,
@@ -15,12 +18,15 @@ from app.application.dto import (
     TelegramConnectionAttemptRead,
     TelegramConnectionHealthRead,
     TelegramConnectionRead,
+    TelegramMtprotoDialogRead,
+    TelegramMtprotoSourceCreate,
 )
 from app.application.mappers import (
     to_telegram_connection_attempt_read,
     to_telegram_connection_read,
 )
 from app.core.config import Settings, get_settings
+from app.core.security import decrypt_secret
 from app.core.telegram_connection_tokens import (
     create_chat_request_ids,
     create_connection_token,
@@ -121,15 +127,18 @@ async def get_health(
         botConfigured=settings.telegram_bot_configured and not production_mock,
         botUsername=settings.telegram_bot_username or None,
         businessAvailable=settings.telegram_bot_configured and not production_mock,
-        # The platform credentials are deliberately global, but this release does not yet ship the QR worker.
-        mtprotoQrAvailable=False,
+        mtprotoQrAvailable=settings.telegram_mtproto_qr_available,
         listenerMode="vps-long-running",
         legacyMonitoringActive=bool(legacy_config and legacy_config.enabled),
         legacyActiveSourceCount=legacy_active_count,
         message=(
             "生产环境禁止使用 Telegram mock adapter"
             if production_mock
-            else "MTProto QR worker 尚未部署；不会收集用户 API ID、API Hash 或 Session。"
+            else (
+                None
+                if settings.telegram_mtproto_qr_available
+                else "普通账号 QR 尚未由管理员配置；不会收集用户 API Hash、手机号、验证码或 Session。"
+            )
         ),
     )
 
@@ -254,11 +263,39 @@ async def start_business_connection(
 
 @router.post("/connect/mtproto-qr", response_model=TelegramConnectionAttemptRead)
 async def start_mtproto_qr_connection(
-    _: User = Depends(require_user),
+    settings: Settings = Depends(get_settings),
+    current_user: User = Depends(require_user),
+    connection_repo: TelegramConnectionRepository = Depends(get_telegram_connection_repo),
 ) -> TelegramConnectionAttemptRead:
-    raise HTTPException(
-        status_code=status.HTTP_409_CONFLICT,
-        detail="MTProto QR worker has not been deployed; this release does not collect user credentials",
+    if not settings.telegram_mtproto_qr_available:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="MTProto QR worker is not configured by the administrator",
+        )
+    attempt = await connection_repo.get_pending_attempt_for_owner(
+        owner_user_id=current_user.id,
+        connection_type=TelegramConnectionType.MTPROTO_QR,
+    )
+    if attempt is None:
+        try:
+            attempt, _ = await create_connection_attempt(
+                connection_repo=connection_repo,
+                owner_user_id=current_user.id,
+                connection_type=TelegramConnectionType.MTPROTO_QR,
+                expires_at=utc_now() + timedelta(seconds=settings.telegram_connect_ttl_seconds),
+                with_chat_picker=False,
+            )
+        except HTTPException as exc:
+            # A concurrent request may have won the partial unique-index race.
+            attempt = await connection_repo.get_pending_attempt_for_owner(
+                owner_user_id=current_user.id,
+                connection_type=TelegramConnectionType.MTPROTO_QR,
+            )
+            if attempt is None:
+                raise exc
+    return to_telegram_connection_attempt_read(
+        attempt,
+        instructions=["正在生成二维码。请使用已登录的 Telegram 客户端扫码确认。", "二维码过期后请重新开始。"],
     )
 
 
@@ -276,7 +313,134 @@ async def get_connection_attempt(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="connection attempt not found"
         )
-    return to_telegram_connection_attempt_read(attempt)
+    qr_code_url = None
+    if attempt.connection_type == TelegramConnectionType.MTPROTO_QR and attempt.qr_url_encrypted:
+        try:
+            qr_code_url = decrypt_secret(attempt.qr_url_encrypted, get_settings())
+        except ValueError:
+            await connection_repo.fail_attempt(attempt=attempt, error="QR login state could not be recovered")
+    return to_telegram_connection_attempt_read(attempt, qr_code_url=qr_code_url)
+
+
+async def mtproto_client_for_connection(
+    *,
+    connection_repo: TelegramConnectionRepository,
+    owner_user_id: UUID,
+    connection_id: UUID,
+    settings: Settings,
+) -> TelegramClient:
+    connection = await connection_repo.get_connection_for_owner(
+        owner_user_id=owner_user_id, connection_id=connection_id
+    )
+    if (
+        not connection
+        or connection.connection_type != TelegramConnectionType.MTPROTO_QR
+        or not connection.credential_encrypted
+        or not settings.telegram_mtproto_qr_available
+    ):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="MTProto connection not found")
+    try:
+        session_string = decrypt_secret(connection.credential_encrypted, settings)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="MTProto session is unavailable") from exc
+    return TelegramClient(
+        StringSession(session_string),
+        settings.telegram_mtproto_api_id,
+        settings.telegram_mtproto_api_hash,
+    )
+
+
+@router.get("/connections/{connection_id}/dialogs", response_model=list[TelegramMtprotoDialogRead])
+async def list_mtproto_dialogs(
+    connection_id: UUID,
+    settings: Settings = Depends(get_settings),
+    current_user: User = Depends(require_user),
+    connection_repo: TelegramConnectionRepository = Depends(get_telegram_connection_repo),
+) -> list[TelegramMtprotoDialogRead]:
+    client = await mtproto_client_for_connection(
+        connection_repo=connection_repo,
+        owner_user_id=current_user.id,
+        connection_id=connection_id,
+        settings=settings,
+    )
+    try:
+        await client.connect()
+        dialogs: list[TelegramMtprotoDialogRead] = []
+        async for dialog in client.iter_dialogs(limit=100):
+            entity = dialog.entity
+            if not isinstance(entity, (Chat, Channel)):
+                continue
+            dialogs.append(
+                TelegramMtprotoDialogRead(
+                    id=str(dialog.id),
+                    sourceType=(
+                        TelegramSourceType.CHANNEL if getattr(entity, "broadcast", False) else TelegramSourceType.GROUP
+                    ),
+                    displayName=dialog.name or "Telegram 群组",
+                    username=getattr(entity, "username", None),
+                )
+            )
+        return dialogs
+    finally:
+        await client.disconnect()
+
+
+@router.post("/connections/{connection_id}/sources", response_model=TelegramConnectionRead)
+async def add_mtproto_source(
+    connection_id: UUID,
+    payload: TelegramMtprotoSourceCreate,
+    settings: Settings = Depends(get_settings),
+    current_user: User = Depends(require_user),
+    connection_repo: TelegramConnectionRepository = Depends(get_telegram_connection_repo),
+    legacy_repo: TelegramUserConfigRepository = Depends(get_telegram_user_config_repo),
+    subscription_repo: SubscriptionRepository = Depends(get_subscription_repo),
+) -> TelegramConnectionRead:
+    client = await mtproto_client_for_connection(
+        connection_repo=connection_repo,
+        owner_user_id=current_user.id,
+        connection_id=connection_id,
+        settings=settings,
+    )
+    try:
+        await client.connect()
+        entity = None
+        async for dialog in client.iter_dialogs(limit=100):
+            if str(dialog.id) == payload.chatId:
+                entity = dialog.entity
+                break
+        if not isinstance(entity, (Chat, Channel)):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="only groups and channels can be monitored",
+            )
+        source_type = TelegramSourceType.CHANNEL if getattr(entity, "broadcast", False) else TelegramSourceType.GROUP
+        snapshot = await subscription_repo.get_snapshot(current_user.id)
+        await connection_repo.add_mtproto_source(
+            owner_user_id=current_user.id,
+            connection_id=connection_id,
+            external_chat_id=payload.chatId,
+            source_type=source_type,
+            display_name=getattr(entity, "title", None) or "Telegram 群组",
+            username=getattr(entity, "username", None),
+            entitlements=snapshot.entitlements,
+            legacy_active_count=await legacy_repo.count_active_monitors_by_user(current_user.id),
+        )
+    except GroupQuotaExceeded as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="invalid Telegram group") from exc
+    finally:
+        await client.disconnect()
+    connection = await connection_repo.get_connection_for_owner(
+        owner_user_id=current_user.id, connection_id=connection_id
+    )
+    assert connection is not None
+    sources = [
+        item
+        for item in await connection_repo.list_sources_for_owner(current_user.id)
+        if item.connection_id == connection.id
+    ]
+    return to_telegram_connection_read(connection, sources)
 
 
 @router.post("/connect/attempts/{attempt_id}/cancel", response_model=TelegramConnectionAttemptRead)

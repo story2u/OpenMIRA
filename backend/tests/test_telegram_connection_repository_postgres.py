@@ -5,10 +5,17 @@ from uuid import uuid4
 
 import pytest
 from sqlalchemy import delete
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from app.domain.enums import TelegramConnectionType
+from app.domain.enums import (
+    PlanCode,
+    TelegramConnectionStatus,
+    TelegramConnectionType,
+    TelegramSourceType,
+)
+from app.domain.services.subscription_policy import get_plan_entitlements
 from app.infrastructure.db.models import (
     TelegramConnection,
     TelegramConnectionAttempt,
@@ -89,3 +96,67 @@ async def test_connection_attempt_is_owner_scoped(connection_subject) -> None:
 
         assert await repo.get_attempt_for_owner(owner_user_id=user.id, attempt_id=attempt.id)
         assert await repo.get_attempt_for_owner(owner_user_id=uuid4(), attempt_id=attempt.id) is None
+
+
+async def test_mtproto_qr_pending_attempt_is_reused_and_owner_scoped(connection_subject) -> None:
+    session_factory, user, _ = connection_subject
+    async with session_factory() as session:
+        repo = TelegramConnectionRepository(session)
+        attempt = await repo.create_attempt(
+            owner_user_id=user.id,
+            connection_type=TelegramConnectionType.MTPROTO_QR,
+            token_hash=os.urandom(32).hex(),
+            expires_at=datetime.now(UTC) + timedelta(minutes=10),
+        )
+
+        assert (
+            await repo.get_pending_attempt_for_owner(
+                owner_user_id=user.id,
+                connection_type=TelegramConnectionType.MTPROTO_QR,
+            )
+        ).id == attempt.id
+        assert (
+            await repo.get_pending_attempt_for_owner(
+                owner_user_id=uuid4(),
+                connection_type=TelegramConnectionType.MTPROTO_QR,
+            )
+            is None
+        )
+
+        with pytest.raises(IntegrityError):
+            await repo.create_attempt(
+                owner_user_id=user.id,
+                connection_type=TelegramConnectionType.MTPROTO_QR,
+                token_hash=os.urandom(32).hex(),
+                expires_at=datetime.now(UTC) + timedelta(minutes=10),
+            )
+
+
+async def test_adding_mtproto_source_touches_connection_for_listener_reload(connection_subject) -> None:
+    session_factory, user, _ = connection_subject
+    async with session_factory() as session:
+        stale_revision = datetime.now(UTC) - timedelta(days=1)
+        connection = TelegramConnection(
+            owner_user_id=user.id,
+            connection_type=TelegramConnectionType.MTPROTO_QR,
+            status=TelegramConnectionStatus.CONNECTED,
+            credential_encrypted="encrypted-session",
+            updated_at=stale_revision,
+        )
+        session.add(connection)
+        await session.commit()
+        await session.refresh(connection)
+
+        await TelegramConnectionRepository(session).add_mtproto_source(
+            owner_user_id=user.id,
+            connection_id=connection.id,
+            external_chat_id="-100123",
+            source_type=TelegramSourceType.GROUP,
+            display_name="Test group",
+            username=None,
+            entitlements=get_plan_entitlements(PlanCode.FREE),
+            legacy_active_count=0,
+        )
+        await session.refresh(connection)
+
+        assert connection.updated_at > stale_revision

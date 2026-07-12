@@ -9,6 +9,8 @@ x-app-env: &app-env
   ADMIN_API_TOKEN: ${ADMIN_API_TOKEN:-change-me}
   JWT_SECRET_KEY: ${JWT_SECRET_KEY:-}
   ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-10080}
+  PASSWORD_LOGIN_MAX_ATTEMPTS: ${PASSWORD_LOGIN_MAX_ATTEMPTS:-5}
+  PASSWORD_LOGIN_WINDOW_SECONDS: ${PASSWORD_LOGIN_WINDOW_SECONDS:-300}
   FRONTEND_BASE_URL: ${FRONTEND_BASE_URL:-https://im.story2u.xyz}
   CORS_ORIGINS: ${CORS_ORIGINS:-["https://im.story2u.xyz","http://localhost:3000"]}
   GOOGLE_OAUTH_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID:-}
@@ -44,6 +46,7 @@ x-app-env: &app-env
   AI_ENABLED: ${AI_ENABLED:-false}
   LITELLM_MODEL: ${LITELLM_MODEL:-openai/gpt-4o-mini}
   OPENAI_API_KEY: ${OPENAI_API_KEY:-change-me}
+  DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
   PI_AGENT_ENABLED: ${PI_AGENT_ENABLED:-true}
   PI_AGENT_PROVIDER: ${PI_AGENT_PROVIDER:-openai}
   PI_AGENT_MODEL: ${PI_AGENT_MODEL:-gpt-4o-mini}
@@ -56,6 +59,20 @@ x-app-env: &app-env
   PI_AGENT_LINK_TIMEOUT_SECONDS: ${PI_AGENT_LINK_TIMEOUT_SECONDS:-10}
   PI_AGENT_MAX_CONTENT_BYTES: ${PI_AGENT_MAX_CONTENT_BYTES:-200000}
   PI_AGENT_MAX_LINK_TEXT_CHARS: ${PI_AGENT_MAX_LINK_TEXT_CHARS:-12000}
+  REVENUECAT_ENABLED: ${REVENUECAT_ENABLED:-true}
+  REVENUECAT_SECRET_API_KEY: ${REVENUECAT_SECRET_API_KEY:-}
+  REVENUECAT_PROJECT_ID: ${REVENUECAT_PROJECT_ID:-}
+  REVENUECAT_WEBHOOK_AUTH_TOKEN: ${REVENUECAT_WEBHOOK_AUTH_TOKEN:-}
+  REVENUECAT_WEBHOOK_HMAC_SECRET: ${REVENUECAT_WEBHOOK_HMAC_SECRET:-}
+  REVENUECAT_WEBHOOK_TOLERANCE_SECONDS: ${REVENUECAT_WEBHOOK_TOLERANCE_SECONDS:-300}
+  REVENUECAT_SYNC_TIMEOUT_SECONDS: ${REVENUECAT_SYNC_TIMEOUT_SECONDS:-10}
+  REVENUECAT_SYNC_RATE_LIMIT_SECONDS: ${REVENUECAT_SYNC_RATE_LIMIT_SECONDS:-30}
+  REVENUECAT_RECONCILE_ENABLED: ${REVENUECAT_RECONCILE_ENABLED:-true}
+  REVENUECAT_RECONCILE_INTERVAL_HOURS: ${REVENUECAT_RECONCILE_INTERVAL_HOURS:-24}
+  REVENUECAT_RECONCILE_BATCH_SIZE: ${REVENUECAT_RECONCILE_BATCH_SIZE:-100}
+  REVENUECAT_ENTITLEMENT_PLUS: ${REVENUECAT_ENTITLEMENT_PLUS:-plus}
+  REVENUECAT_ENTITLEMENT_PRO: ${REVENUECAT_ENTITLEMENT_PRO:-pro}
+  REVENUECAT_ENTITLEMENT_MAX: ${REVENUECAT_ENTITLEMENT_MAX:-max}
 
 services:
   postgres:
@@ -129,6 +146,24 @@ services:
     image: ${BACKEND_IMAGE:-ghcr.io/story2u/im-backend:latest}
     restart: unless-stopped
     command: python -m app.worker.telegram_listener
+    environment: *app-env
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  telegram_mtproto_qr_worker:
+    image: ${BACKEND_IMAGE:-ghcr.io/story2u/im-backend:latest}
+    restart: unless-stopped
+    command: python -m app.worker.telegram_mtproto_qr_worker
+    environment: *app-env
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  telegram_mtproto_listener:
+    image: ${BACKEND_IMAGE:-ghcr.io/story2u/im-backend:latest}
+    restart: unless-stopped
+    command: python -m app.worker.telegram_mtproto_listener
     environment: *app-env
     depends_on:
       migrate:

@@ -10,10 +10,13 @@ import type {
   ReplyTemplate,
   PlanEntitlements,
   SubscriptionUsage,
+  SubscriptionCatalogPlan,
+  SubscriptionManagement,
   TelegramDialog,
   TelegramConnection,
   TelegramConnectionAttempt,
   TelegramConnectionHealth,
+  TelegramMtprotoDialog,
   TelegramUserConfig,
   TelegramUserConfigUpdate,
 } from './types'
@@ -172,6 +175,18 @@ export async function fetchMySubscription(): Promise<SubscriptionUsage> {
   return fetchJson<SubscriptionUsage>('/api/v1/subscriptions/me')
 }
 
+export async function fetchSubscriptionCatalog(): Promise<SubscriptionCatalogPlan[]> {
+  return fetchJson<SubscriptionCatalogPlan[]>('/api/v1/subscriptions/catalog')
+}
+
+export async function syncMySubscription(): Promise<SubscriptionUsage> {
+  return fetchJson<SubscriptionUsage>('/api/v1/subscriptions/sync', { method: 'POST' })
+}
+
+export async function fetchSubscriptionManagement(): Promise<SubscriptionManagement> {
+  return fetchJson<SubscriptionManagement>('/api/v1/subscriptions/management?client=web')
+}
+
 export async function fetchReplyTemplates(): Promise<ReplyTemplate[]> {
   return fetchJson<ReplyTemplate[]>('/api/v1/templates')
 }
@@ -198,9 +213,7 @@ export async function updateTelegramUserConfig(
   })
 }
 
-export async function updateTelegramMonitorRetention(
-  monitorIds: string[],
-): Promise<TelegramUserConfig> {
+export async function updateTelegramMonitorRetention(monitorIds: string[]): Promise<TelegramUserConfig> {
   return fetchJson<TelegramUserConfig>('/api/v1/integrations/telegram-user/monitors/retention', {
     method: 'PUT',
     body: JSON.stringify({ monitorIds }),
@@ -248,6 +261,12 @@ export async function startTelegramBusinessConnection(): Promise<TelegramConnect
   })
 }
 
+export async function startTelegramMtprotoQrConnection(): Promise<TelegramConnectionAttempt> {
+  return fetchJson<TelegramConnectionAttempt>('/api/v1/integrations/telegram/connect/mtproto-qr', {
+    method: 'POST',
+  })
+}
+
 export async function fetchTelegramConnectionAttempt(attemptId: string): Promise<TelegramConnectionAttempt> {
   return fetchJson<TelegramConnectionAttempt>(`/api/v1/integrations/telegram/connect/attempts/${attemptId}`)
 }
@@ -277,5 +296,19 @@ export async function deleteTelegramConnection(connectionId: string): Promise<vo
 export async function deleteTelegramConnectionSource(sourceId: string): Promise<void> {
   return fetchJson<void>(`/api/v1/integrations/telegram/sources/${sourceId}`, {
     method: 'DELETE',
+  })
+}
+
+export async function fetchTelegramMtprotoDialogs(connectionId: string): Promise<TelegramMtprotoDialog[]> {
+  return fetchJson<TelegramMtprotoDialog[]>(`/api/v1/integrations/telegram/connections/${connectionId}/dialogs`)
+}
+
+export async function addTelegramMtprotoSource(
+  connectionId: string,
+  chatId: string,
+): Promise<TelegramConnection> {
+  return fetchJson<TelegramConnection>(`/api/v1/integrations/telegram/connections/${connectionId}/sources`, {
+    method: 'POST',
+    body: JSON.stringify({ chatId }),
   })
 }

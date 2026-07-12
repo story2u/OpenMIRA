@@ -25,6 +25,8 @@ class Settings(BaseSettings):
     admin_api_token: str
     jwt_secret_key: str = ""
     access_token_expire_minutes: int = 60 * 24 * 7
+    password_login_max_attempts: int = Field(default=5, ge=1, le=100)
+    password_login_window_seconds: int = Field(default=300, ge=10, le=3600)
     frontend_base_url: str = "http://localhost:3000"
     cors_origins: list[AnyHttpUrl | str] = Field(default_factory=list)
 
@@ -37,6 +39,11 @@ class Settings(BaseSettings):
     apple_oauth_team_id: str = ""
     apple_oauth_key_id: str = ""
     apple_oauth_private_key: str = ""
+    # 移动端原生登录允许的 id_token audience，逗号分隔：
+    # Google 为 iOS OAuth client id（如同时配置 server client id 也一并列出），
+    # Apple 为 app bundle id。Apple 默认填 iOS app 的 bundle id；Google 无稳定默认值。
+    google_native_client_ids: str = ""
+    apple_native_client_ids: str = "com.codeiy.im"
 
     default_timezone: str = "Asia/Shanghai"
     default_workdays: list[int] = Field(default_factory=lambda: [1, 2, 3, 4, 5])
@@ -79,6 +86,33 @@ class Settings(BaseSettings):
     pi_agent_link_timeout_seconds: float = Field(default=10.0, ge=1.0, le=30.0)
     pi_agent_max_content_bytes: int = Field(default=200_000, ge=10_000, le=1_000_000)
     pi_agent_max_link_text_chars: int = Field(default=12_000, ge=1_000, le=20_000)
+
+    revenuecat_enabled: bool = False
+    revenuecat_secret_api_key: str = ""
+    revenuecat_project_id: str = ""
+    revenuecat_webhook_auth_token: str = ""
+    revenuecat_webhook_hmac_secret: str = ""
+    revenuecat_webhook_tolerance_seconds: int = Field(default=300, ge=30, le=3600)
+    revenuecat_sync_timeout_seconds: float = Field(default=10.0, ge=1.0, le=60.0)
+    revenuecat_sync_rate_limit_seconds: int = Field(default=30, ge=1, le=3600)
+    revenuecat_reconcile_enabled: bool = False
+    revenuecat_reconcile_interval_hours: int = Field(default=24, ge=1, le=168)
+    revenuecat_reconcile_batch_size: int = Field(default=100, ge=1, le=500)
+    revenuecat_entitlement_plus: str = "plus"
+    revenuecat_entitlement_pro: str = "pro"
+    revenuecat_entitlement_max: str = "max"
+
+    @property
+    def revenuecat_server_available(self) -> bool:
+        return bool(self.revenuecat_enabled and self.revenuecat_secret_api_key)
+
+    @property
+    def revenuecat_webhook_available(self) -> bool:
+        return bool(
+            self.revenuecat_server_available
+            and self.revenuecat_webhook_auth_token
+            and self.revenuecat_webhook_hmac_secret
+        )
 
     @field_validator("telegram_mtproto_api_id", mode="before")
     @classmethod

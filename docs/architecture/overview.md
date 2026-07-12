@@ -21,6 +21,8 @@ flowchart LR
     CELERY --> WEBLINK["公开网页 / 安全链接读取器"]
     CELERY --> TG
     CELERY --> WC
+    RC["RevenueCat / Paddle / App Stores"] --> API
+    API --> RC
 ```
 
 ## 部署单元
@@ -32,7 +34,8 @@ flowchart LR
 | Celery worker | `backend/app/worker/celery_app.py` | AI 回复与超时任务的异步执行 |
 | Celery beat | 同上 | 周期调度待人工商机超时检查 |
 | pi Agent runner | `backend/pi-agent-runtime/src/index.mjs` | 由 worker 按消息启动；只提交结构化分析，不持有业务动作权限 |
-| Telegram listener | `backend/app/worker/telegram_listener.py` | 按用户启动 MTProto 监听器并复用消息摄取用例 |
+| Telegram listener | `backend/app/worker/telegram_listener.py` | 保持旧 MTProto session 的兼容监听 |
+| Telegram QR worker / listener | `backend/app/worker/telegram_mtproto_qr_worker.py`、`telegram_mtproto_listener.py` | 平台凭据二维码登录、加密 session 与普通账号来源的只读监听 |
 | PostgreSQL | SQLModel + Alembic | 用户、订阅/用量账本、消息、商机、规则、配置、模板、Telegram 配置 |
 | Redis | DB 0/1/2 | 应用临时状态、Celery broker、Celery result backend |
 
@@ -82,7 +85,8 @@ ADR 和迁移计划，不要在单个功能中半途改造。
 | 模型 | 作用 | 关键关系/约束 |
 | --- | --- | --- |
 | `User` / `AuthAccount` | 本地用户与 OAuth 身份 | provider + subject 唯一；资源按 `user_id` 隔离 |
-| `SubscriptionAccount` | 用户付费状态与当前 billing period | user 唯一；只有 active/trialing 且在周期内的付费套餐生效 |
+| `SubscriptionAccount` | 用户有效权益投影 | user 唯一；受限 API 的最终权限来源；旧 provider ID 字段仅兼容保留 |
+| `BillingSubscription` / `BillingEvent` / `BillingProduct` | RevenueCat 渠道事实、幂等事件与产品映射审计 | 多渠道订阅；provider external key 与 event ID 唯一；不长期保存 raw webhook |
 | `UsageLedger` | AI 功能额度的可审计账本 | user + feature + idempotency key 唯一；reserved/consumed/released |
 | `Message` | 收发消息审计记录 | channel + external_message_id 幂等；保存 pi 分析状态/结果；可关联 opportunity |
 | `Opportunity` | 商机聚合根 | 持有来源、检测结果、Agent 投影、状态、草稿与最终回复；source_message 唯一 |
@@ -113,11 +117,15 @@ sequenceDiagram
     IM->>E: 外部消息
     E->>U: InboundMessage
     U->>DB: 按 channel + external_message_id 去重并落 Message
-    U->>D: 文本 + 已启用规则
+    U->>DB: 按 owner 读取有限同会话历史
+    U->>D: 当前文本 + 历史 + 来源 + 已启用规则
+    opt 规则未达到高置信且 AI_ENABLED
+        D->>D: LiteLLM 语义复核 + AI hint
+    end
     D-->>U: DetectionResult
     alt 非商机
         U->>DB: 标记 processed
-    else 工作时间商机
+    else 工作时间或 AI 新发现商机
         U->>DB: 创建 PENDING_HUMAN Opportunity
         U->>Q: 通知审核者（当前为队列接口）
     else 非工作时间商机
@@ -138,6 +146,13 @@ sequenceDiagram
         Q->>DB: 创建 PENDING_HUMAN 商机
     end
 ```
+
+- 高置信规则命中保持低延迟直通；其余非空消息在 `AI_ENABLED=true` 时均可进入语义复核，不再要求
+  先达到关键词灰区分数。AI 关闭、输出非法或 provider 失败时回退到同一确定性规则结果。
+- 语义复核最多使用当前 owner 同会话最近 6 条、合计 4000 字符的规范化历史；不传 raw payload、
+  token 或 session。`AI_HINT` 规则既保留原匹配分数，也作为模型的领域正例提示。
+- 语义模型新发现的商机始终进入 `PENDING_HUMAN`，即使处于非工作时间也不能直接触发自动回复；
+  只有确定性规则识别路径继续遵循工作时间路由。
 
 ### Telegram 原生连接
 
@@ -179,12 +194,22 @@ sequenceDiagram
 - Agent 高置信补判商机时只创建 `PENDING_HUMAN`，不能让模型把自己路由到自动回复。
 - 自动分析使用 message 级幂等键，手工重跑接受 `Idempotency-Key`；两条路径都在 enqueue 前通过
   `SubscriptionRepository` 预留额度。worker 成功结算，最终失败释放；Free 使用 UTC 自然月，付费
-  用户使用有效 subscription period。无 owner 消息不运行 Agent，也不占用任何用户额度。
+  用户也始终使用 UTC 自然月 usage period；monthly/annual billing period 只描述续费和到期。无 owner
+  消息不运行 Agent，也不占用任何用户额度。
 - Telegram 配置读取和 listener 每次刷新都重新解析有效套餐；套餐到期后，按用户保留优先级启动
   额度内 monitor，超额项标记 `quota_paused` 而不删除。用户可在设置页重新选择保留群；选择写入当前
   retention limit，升级后优先级仍保留，未来再次降级可复用。
 - 新版 Bot 来源与旧 MTProto monitor 在 Telegram 套餐额度中合计统计。新来源创建时先检查总额；
   webhook 只会摄取已启用且未被额度暂停的 `TelegramSource`。
+
+### 统一订阅同步
+
+- 三端登录后以 `users.id` UUID 绑定 RevenueCat，客户端购买成功只触发当前用户 `/subscriptions/sync`，
+  不能提交 plan、entitlement 或 purchase token。
+- RevenueCat webhook 在 JSON parse 前校验固定 Authorization、raw-body HMAC 与 timestamp，按 event ID
+  幂等落库后交 Celery。worker 总是重新查询 Customer，再在一个事务中更新渠道记录与权益投影。
+- 同时存在多个渠道时取 `max > pro > plus > free`，投影标记重复付费；不会自动取消、退款或迁移。
+- provider 网络失败不写 Free 覆盖快照。每日 reconcile 修复漏事件；降级只暂停超额 Source，不删数据。
 
 ### 回复
 

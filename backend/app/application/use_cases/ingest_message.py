@@ -1,7 +1,9 @@
+from uuid import UUID
+
 from app.application.use_cases.schedule_agent_analysis import ScheduleAgentAnalysisUseCase
 from app.core.time_window import WorkTimeService
 from app.domain.enums import OpportunityStatus
-from app.domain.ports import InboundMessage, TaskQueue
+from app.domain.ports import ConversationTurn, InboundMessage, TaskQueue
 from app.domain.services.detection_policy import OpportunityDetector
 from app.infrastructure.db.models import Message, Opportunity
 from app.infrastructure.db.repositories import (
@@ -45,9 +47,18 @@ class IngestMessageUseCase:
             return existing
 
         message = await self.message_repo.create_incoming(inbound)
+        conversation = await self.message_repo.list_by_conversation(
+            message.channel,
+            message.conversation_id,
+            message.owner_user_id,
+            limit=7,
+        )
         detection = await self.detector.detect(
             text=inbound.text or "",
             rules=await self.rule_repo.enabled_detection_rules(),
+            conversation=self._detection_context(conversation, current_message_id=message.id),
+            source_type=inbound.source_type,
+            group_name=inbound.group_name,
         )
 
         if not detection.is_opportunity:
@@ -58,7 +69,7 @@ class IngestMessageUseCase:
             )
             return message
 
-        if self.work_time.is_working_time():
+        if detection.requires_human_review or self.work_time.is_working_time():
             status = OpportunityStatus.PENDING_HUMAN
         else:
             status = OpportunityStatus.AI_AUTO_REPLY
@@ -95,3 +106,30 @@ class IngestMessageUseCase:
         )
 
         return opportunity
+
+    def _detection_context(
+        self,
+        messages: list[Message],
+        *,
+        current_message_id: UUID,
+    ) -> list[ConversationTurn]:
+        remaining_chars = 4000
+        turns: list[ConversationTurn] = []
+        for candidate in reversed(messages):
+            if candidate.id == current_message_id or not candidate.text:
+                continue
+            text = candidate.text.strip()
+            if not text or remaining_chars <= 0:
+                continue
+            text = text[: min(1000, remaining_chars)]
+            turns.append(
+                ConversationTurn(
+                    sender_display_name=candidate.sender_display_name,
+                    direction=candidate.direction,
+                    text=text,
+                )
+            )
+            remaining_chars -= len(text)
+            if len(turns) >= 6:
+                break
+        return list(reversed(turns))

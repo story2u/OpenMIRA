@@ -1,8 +1,13 @@
 import re
 
 from app.domain.enums import Priority, RuleType
-from app.domain.ports import DetectionResult, DetectionRule, OpportunityAIClassifier
-
+from app.domain.ports import (
+    ConversationTurn,
+    DetectionResult,
+    DetectionRule,
+    OpportunityAIClassifier,
+    OpportunityClassificationRequest,
+)
 
 HIGH_INTENT_WORDS = (
     "报价",
@@ -61,13 +66,30 @@ CONTACT_SIGNAL_RE = re.compile(
     r"(@[A-Za-z0-9_]{4,}|[\w.+-]+@[\w-]+(?:\.[\w-]+)+|(?:微信|VX|vx|TG|Telegram|联系))"
 )
 SALARY_SIGNAL_RE = re.compile(r"(\d{1,3}\s*[kK]|[\d.]+\s*[万wW]|薪资|薪酬|预算|base)")
+PROJECT_SIGNAL_RE = re.compile(r"(项目|需求|业务|单子|外包)", re.IGNORECASE)
+COMMERCIAL_VALUE_RE = re.compile(
+    r"(报价|预算|价格|金额|\d+(?:\.\d+)?\s*(?:万|[wWkK]))",
+    re.IGNORECASE,
+)
+PARTNER_INTENT_RE = re.compile(
+    r"(谁有兴趣|有兴趣(?:的)?|寻找|找(?:个|人|团队)?|承接|合作|联系(?:我|一下)?)",
+    re.IGNORECASE,
+)
 
 
 class OpportunityDetector:
     def __init__(self, ai_classifier: OpportunityAIClassifier | None = None) -> None:
         self.ai_classifier = ai_classifier
 
-    async def detect(self, text: str, rules: list[DetectionRule]) -> DetectionResult:
+    async def detect(
+        self,
+        text: str,
+        rules: list[DetectionRule],
+        *,
+        conversation: list[ConversationTurn] | None = None,
+        source_type: str = "private",
+        group_name: str | None = None,
+    ) -> DetectionResult:
         normalized = text.strip()
         if not normalized:
             return DetectionResult(is_opportunity=False)
@@ -99,21 +121,49 @@ class OpportunityDetector:
                     matched_keywords.append(keyword)
             reasons.append("recruiting_signal")
 
+        project_score, project_keywords = self._project_opportunity_score(normalized)
+        if project_score > 0:
+            score = min(1.0, score + project_score)
+            for keyword in project_keywords:
+                if keyword not in matched_keywords:
+                    matched_keywords.append(keyword)
+            reasons.append("project_budget_partner_signal")
+
         if score >= 0.75:
             return self._build_positive_result(normalized, score, reasons, matched_keywords)
 
-        if score < 0.35 or not self.ai_classifier:
-            return DetectionResult(
-                is_opportunity=score >= 0.45,
-                confidence=score,
-                title=self._title(normalized) if score >= 0.45 else None,
-                summary=normalized if score >= 0.45 else None,
-                reason="; ".join(reasons) if reasons else None,
-                matched_keywords=matched_keywords,
-                priority=self._priority(score, matched_keywords),
-            )
+        rule_result = DetectionResult(
+            is_opportunity=score >= 0.45,
+            confidence=score,
+            title=self._title(normalized) if score >= 0.45 else None,
+            summary=normalized if score >= 0.45 else None,
+            reason="; ".join(reasons) if reasons else None,
+            matched_keywords=matched_keywords,
+            priority=self._priority(score, matched_keywords),
+        )
+        if not self.ai_classifier:
+            return rule_result
 
-        ai_result = await self.ai_classifier.classify(text=normalized, rule_score=score)
+        request = OpportunityClassificationRequest(
+            text=normalized,
+            rule_score=score,
+            matched_keywords=matched_keywords,
+            ai_hints=self._ai_hints(rules),
+            conversation=conversation or [],
+            source_type=source_type,
+            group_name=group_name,
+        )
+        try:
+            ai_result = await self.ai_classifier.classify(request)
+        except Exception:
+            # Provider failures must not interrupt durable message ingestion. The caller still
+            # receives the same deterministic rule result it would get with AI disabled.
+            return rule_result
+        if ai_result is None:
+            return rule_result
+        if ai_result.is_opportunity:
+            # Expanding semantic recall must not also expand automatic-send authority.
+            ai_result.requires_human_review = True
         if matched_keywords:
             ai_result.matched_keywords = sorted(
                 {*ai_result.matched_keywords, *matched_keywords},
@@ -122,6 +172,19 @@ class OpportunityDetector:
                 else 999,
             )
         return ai_result
+
+    def _ai_hints(self, rules: list[DetectionRule]) -> list[str]:
+        hints: list[str] = []
+        for rule in sorted(rules, key=lambda item: item.priority):
+            if rule.rule_type != RuleType.AI_HINT:
+                continue
+            for candidate in (item.strip() for item in rule.pattern.split(",")):
+                normalized = candidate[:240]
+                if normalized and normalized not in hints:
+                    hints.append(normalized)
+                if len(hints) >= 20:
+                    return hints
+        return hints
 
     def _match_rule(self, rule: DetectionRule, text: str) -> str | None:
         if rule.rule_type in {RuleType.KEYWORD, RuleType.AI_HINT}:
@@ -184,3 +247,11 @@ class OpportunityDetector:
             score += 0.08
 
         return min(score, 0.78), matched[:8]
+
+    def _project_opportunity_score(self, text: str) -> tuple[float, list[str]]:
+        project = PROJECT_SIGNAL_RE.search(text)
+        value = COMMERCIAL_VALUE_RE.search(text)
+        partner_intent = PARTNER_INTENT_RE.search(text)
+        if not (project and value and partner_intent):
+            return 0.0, []
+        return 0.65, [project.group(0), value.group(0), partner_intent.group(0)]

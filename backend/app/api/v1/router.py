@@ -13,6 +13,7 @@ from app.api.v1.routes import (
     telegram_user_configs,
     templates,
     webhooks_telegram,
+    webhooks_revenuecat,
     webhooks_wecom,
 )
 
@@ -21,6 +22,7 @@ api_router.include_router(health.router, tags=["health"])
 api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
 api_router.include_router(webhooks_telegram.router, prefix="/webhooks/telegram", tags=["webhooks"])
 api_router.include_router(webhooks_wecom.router, prefix="/webhooks/wecom", tags=["webhooks"])
+api_router.include_router(webhooks_revenuecat.router, prefix="/webhooks/revenuecat", tags=["webhooks"])
 api_router.include_router(opportunities.router, prefix="/opportunities", tags=["opportunities"])
 api_router.include_router(messages.router, prefix="/messages", tags=["messages"])
 api_router.include_router(rules.router, prefix="/rules", tags=["rules"])

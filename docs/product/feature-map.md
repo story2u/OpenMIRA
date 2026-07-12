@@ -15,8 +15,10 @@
 
 | 能力 | 前端入口 | 后端/API | 成熟度 | 备注 |
 | --- | --- | --- | --- | --- |
-| Google / Apple OAuth 登录 | `/login` | `/api/v1/auth/oauth/*`、`/auth/me` | 部分实现 | 真实 OAuth 与 JWT；依赖外部 provider 配置，缺少端到端 OAuth 测试 |
+| Google / Apple OAuth 登录 | `/login` | `/api/v1/auth/oauth/*`、`/auth/me` | 部分实现 | 真实 OAuth 与 JWT；依赖外部 provider 配置，缺少端到端 OAuth 测试。移动端原生登录 `POST /auth/oauth/{google\|apple}/native`（id_token 换 JWT）已实现并有路由测试，audience 经 `GOOGLE/APPLE_NATIVE_CLIENT_IDS` 配置，为空即关闭 |
+| iOS 邮箱密码登录 | iOS 登录页 | `POST /auth/password/login`、`/auth/me` | 已实现 | 仅登录已有密码账户，不含注册/重置；PBKDF2 校验、统一失败响应、Redis 登录限流、JWT 存 Keychain；DEBUG/Release 均无粘贴 token 旁路 |
 | 商机列表、筛选、分页 | `/` | `GET /opportunities` | 已实现 | 登录后每 30 秒轮询；查询按 owner 隔离 |
+| 商机语义识别 | 无独立页 | 摄取用例 + `OpportunityDetector` + LiteLLM | 已实现 | 高置信规则直通；启用 AI 后对其余非空消息结合 owner 隔离的有限会话历史、来源和 AI hint 复核；模型新发现只进人工审核，provider 失败回退规则 |
 | 商机详情 | `/opportunity/[id]` | `GET /opportunities/{id}` | 部分实现 | 页面从列表 store 查找，未独立请求详情，刷新/深链能力有限 |
 | 消息历史 | 详情页 SOP | `GET /messages` | 部分实现 | API 已有；前端未调用，后端数据加载后消息 store 为空 |
 | 人工回复 | 详情页回复框 | `POST /opportunities/{id}/manual-reply` | 部分实现 | 后端真实发送/落库；前端当前只写本地 store |
@@ -25,17 +27,17 @@
 | 商机状态更新/认领 | 看板/详情部分交互 | `PATCH .../status`、`POST .../claim` | 部分实现 | 后端已实现；前端状态动作多为本地更新 |
 | 回复模板读取 | `/templates` | `GET /templates` | 已实现 | 登录后加载；空结果会回退到 mock 模板，应在生产化时移除静默回退 |
 | 回复模板编辑 | `/templates` | `POST/PATCH /templates` | 部分实现 | 后端 admin API 已有；前端新增/编辑只改本地 store |
-| Telegram 原生连接中心 | `/settings/telegram` | `/integrations/telegram/*` | 部分实现 | P0 Bot 群/频道有真实连接、来源、验签和 webhook 幂等；Business 需平台配置；QR worker 未部署 |
+| Telegram 原生连接中心 | `/settings/telegram` | `/integrations/telegram/*` | 部分实现 | P0 Bot 群/频道有真实连接、来源、验签和 webhook 幂等；Business 需平台配置；P2 依赖平台 MTProto 凭据 |
 | Telegram Bot 群组/频道 | `/settings/telegram` | `POST /integrations/telegram/connect/bot-chat`、`POST /webhooks/telegram` | 已实现 | 使用短期 token 和 `request_chat`，回调后验证 chat/Bot membership；未配置来源的 chat 不摄取 |
 | Telegram Business 私聊 | `/settings/telegram` | `POST /integrations/telegram/connect/business`、`POST /webhooks/telegram` | 部分实现 | 私聊确认后按 Business connection owner 路由；需可用的平台 Bot 和 Telegram Business 权限 |
-| Telegram 普通账号 QR | `/settings/telegram` | `POST /integrations/telegram/connect/mtproto-qr` | 未实现 | 已明确平台全局凭据/worker 前置条件；当前安全拒绝，不收集用户秘密 |
-| Telegram 旧 MTProto 监听 | 无默认表单入口 | 旧 `/integrations/telegram-user/*`、独立 listener | 已实现（兼容） | 已授权 session 继续监听；新页面不显示或迁移秘密，直至单独迁移计划 |
+| Telegram 普通账号 QR | `/settings/telegram` | `POST /integrations/telegram/connect/mtproto-qr`、dialogs/sources API | 部分实现 | 平台统一凭据、二维码、加密 session、独立 QR worker 和只读 listener；需生产 Telegram 隔离冒烟 |
+| Telegram 旧 MTProto 监听 | 无默认表单入口 | 独立 legacy listener | 已实现（兼容） | 已授权 session 继续监听；旧用户凭据采集 API 已删除，新页面不展示或迁移秘密 |
 | 企业微信 webhook | 设置页显示绑定卡 | `GET/POST /webhooks/wecom` | 已实现 | 后端验签/解密/摄取；前端绑定状态目前是静态展示 |
 | 规则管理 | `/settings` | CRUD `/rules` | 部分实现 | 后端 admin API 已有；前端关键词与 AI 开关仅本地状态 |
 | 工作时间配置 | `/settings/working-hours` | `/configs/work-mode`、`PATCH /configs/{key}` | 部分实现 | 后端可读写；前端编辑只在本地状态 |
 | 统计摘要 | 无独立展示 | `GET /stats/summary` | 部分实现 | API 已有，前端未消费 |
 | pi Agent 消息后处理 | 看板提醒、详情页 SOP | Celery `agent.analyze_message`、`POST .../agent-analysis` | 部分实现 | 新消息异步分析、补判商机、结构化建议；默认开启，依赖有效 provider key，并执行套餐月额度 |
-| 订阅套餐与用量 | `/settings/subscription` | `GET /subscriptions/plans`、`GET /subscriptions/me` | 部分实现 | Free/Plus/Pro/Max entitlement、AI 账本、TG 限额和降级保留选择已实现；尚无支付/升级和用户级企微群配置 |
+| 统一订阅、购买与用量 | `/settings/subscription`、iOS/Android 套餐页 | `/subscriptions/{plans,catalog,me,sync,management}`、RevenueCat webhook | 部分实现 | RevenueCat 聚合 Paddle/App Store/Play，本地投影执行权益；三端 Offering/购买/恢复代码和 webhook 已实现。外部 Dashboard、真实 Sandbox E2E 与用户级企微群配置仍待完成，不能视作生产支付已开通 |
 | 链接安全核验 | 详情页 SOP | SafeLinkInspector + pi Agent | 已实现 | 公网/重定向/大小限制、结果持久化、可重跑；不是恶意软件扫描器，生产需受控 egress |
 | 联系方式提取 | 详情页 SOP | pi Agent 结果投影 | 部分实现 | 消息/公开网页中的联系方式可持久化；详情页手工编辑仍只更新浏览器状态 |
 | 后续行动建议 | 详情页发现步骤 | pi Agent 结构化 actions | 已实现 | 可建议邮件、加好友、私信和内部提醒；外部动作强制标记需人工批准，不会自动执行 |
@@ -57,7 +59,7 @@
 | AI 分类/回复 | `backend/app/infrastructure/ai/litellm_client.py` |
 | 异步任务 | `backend/app/worker/tasks.py`、`queue.py` |
 | pi Agent 后处理 | `backend/app/application/use_cases/analyze_message.py`、`infrastructure/agent/`、`pi-agent-runtime/` |
-| 订阅与额度 | `backend/app/domain/services/subscription_policy.py`、`application/use_cases/schedule_agent_analysis.py` |
+| 订阅与额度 | `backend/app/domain/services/subscription_policy.py`、`application/use_cases/sync_revenuecat_customer.py`、`infrastructure/billing/` |
 | 持久化 | `backend/app/infrastructure/db/models.py`、`repositories.py` |
 
 ## 扩展功能时的同步清单

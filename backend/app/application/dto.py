@@ -1,12 +1,14 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.core.time_window import WorkTimeConfig
 from app.domain.enums import (
     AgentActionType,
     AgentAnalysisStatus,
+    BillingInterval,
+    BillingStore,
     FrontendOpportunityStatus,
     IMChannel,
     MessageSource,
@@ -208,10 +210,60 @@ class SubscriptionUsageRead(BaseModel):
     aiAnalysesConsumed: int
     aiAnalysesReserved: int
     aiAnalysesRemaining: int
+    effectiveStore: BillingStore | None = None
+    billingInterval: BillingInterval | None = None
+    billingPeriodStart: datetime | None = None
+    billingPeriodEnd: datetime | None = None
+    usagePeriodStart: datetime
+    usagePeriodEnd: datetime
+    entitlementExpiresAt: datetime | None = None
+    willRenew: bool = False
+    billingIssue: bool = False
+    multipleActiveSubscriptions: bool = False
+    managementUrl: str | None = None
+    lastSyncedAt: datetime | None = None
+
+
+class SubscriptionCatalogPlanRead(BaseModel):
+    planCode: PlanCode
+    displayName: str
+    rank: int
+    entitlements: PlanEntitlementsRead
+    availableIntervals: list[BillingInterval]
+    revenuecatPackageIdentifiers: list[str]
+
+
+class SubscriptionManagementRead(BaseModel):
+    store: BillingStore | None = None
+    managementUrl: str | None = None
+    instruction: str
+    canOpenInCurrentClient: bool
 
 
 class OAuthAuthorizeRead(BaseModel):
     authorizationUrl: str
+
+
+class NativeLoginRequest(BaseModel):
+    """移动端原生登录：App 用系统 SDK 取得 provider id_token 后换取本服务 JWT。"""
+
+    idToken: str = Field(min_length=16, max_length=8192)
+
+
+class PasswordLoginRequest(BaseModel):
+    """已有账户使用邮箱和密码换取访问令牌。"""
+
+    email: str = Field(
+        min_length=3,
+        max_length=320,
+        pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$",
+    )
+    password: str = Field(min_length=1, max_length=128)
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def normalize_email(cls, value: object) -> object:
+        return value.strip().lower() if isinstance(value, str) else value
 
 
 class TelegramMonitorRead(BaseModel):
@@ -317,6 +369,7 @@ class TelegramConnectionAttemptRead(BaseModel):
     connectionId: UUID | None = None
     error: str | None = None
     telegramUrl: str | None = None
+    qrCodeUrl: str | None = None
     instructions: list[str] = Field(default_factory=list)
     localMock: bool = False
 
@@ -331,3 +384,14 @@ class TelegramConnectionHealthRead(BaseModel):
     legacyMonitoringActive: bool = False
     legacyActiveSourceCount: int = 0
     message: str | None = None
+
+
+class TelegramMtprotoDialogRead(BaseModel):
+    id: str
+    sourceType: TelegramSourceType
+    displayName: str
+    username: str | None = None
+
+
+class TelegramMtprotoSourceCreate(BaseModel):
+    chatId: str = Field(min_length=1, max_length=128)

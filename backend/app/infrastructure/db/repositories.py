@@ -12,6 +12,11 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.domain.enums import (
     AgentAnalysisStatus,
+    BillingEventStatus,
+    BillingProvider,
+    BillingInterval,
+    BillingStore,
+    BillingSubscriptionStatus,
     FrontendOpportunityStatus,
     IMChannel,
     MessageDirection,
@@ -39,6 +44,8 @@ from app.domain.services.subscription_policy import (
 from app.infrastructure.db.models import (
     AppConfig,
     AuthAccount,
+    BillingSubscription,
+    BillingEvent,
     Message,
     Opportunity,
     ReplyTemplate,
@@ -217,9 +224,35 @@ class UserRepository:
 class SubscriptionSnapshot:
     plan_code: PlanCode
     subscription_status: SubscriptionStatus
-    period: BillingPeriod
+    billing_period_start: datetime | None
+    billing_period_end: datetime | None
+    usage_period_start: datetime
+    usage_period_end: datetime
     entitlements: PlanEntitlements
     cancel_at_period_end: bool
+    effective_store: BillingStore | None
+    billing_interval: BillingInterval | None
+    entitlement_expires_at: datetime | None
+    will_renew: bool
+    billing_issue: bool
+    multiple_active_subscriptions: bool
+    last_synced_at: datetime | None
+    management_url_encrypted: str | None
+
+    @property
+    def billing_period(self) -> BillingPeriod | None:
+        if self.billing_period_start is None or self.billing_period_end is None:
+            return None
+        return BillingPeriod(start=self.billing_period_start, end=self.billing_period_end)
+
+    @property
+    def usage_period(self) -> BillingPeriod:
+        return BillingPeriod(start=self.usage_period_start, end=self.usage_period_end)
+
+    @property
+    def period(self) -> BillingPeriod:
+        """Backward-compatible alias; usage accounting must always use the UTC month."""
+        return self.usage_period
 
 
 @dataclass(frozen=True, slots=True)
@@ -231,6 +264,164 @@ class UsageReservation:
     allocated: int
 
 
+@dataclass(frozen=True, slots=True)
+class BillingSubscriptionWrite:
+    external_key: str
+    store: BillingStore
+    environment: str
+    external_product_id: str
+    external_transaction_id: str | None
+    revenuecat_entitlement_id: str | None
+    plan_code: PlanCode
+    billing_interval: BillingInterval
+    status: BillingSubscriptionStatus
+    current_period_start: datetime | None
+    current_period_end: datetime | None
+    grace_period_end: datetime | None
+    will_renew: bool
+    cancel_at_period_end: bool
+    billing_issue_detected_at: datetime | None
+    last_synced_at: datetime
+    metadata: dict
+
+
+@dataclass(frozen=True, slots=True)
+class BillingEventReservation:
+    event: BillingEvent
+    should_enqueue: bool
+    duplicate: bool
+
+
+class BillingEventRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self.session = session
+
+    async def reserve_revenuecat_event(
+        self,
+        *,
+        provider_event_id: str,
+        event_type: str,
+        app_user_ids: list[UUID],
+        environment: str | None,
+        payload_hash: str,
+    ) -> BillingEventReservation:
+        joined_user_ids = ",".join(str(item) for item in app_user_ids) or None
+        event = BillingEvent(
+            provider=BillingProvider.REVENUECAT,
+            provider_event_id=provider_event_id,
+            event_type=event_type[:128],
+            app_user_id=joined_user_ids,
+            environment=environment[:32] if environment else None,
+            payload_hash=payload_hash,
+            status=BillingEventStatus.QUEUED,
+            queued_at=utc_now(),
+        )
+        self.session.add(event)
+        try:
+            await self.session.commit()
+            await self.session.refresh(event)
+            return BillingEventReservation(event=event, should_enqueue=True, duplicate=False)
+        except IntegrityError:
+            await self.session.rollback()
+        result = await self.session.exec(
+            select(BillingEvent).where(
+                BillingEvent.provider == BillingProvider.REVENUECAT,
+                BillingEvent.provider_event_id == provider_event_id,
+            )
+        )
+        existing = result.first()
+        if not existing:
+            raise RuntimeError("billing event reservation conflict could not be recovered")
+        if existing.payload_hash != payload_hash:
+            raise ValueError("provider event ID was reused with a different payload")
+        if existing.status == BillingEventStatus.FAILED:
+            existing.status = BillingEventStatus.QUEUED
+            existing.queued_at = utc_now()
+            existing.processing_error = None
+            existing.updated_at = utc_now()
+            self.session.add(existing)
+            await self.session.commit()
+            await self.session.refresh(existing)
+            return BillingEventReservation(event=existing, should_enqueue=True, duplicate=True)
+        return BillingEventReservation(event=existing, should_enqueue=False, duplicate=True)
+
+    async def begin_processing(self, event_id: UUID) -> BillingEvent | None:
+        event = await self.session.get(BillingEvent, event_id, with_for_update=True)
+        if not event or event.status in {
+            BillingEventStatus.COMPLETED,
+            BillingEventStatus.ORPHANED,
+            BillingEventStatus.PROCESSING,
+        }:
+            # End the read transaction without expiring objects returned by an earlier
+            # successful transition on this session.
+            await self.session.commit()
+            return None
+        event.status = BillingEventStatus.PROCESSING
+        event.attempt_count += 1
+        event.updated_at = utc_now()
+        self.session.add(event)
+        await self.session.commit()
+        await self.session.refresh(event)
+        return event
+
+    async def finish(self, event_id: UUID, *, orphaned: bool = False) -> None:
+        event = await self.session.get(BillingEvent, event_id)
+        if not event:
+            return
+        event.status = BillingEventStatus.ORPHANED if orphaned else BillingEventStatus.COMPLETED
+        event.processed_at = utc_now()
+        event.processing_error = None
+        event.updated_at = utc_now()
+        self.session.add(event)
+        await self.session.commit()
+
+    async def fail(self, event_id: UUID, error: str) -> None:
+        event = await self.session.get(BillingEvent, event_id)
+        if not event:
+            return
+        event.status = BillingEventStatus.FAILED
+        event.processing_error = error[:1000]
+        event.updated_at = utc_now()
+        self.session.add(event)
+        await self.session.commit()
+
+    async def reconciliation_user_ids(self, *, limit: int, now: datetime | None = None) -> list[UUID]:
+        current = now or utc_now()
+        statement = (
+            select(SubscriptionAccount.user_id)
+            .where(
+                SubscriptionAccount.billing_provider == BillingProvider.REVENUECAT.value,
+                (
+                    SubscriptionAccount.status.in_([SubscriptionStatus.ACTIVE, SubscriptionStatus.TRIALING])
+                    | (SubscriptionAccount.entitlement_expires_at <= current + timedelta(hours=48))
+                    | SubscriptionAccount.billing_issue.is_(True)
+                ),
+            )
+            .order_by(col(SubscriptionAccount.last_synced_at).asc().nullsfirst())
+            .limit(limit)
+        )
+        result = await self.session.exec(statement)
+        user_ids = list(result.all())
+        failed_result = await self.session.exec(
+            select(BillingEvent.app_user_id).where(
+                BillingEvent.status == BillingEventStatus.FAILED,
+                BillingEvent.received_at >= current - timedelta(hours=48),
+                BillingEvent.app_user_id.is_not(None),
+            )
+        )
+        seen = set(user_ids)
+        for joined in failed_result.all():
+            for raw_user_id in joined.split(",") if joined else []:
+                try:
+                    user_id = UUID(raw_user_id)
+                except ValueError:
+                    continue
+                if user_id not in seen and len(user_ids) < limit:
+                    user_ids.append(user_id)
+                    seen.add(user_id)
+        return user_ids
+
+
 class SubscriptionRepository:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
@@ -239,6 +430,97 @@ class SubscriptionRepository:
         statement = select(SubscriptionAccount).where(SubscriptionAccount.user_id == user_id)
         result = await self.session.exec(statement)
         return result.first()
+
+    async def project_revenuecat_customer(
+        self,
+        *,
+        user_id: UUID,
+        subscriptions: list[BillingSubscriptionWrite],
+        effective_plan: PlanCode,
+        effective_store: BillingStore | None,
+        billing_interval: BillingInterval | None,
+        entitlement_started_at: datetime | None,
+        entitlement_expires_at: datetime | None,
+        billing_period_start: datetime | None,
+        billing_period_end: datetime | None,
+        will_renew: bool,
+        cancel_at_period_end: bool,
+        billing_issue: bool,
+        multiple_active_subscriptions: bool,
+        last_synced_at: datetime,
+        management_url_encrypted: str | None,
+    ) -> SubscriptionAccount:
+        existing_result = await self.session.exec(
+            select(BillingSubscription).where(
+                BillingSubscription.user_id == user_id,
+                BillingSubscription.provider == BillingProvider.REVENUECAT,
+            )
+        )
+        existing = {item.external_key: item for item in existing_result.all()}
+        current_keys: set[str] = set()
+        for item in subscriptions:
+            current_keys.add(item.external_key)
+            record = existing.get(item.external_key)
+            if not record:
+                record = BillingSubscription(
+                    user_id=user_id,
+                    provider=BillingProvider.REVENUECAT,
+                    store=item.store,
+                    environment=item.environment,
+                    external_key=item.external_key,
+                    external_product_id=item.external_product_id,
+                    plan_code=item.plan_code,
+                )
+            record.store = item.store
+            record.environment = item.environment
+            record.external_product_id = item.external_product_id
+            record.external_transaction_id = item.external_transaction_id
+            record.revenuecat_entitlement_id = item.revenuecat_entitlement_id
+            record.plan_code = item.plan_code
+            record.billing_interval = item.billing_interval
+            record.status = item.status
+            record.current_period_start = item.current_period_start
+            record.current_period_end = item.current_period_end
+            record.grace_period_end = item.grace_period_end
+            record.will_renew = item.will_renew
+            record.cancel_at_period_end = item.cancel_at_period_end
+            record.billing_issue_detected_at = item.billing_issue_detected_at
+            record.last_synced_at = item.last_synced_at
+            record.metadata_json = item.metadata
+            record.updated_at = last_synced_at
+            self.session.add(record)
+
+        for external_key, record in existing.items():
+            if external_key not in current_keys:
+                record.status = BillingSubscriptionStatus.INACTIVE
+                record.will_renew = False
+                record.last_synced_at = last_synced_at
+                record.updated_at = last_synced_at
+                self.session.add(record)
+
+        account = await self.get_account(user_id)
+        if not account:
+            account = SubscriptionAccount(user_id=user_id)
+        account.plan_code = effective_plan
+        account.status = SubscriptionStatus.ACTIVE if effective_plan != PlanCode.FREE else SubscriptionStatus.INACTIVE
+        account.billing_provider = BillingProvider.REVENUECAT.value
+        account.effective_store = effective_store
+        account.billing_interval = billing_interval
+        account.entitlement_started_at = entitlement_started_at
+        account.entitlement_expires_at = entitlement_expires_at
+        account.current_period_start = billing_period_start
+        account.current_period_end = billing_period_end
+        account.will_renew = will_renew
+        account.cancel_at_period_end = cancel_at_period_end
+        account.billing_issue = billing_issue
+        account.multiple_active_subscriptions = multiple_active_subscriptions
+        account.last_synced_at = last_synced_at
+        account.management_url_encrypted = management_url_encrypted
+        account.updated_at = last_synced_at
+        self.session.add(account)
+        await self.session.commit()
+        await self.session.refresh(account)
+        return account
 
     async def get_snapshot(
         self,
@@ -255,24 +537,24 @@ class SubscriptionRepository:
             period_end=account.current_period_end if account else None,
             now=current,
         )
-        if (
-            account
-            and plan_code != PlanCode.FREE
-            and account.current_period_start
-            and account.current_period_end
-        ):
-            period = BillingPeriod(
-                start=account.current_period_start,
-                end=account.current_period_end,
-            )
-        else:
-            period = utc_calendar_month(current)
+        usage_period = utc_calendar_month(current)
         return SubscriptionSnapshot(
             plan_code=plan_code,
             subscription_status=(account.status if account else SubscriptionStatus.INACTIVE),
-            period=period,
+            billing_period_start=(account.current_period_start if account else None),
+            billing_period_end=(account.current_period_end if account else None),
+            usage_period_start=usage_period.start,
+            usage_period_end=usage_period.end,
             entitlements=get_plan_entitlements(plan_code),
             cancel_at_period_end=bool(account and account.cancel_at_period_end),
+            effective_store=(account.effective_store if account else None),
+            billing_interval=(account.billing_interval if account else None),
+            entitlement_expires_at=(account.entitlement_expires_at if account else None),
+            will_renew=bool(account and account.will_renew),
+            billing_issue=bool(account and account.billing_issue),
+            multiple_active_subscriptions=bool(account and account.multiple_active_subscriptions),
+            last_synced_at=(account.last_synced_at if account else None),
+            management_url_encrypted=(account.management_url_encrypted if account else None),
         )
 
     async def reserve_agent_analysis(
@@ -303,7 +585,7 @@ class SubscriptionRepository:
         existing = existing_result.first()
         snapshot = await self.get_snapshot(user_id, now=current)
         limit = snapshot.entitlements.pi_agent_analysis_monthly_limit
-        allocated = await self._allocated_usage(user_id, snapshot.period)
+        allocated = await self._allocated_usage(user_id, snapshot.usage_period)
         if existing:
             reservation = UsageReservation(
                 allowed=existing.status in {UsageStatus.RESERVED, UsageStatus.CONSUMED},
@@ -322,8 +604,8 @@ class SubscriptionRepository:
             user_id=user_id,
             feature=UsageFeature.PI_AGENT_ANALYSIS,
             quantity=1,
-            period_start=snapshot.period.start,
-            period_end=snapshot.period.end,
+            period_start=snapshot.usage_period_start,
+            period_end=snapshot.usage_period_end,
             idempotency_key=normalized_key,
             source_message_id=message_id,
             status=UsageStatus.RESERVED,
@@ -595,11 +877,16 @@ class MessageRepository:
         self,
         channel: IMChannel,
         conversation_id: str,
+        owner_user_id: UUID | None,
         limit: int = 20,
     ) -> list[Message]:
         statement = (
             select(Message)
-            .where(Message.channel == channel, Message.conversation_id == conversation_id)
+            .where(
+                Message.channel == channel,
+                Message.conversation_id == conversation_id,
+                Message.owner_user_id == owner_user_id,
+            )
             .order_by(col(Message.sent_at).desc())
             .limit(limit)
         )
@@ -1104,6 +1391,28 @@ class TelegramConnectionRepository:
         await self.session.refresh(attempt)
         return attempt
 
+    async def get_pending_attempt_for_owner(
+        self,
+        *,
+        owner_user_id: UUID,
+        connection_type: TelegramConnectionType,
+    ) -> TelegramConnectionAttempt | None:
+        statement = (
+            select(TelegramConnectionAttempt)
+            .where(
+                TelegramConnectionAttempt.owner_user_id == owner_user_id,
+                TelegramConnectionAttempt.connection_type == connection_type,
+                TelegramConnectionAttempt.status == TelegramConnectionAttemptStatus.PENDING,
+            )
+            .order_by(col(TelegramConnectionAttempt.created_at).desc())
+        )
+        result = await self.session.exec(statement)
+        for attempt in result.all():
+            await self._expire_attempt_if_needed(attempt)
+            if attempt.status == TelegramConnectionAttemptStatus.PENDING:
+                return attempt
+        return None
+
     async def get_attempt_for_owner(
         self,
         *,
@@ -1116,6 +1425,12 @@ class TelegramConnectionRepository:
         )
         result = await self.session.exec(statement)
         attempt = result.first()
+        if attempt:
+            await self._expire_attempt_if_needed(attempt)
+        return attempt
+
+    async def get_attempt(self, attempt_id: UUID) -> TelegramConnectionAttempt | None:
+        attempt = await self.session.get(TelegramConnectionAttempt, attempt_id)
         if attempt:
             await self._expire_attempt_if_needed(attempt)
         return attempt
@@ -1164,6 +1479,129 @@ class TelegramConnectionRepository:
             await self.session.commit()
             await self.session.refresh(attempt)
         return attempt
+
+    async def list_pending_mtproto_qr_attempts(self) -> list[TelegramConnectionAttempt]:
+        statement = select(TelegramConnectionAttempt).where(
+            TelegramConnectionAttempt.connection_type == TelegramConnectionType.MTPROTO_QR,
+            TelegramConnectionAttempt.status == TelegramConnectionAttemptStatus.PENDING,
+            TelegramConnectionAttempt.expires_at > utc_now(),
+        )
+        result = await self.session.exec(statement)
+        return list(result.all())
+
+    async def set_qr_url_encrypted(
+        self, *, attempt_id: UUID, qr_url_encrypted: str
+    ) -> TelegramConnectionAttempt | None:
+        attempt = await self.session.get(TelegramConnectionAttempt, attempt_id)
+        if not attempt or attempt.status != TelegramConnectionAttemptStatus.PENDING:
+            return None
+        attempt.qr_url_encrypted = qr_url_encrypted
+        attempt.updated_at = utc_now()
+        self.session.add(attempt)
+        await self.session.commit()
+        await self.session.refresh(attempt)
+        return attempt
+
+    async def complete_mtproto_qr_attempt(
+        self,
+        *,
+        attempt_id: UUID,
+        telegram_account_id: str,
+        label: str,
+        credential_encrypted: str,
+    ) -> TelegramConnection | None:
+        attempt = await self.session.get(TelegramConnectionAttempt, attempt_id, with_for_update=True)
+        if not attempt or attempt.status != TelegramConnectionAttemptStatus.PENDING:
+            return None
+        existing_result = await self.session.exec(
+            select(TelegramConnection).where(
+                TelegramConnection.owner_user_id == attempt.owner_user_id,
+                TelegramConnection.connection_type == TelegramConnectionType.MTPROTO_QR,
+            )
+        )
+        connection = existing_result.first()
+        now = utc_now()
+        if not connection:
+            connection = TelegramConnection(
+                owner_user_id=attempt.owner_user_id,
+                connection_type=TelegramConnectionType.MTPROTO_QR,
+                label=label,
+            )
+        connection.telegram_account_id = telegram_account_id
+        connection.credential_encrypted = credential_encrypted
+        connection.capabilities = {"receive_group_messages": True, "receive_channel_posts": True}
+        connection.status = TelegramConnectionStatus.CONNECTED
+        connection.enabled = True
+        connection.last_error = None
+        connection.last_checked_at = now
+        connection.updated_at = now
+        self.session.add(connection)
+        await self.session.flush()
+        attempt.status = TelegramConnectionAttemptStatus.COMPLETED
+        attempt.connection_id = connection.id
+        attempt.qr_url_encrypted = None
+        attempt.completed_at = now
+        attempt.updated_at = now
+        self.session.add(attempt)
+        await self.session.commit()
+        await self.session.refresh(connection)
+        return connection
+
+    async def add_mtproto_source(
+        self,
+        *,
+        owner_user_id: UUID,
+        connection_id: UUID,
+        external_chat_id: str,
+        source_type: TelegramSourceType,
+        display_name: str,
+        username: str | None,
+        entitlements: PlanEntitlements,
+        legacy_active_count: int,
+    ) -> TelegramSource:
+        connection = await self.get_connection_for_owner(
+            owner_user_id=owner_user_id, connection_id=connection_id
+        )
+        if not connection or connection.connection_type != TelegramConnectionType.MTPROTO_QR:
+            raise ValueError("MTProto connection not found")
+        result = await self.session.exec(
+            select(TelegramSource).where(
+                TelegramSource.connection_id == connection_id,
+                TelegramSource.external_chat_id == external_chat_id,
+            )
+        )
+        source = result.first()
+        if not source:
+            ensure_group_quota(
+                entitlements=entitlements,
+                telegram_groups=legacy_active_count + await self.count_active_sources_by_user(owner_user_id) + 1,
+                wecom_groups=0,
+            )
+            source = TelegramSource(
+                owner_user_id=owner_user_id,
+                connection_id=connection_id,
+                external_chat_id=external_chat_id,
+                source_type=source_type,
+                display_name=display_name,
+                username=username,
+            )
+        else:
+            source.source_type = source_type
+            source.display_name = display_name
+            source.username = username
+            source.enabled = True
+            source.quota_paused = False
+            source.quota_reason = None
+            source.last_error = None
+            source.updated_at = utc_now()
+        # The MTProto listener keys its running task by the connection revision.
+        # Touch the parent whenever its selected chats change so the task reloads.
+        connection.updated_at = utc_now()
+        self.session.add(connection)
+        self.session.add(source)
+        await self.session.commit()
+        await self.session.refresh(source)
+        return source
 
     async def get_attempt_by_request_id(self, request_id: int) -> TelegramConnectionAttempt | None:
         statement = select(TelegramConnectionAttempt).where(
@@ -1223,6 +1661,36 @@ class TelegramConnectionRepository:
         )
         result = await self.session.exec(statement)
         return list(result.all())
+
+    async def list_listenable_mtproto_connections(
+        self,
+    ) -> list[tuple[TelegramConnection, list[TelegramSource]]]:
+        result = await self.session.exec(
+            select(TelegramConnection, TelegramSource)
+            .join(TelegramSource, TelegramSource.connection_id == TelegramConnection.id)
+            .where(
+                TelegramConnection.connection_type == TelegramConnectionType.MTPROTO_QR,
+                TelegramConnection.status == TelegramConnectionStatus.CONNECTED,
+                TelegramConnection.enabled.is_(True),
+                TelegramConnection.credential_encrypted.is_not(None),
+                TelegramSource.enabled.is_(True),
+                TelegramSource.quota_paused.is_(False),
+            )
+        )
+        grouped: dict[UUID, tuple[TelegramConnection, list[TelegramSource]]] = {}
+        for connection, source in result.all():
+            grouped.setdefault(connection.id, (connection, []))[1].append(source)
+        return list(grouped.values())
+
+    async def record_connection_error(self, connection_id: UUID, error: str | None) -> None:
+        connection = await self.session.get(TelegramConnection, connection_id)
+        if not connection:
+            return
+        connection.last_error = error[:1000] if error else None
+        connection.last_checked_at = utc_now()
+        connection.updated_at = utc_now()
+        self.session.add(connection)
+        await self.session.commit()
 
     async def list_active_sources_for_chat(
         self,
