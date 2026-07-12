@@ -2,6 +2,8 @@
 
 当前活动计划：
 
+- [RevenueCat + Paddle 统一订阅计费](2026-07-12-revenuecat-paddle-billing.md)
+
 - [订阅体系与 pi Agent 用量额度](2026-07-11-subscriptions-and-agent-quotas.md)
 - [Telegram 原生连接重构](2026-07-11-telegram-native-connections.md)
 - [Telegram 普通账号 QR 连接](2026-07-12-telegram-mtproto-qr.md)

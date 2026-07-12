@@ -217,9 +217,27 @@ class UserRepository:
 class SubscriptionSnapshot:
     plan_code: PlanCode
     subscription_status: SubscriptionStatus
-    period: BillingPeriod
+    billing_period_start: datetime | None
+    billing_period_end: datetime | None
+    usage_period_start: datetime
+    usage_period_end: datetime
     entitlements: PlanEntitlements
     cancel_at_period_end: bool
+
+    @property
+    def billing_period(self) -> BillingPeriod | None:
+        if self.billing_period_start is None or self.billing_period_end is None:
+            return None
+        return BillingPeriod(start=self.billing_period_start, end=self.billing_period_end)
+
+    @property
+    def usage_period(self) -> BillingPeriod:
+        return BillingPeriod(start=self.usage_period_start, end=self.usage_period_end)
+
+    @property
+    def period(self) -> BillingPeriod:
+        """Backward-compatible alias; usage accounting must always use the UTC month."""
+        return self.usage_period
 
 
 @dataclass(frozen=True, slots=True)
@@ -255,22 +273,14 @@ class SubscriptionRepository:
             period_end=account.current_period_end if account else None,
             now=current,
         )
-        if (
-            account
-            and plan_code != PlanCode.FREE
-            and account.current_period_start
-            and account.current_period_end
-        ):
-            period = BillingPeriod(
-                start=account.current_period_start,
-                end=account.current_period_end,
-            )
-        else:
-            period = utc_calendar_month(current)
+        usage_period = utc_calendar_month(current)
         return SubscriptionSnapshot(
             plan_code=plan_code,
             subscription_status=(account.status if account else SubscriptionStatus.INACTIVE),
-            period=period,
+            billing_period_start=(account.current_period_start if account else None),
+            billing_period_end=(account.current_period_end if account else None),
+            usage_period_start=usage_period.start,
+            usage_period_end=usage_period.end,
             entitlements=get_plan_entitlements(plan_code),
             cancel_at_period_end=bool(account and account.cancel_at_period_end),
         )
@@ -303,7 +313,7 @@ class SubscriptionRepository:
         existing = existing_result.first()
         snapshot = await self.get_snapshot(user_id, now=current)
         limit = snapshot.entitlements.pi_agent_analysis_monthly_limit
-        allocated = await self._allocated_usage(user_id, snapshot.period)
+        allocated = await self._allocated_usage(user_id, snapshot.usage_period)
         if existing:
             reservation = UsageReservation(
                 allowed=existing.status in {UsageStatus.RESERVED, UsageStatus.CONSUMED},
@@ -322,8 +332,8 @@ class SubscriptionRepository:
             user_id=user_id,
             feature=UsageFeature.PI_AGENT_ANALYSIS,
             quantity=1,
-            period_start=snapshot.period.start,
-            period_end=snapshot.period.end,
+            period_start=snapshot.usage_period_start,
+            period_end=snapshot.usage_period_end,
             idempotency_key=normalized_key,
             source_message_id=message_id,
             status=UsageStatus.RESERVED,

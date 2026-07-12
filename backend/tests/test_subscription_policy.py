@@ -9,6 +9,7 @@ from app.domain.services.subscription_policy import (
     ensure_group_quota,
     get_plan_entitlements,
     telegram_group_capacity,
+    utc_calendar_month,
 )
 
 
@@ -71,3 +72,10 @@ def test_expired_or_non_active_subscription_falls_back_to_free() -> None:
         period_end=now,
         now=now,
     ) == PlanCode.FREE
+
+
+def test_annual_billing_does_not_change_utc_month_usage_period() -> None:
+    period = utc_calendar_month(datetime(2026, 12, 31, 23, 59, tzinfo=timezone.utc))
+
+    assert period.start == datetime(2026, 12, 1, tzinfo=timezone.utc)
+    assert period.end == datetime(2027, 1, 1, tzinfo=timezone.utc)

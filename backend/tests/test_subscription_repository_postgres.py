@@ -123,6 +123,53 @@ async def test_repeated_idempotency_key_only_allocates_once(quota_subject) -> No
         assert await repo.usage_counts(user_id=user.id, period=snapshot.period) == (1, 0)
 
 
+async def test_annual_subscription_uses_utc_month_for_usage_and_upgrade_keeps_usage(quota_subject) -> None:
+    session_factory, user, message = quota_subject
+    now = datetime(2026, 7, 15, 12, tzinfo=UTC)
+    async with session_factory() as session:
+        account = SubscriptionAccount(
+            user_id=user.id,
+            plan_code=PlanCode.PLUS,
+            status=SubscriptionStatus.ACTIVE,
+            current_period_start=datetime(2026, 1, 1, tzinfo=UTC),
+            current_period_end=datetime(2027, 1, 1, tzinfo=UTC),
+        )
+        session.add(account)
+        await session.commit()
+        repo = SubscriptionRepository(session)
+
+        first = await repo.reserve_agent_analysis(
+            user_id=user.id,
+            message_id=message.id,
+            idempotency_key="annual-plus-july",
+            now=now,
+        )
+        assert first.ledger is not None
+        assert first.ledger.period_start == datetime(2026, 7, 1, tzinfo=UTC)
+        assert first.ledger.period_end == datetime(2026, 8, 1, tzinfo=UTC)
+        await repo.consume_usage(first.ledger.id)
+
+        account.plan_code = PlanCode.PRO
+        account.updated_at = now
+        session.add(account)
+        await session.commit()
+        upgraded = await repo.reserve_agent_analysis(
+            user_id=user.id,
+            message_id=message.id,
+            idempotency_key="annual-pro-july",
+            now=now,
+        )
+
+        assert upgraded.allowed is True
+        assert upgraded.allocated == 2
+        snapshot = await repo.get_snapshot(user.id, now=now)
+        assert snapshot.plan_code == PlanCode.PRO
+        assert snapshot.billing_period_start == datetime(2026, 1, 1, tzinfo=UTC)
+        assert snapshot.billing_period_end == datetime(2027, 1, 1, tzinfo=UTC)
+        assert snapshot.usage_period_start == datetime(2026, 7, 1, tzinfo=UTC)
+        assert snapshot.usage_period_end == datetime(2026, 8, 1, tzinfo=UTC)
+
+
 async def test_telegram_monitor_write_uses_effective_plan_limit(quota_subject) -> None:
     session_factory, user, _ = quota_subject
     now = datetime.now(UTC)
