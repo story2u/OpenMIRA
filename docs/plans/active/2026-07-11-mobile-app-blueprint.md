@@ -124,6 +124,8 @@ mobile/
 ## 验证入口（随 P0 落地）
 
 - `make android-check`：`./gradlew lint test`，Linux CI 可执行。
-- `make ios-check`：`xcodebuild test`，需要 macOS（CI 使用 macOS runner）。
+- `make ios-check`：xcodegen 生成工程 + 不签名编译，需要 macOS（CI 使用 macOS runner）。
+- iOS 目录入口与实现状态见 [`mobile/ios/README.md`](../../../mobile/ios/README.md)（含文件地图、
+  待办、TestFlight 发布流程）。
 - 每个切片的完成定义：接真实 API、处理 loading/error/空态、通过对应平台检查。
 - 进度、发现与决策写回[执行计划](2026-07-11-mobile-app.md)，不留在会话里。

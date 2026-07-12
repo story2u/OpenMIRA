@@ -90,6 +90,14 @@
   helper；7 个路由测试覆盖建号/多 audience/apple/错 audience/未验证邮箱/未配置/未知
   provider。契约与 iOS `NativeLoginRequest` 一致（`{"idToken"}`），响应复用 `AuthTokenRead`。
   Android 待 iOS 联调通过后开工（用户指令）。
+- 2026-07-12：iOS bundle id 定为 `com.codeiy.im`，后端 `APPLE_NATIVE_CLIENT_IDS` 默认值设为
+  同值（部署 `append_env` 仅在 GitHub var 非空时写入，留空即用默认，无需改工作流）。
+- 2026-07-12：iOS Release 构建为 TestFlight 就绪——生产 API 地址 `https://im.story2u.xyz/api/v1`
+  烧进 Info.plist（Release 读 `RadarAPIBaseURL`，修掉此前 Release 缺值 `fatalError` 崩溃），
+  DEBUG 固定本地 + `RADAR_API_URL` scheme 覆盖；新增 1024 无 alpha 图标 asset catalog、
+  `ITSAppUsesNonExemptEncryption=false`、`MARKETING_VERSION`/`CURRENT_PROJECT_VERSION`。
+  新增 `mobile/ios/README.md` 记录实现状态、文件地图、待办与发布流程。签名/上传需用户在
+  有 Apple 开发者凭据的机器上执行。
 
 ## 发现日志
 
@@ -125,8 +133,9 @@
 | iOS 源码类型检查 | 通过（2026-07-12） | `swiftc -typecheck`，Swift 6 严格模式，`arm64-apple-ios17.0-simulator` 目标，App/Core/Features/Models 全部文件 |
 | `Tests/ModelsDecodingTests.swift` 类型检查 | 通过（2026-07-12） | 以 `-enable-testing` 模块 + XCTest overlay 单独 typecheck |
 | DTO 解码/编码断言 | 通过（2026-07-12） | 与测试同断言的可执行检查在 macOS 实际运行（分数秒时间、未知枚举容错、snake_case 请求体） |
-| `make ios-check`（xcodegen + xcodebuild） | 未运行 | 本会话沙箱禁止 xcodegen/xcodebuild 写 `/var/folders` 暂存目录；需在正常终端或 CI macOS runner 执行 |
-| `xcodebuild test`（模拟器跑单测） | 未运行 | 同上；接入 CI 时补 |
+| `make ios-check`（xcodegen + xcodebuild） | 通过（2026-07-12，用户终端） | 用户在本机跑 `make ios-check` 报 BUILD SUCCEEDED；本会话沙箱禁写 `/var/folders` 无法复跑，仅做源码 typecheck |
+| iOS Release 归档 / 上传 TestFlight | 未运行 | 需 Apple 开发者凭据，用户执行；步骤见 `mobile/ios/README.md` |
+| `xcodebuild test`（模拟器跑单测） | 未运行 | 接入 CI macOS runner 时补 |
 | 后端 pytest 全量 | 通过（2026-07-12） | 47 passed / 3 skipped（Postgres 仓储测试本地跳过，CI 有服务）；含 7 个新原生登录路由测试 |
 | 后端 compileall + ruff（E,F,ASYNC） | 通过（2026-07-12） | app/tests/scripts/alembic 全部通过 |
 | `uv sync --locked` | 未运行 | 会话沙箱禁写 `~/.cache/uv`；用主仓库同锁 `.venv` 执行上述检查，CI 会跑 locked sync |
