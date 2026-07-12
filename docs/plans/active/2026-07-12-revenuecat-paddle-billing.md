@@ -46,10 +46,10 @@
 - [x] Commit 2：RevenueCat client、稳定模型、同步用例。
 - [x] Commit 3：Webhook、Celery、reconcile。
 - [x] Commit 4：订阅 API 与 DTO。
-- [ ] Commit 5：H5 RevenueCat Web/Paddle。
-- [ ] Commit 6：iOS RevenueCat/App Store。
-- [ ] Commit 7：Android RevenueCat/Google Play。
-- [ ] Commit 8：部署、CI、ADR、Runbook、完整验证。
+- [x] Commit 5：H5 RevenueCat Web/Paddle。
+- [x] Commit 6：iOS RevenueCat/App Store。
+- [x] Commit 7：Android RevenueCat/Google Play。
+- [x] Commit 8：部署、CI、ADR、Runbook、完整验证。
 
 ## 进度日志
 
@@ -58,10 +58,13 @@
 - 2026-07-12：按官方 v1 CustomerInfo endpoint 实现有限重试 adapter、稳定模型、mock provider 和全量权益投影；management URL 加密保存。
 - 2026-07-12：实现 Authorization + raw-body HMAC webhook、幂等事件仓储、Celery 全量同步和每日批量 reconcile；未知事件保持兼容。
 - 2026-07-12：新增 catalog/sync/management，扩展 `/me` billing/usage 周期与来源字段；sync 无客户端升级 payload 且按用户 Redis 限流。
+- 2026-07-12：H5 通过 purchases-js 加载 Paddle-backed Offering；iOS/Android 通过官方 SDK 加载、购买、恢复，并在后端确认后更新 UI。
+- 2026-07-12：补齐 Android Gradle wrapper/Version Catalog，新增三端单元测试；开始部署注入、平台 CI 和 Runbook。
 
 ## 发现日志
 
 - Android 已由 PR #9 脚手架完成，实施改为在现有唯一 network boundary 上增加套餐最小真实链路。
+- 基线 Android 忽略 Gradle wrapper，`make android-check` 不可执行；本分支补齐官方 8.11.1 wrapper。
 - 现有 `SubscriptionSnapshot.period` 是支付周期和用量周期混用的根因。
 
 ## 决策日志
@@ -73,8 +76,15 @@
 
 | 命令/场景 | 结果 | 证据或备注 |
 | --- | --- | --- |
-| `make check` | 待运行 | |
-| RevenueCat/Paddle/App Store/Play Sandbox E2E | 未运行 | 需要外部 Dashboard 与测试账号配置 |
+| `make backend-check` | 通过 | 本地 80 passed、9 skipped；CI PostgreSQL 89 passed，含 billing repository |
+| `make frontend-check` | 通过 | lint、typecheck、5 Vitest、Next production build |
+| `make pi-agent-check` | 通过 | 4 passed |
+| `make harness-check` | 通过 | 40 Markdown、79 Python files、7 harness tests |
+| Alembic upgrade/downgrade/upgrade | 通过 | GitHub Actions PostgreSQL 16 |
+| `make ios-check` | 通过 | GitHub Actions macOS：RevenueCat 5.x build + XCTest |
+| `make android-check` | 通过 | GitHub Actions：lint、5 billing tests + existing tests、debug assemble |
+| Docker Compose config | 未运行 | 本机无 Docker；CI/部署尚未运行 compose config |
+| RevenueCat/Paddle/App Store/Play Sandbox E2E | 未运行 | 需要外部 Dashboard、产品和测试账号配置 |
 
 ## 回滚与恢复
 
@@ -83,4 +93,6 @@
 
 ## 结果与剩余风险
 
-待完成。
+代码、迁移、三端购买链路、部署注入、CI、ADR 与 Runbook 已完成。功能保持“部分实现”：尚未配置
+RevenueCat/Paddle/App Store Connect/Google Play Console，也未执行 20 项跨平台 Sandbox E2E；生产开关
+必须保持关闭，直到 Runbook 验收完成。Compose 语法仍需在有 Docker 的环境执行一次 config 检查。

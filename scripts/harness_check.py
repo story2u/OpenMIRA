@@ -44,6 +44,10 @@ REQUIRED_FILES = (
     "docs/decisions/0001-use-uv-for-python-dependencies.md",
     "docs/decisions/0002-integrate-pi-as-constrained-runner.md",
     "docs/decisions/0003-enable-pi-agent-by-default.md",
+    "docs/decisions/0008-revenuecat-paddle-unified-billing.md",
+    "docs/integrations/revenuecat-paddle-billing.md",
+    "mobile/android/gradlew",
+    "mobile/android/gradle/wrapper/gradle-wrapper.jar",
 )
 
 FORBIDDEN_IMPORTS = {
@@ -454,7 +458,30 @@ def check_ci_and_commands(errors: list[str]) -> None:
             errors.append(f"{label} must enable pi agent by default with: {expected}")
     check_release_workflow(errors, deploy_path)
 
-    release_pattern = 'branches: ["release/v*.*.*"]'
+    client_roots = (ROOT / "frontend", ROOT / "mobile/ios", ROOT / "mobile/android")
+    forbidden_client_secrets = ("REVENUECAT_SECRET_API_KEY", "PADDLE_API_KEY")
+    for client_root in client_roots:
+        for path in client_root.rglob("*"):
+            if not path.is_file() or any(part in {"node_modules", ".next", ".build"} for part in path.parts):
+                continue
+            try:
+                contents = path.read_text(encoding="utf-8")
+            except (UnicodeDecodeError, OSError):
+                continue
+            for secret_name in forbidden_client_secrets:
+                if secret_name in contents:
+                    errors.append(f"client source must not reference server payment secret {secret_name}: {relative(path)}")
+
+    deploy_text = deploy_path.read_text(encoding="utf-8")
+    for secret_name in (
+        "REVENUECAT_SECRET_API_KEY",
+        "REVENUECAT_WEBHOOK_AUTH_TOKEN",
+        "REVENUECAT_WEBHOOK_HMAC_SECRET",
+    ):
+        if f"secrets.{secret_name}" not in deploy_text:
+            errors.append(f"deploy workflow must source {secret_name} from GitHub Secrets")
+
+    release_pattern = 'release/v*.*.*'
     workflow_triggers = {
         "CI": (ci_path, "push:"),
         "Deploy to VPS": (deploy_path, "workflow_run:"),

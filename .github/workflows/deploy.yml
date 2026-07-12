@@ -84,6 +84,9 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=${{ matrix.image }}
           cache-to: type=gha,scope=${{ matrix.image }},mode=max
+          build-args: |
+            NEXT_PUBLIC_REVENUECAT_WEB_API_KEY=${{ matrix.image == 'im-frontend' && vars.NEXT_PUBLIC_REVENUECAT_WEB_API_KEY || '' }}
+            NEXT_PUBLIC_REVENUECAT_OFFERING_ID=${{ vars.NEXT_PUBLIC_REVENUECAT_OFFERING_ID || 'default' }}
 
   deploy:
     name: Deploy
@@ -136,6 +139,12 @@ jobs:
       RUNTIME_PI_AGENT_API_KEY: ${{ vars.PI_AGENT_PROVIDER == 'deepseek' && secrets.DEEPSEEK_API_KEY || secrets.PI_AGENT_API_KEY }}
       RUNTIME_PI_AGENT_TIMEOUT_SECONDS: ${{ vars.PI_AGENT_TIMEOUT_SECONDS }}
       RUNTIME_PI_AGENT_MIN_OPPORTUNITY_CONFIDENCE: ${{ vars.PI_AGENT_MIN_OPPORTUNITY_CONFIDENCE }}
+      RUNTIME_REVENUECAT_ENABLED: ${{ vars.REVENUECAT_ENABLED || 'false' }}
+      RUNTIME_REVENUECAT_SECRET_API_KEY: ${{ secrets.REVENUECAT_SECRET_API_KEY }}
+      RUNTIME_REVENUECAT_PROJECT_ID: ${{ vars.REVENUECAT_PROJECT_ID }}
+      RUNTIME_REVENUECAT_WEBHOOK_AUTH_TOKEN: ${{ secrets.REVENUECAT_WEBHOOK_AUTH_TOKEN }}
+      RUNTIME_REVENUECAT_WEBHOOK_HMAC_SECRET: ${{ secrets.REVENUECAT_WEBHOOK_HMAC_SECRET }}
+      RUNTIME_REVENUECAT_RECONCILE_ENABLED: ${{ vars.REVENUECAT_RECONCILE_ENABLED || 'false' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -185,6 +194,12 @@ jobs:
               test -n "$CLOUDFLARE_TUNNEL_TOKEN" || { echo "CLOUDFLARE_TUNNEL_TOKEN secret is required when deploying cloudflared"; exit 1; }
               ;;
           esac
+          if [ "$RUNTIME_REVENUECAT_ENABLED" = "true" ]; then
+            test -n "$RUNTIME_REVENUECAT_SECRET_API_KEY" || { echo "REVENUECAT_SECRET_API_KEY secret is required when billing is enabled"; exit 1; }
+            test -n "$RUNTIME_REVENUECAT_PROJECT_ID" || { echo "REVENUECAT_PROJECT_ID var is required when billing is enabled"; exit 1; }
+            test -n "$RUNTIME_REVENUECAT_WEBHOOK_AUTH_TOKEN" || { echo "REVENUECAT_WEBHOOK_AUTH_TOKEN secret is required when billing is enabled"; exit 1; }
+            test -n "$RUNTIME_REVENUECAT_WEBHOOK_HMAC_SECRET" || { echo "REVENUECAT_WEBHOOK_HMAC_SECRET secret is required when billing is enabled"; exit 1; }
+          fi
           case "$VPS_DEPLOY_DIR" in
             *"'"*) echo "VPS_DEPLOY_DIR must not contain single quotes"; exit 1 ;;
           esac
@@ -259,6 +274,12 @@ jobs:
           append_env PI_AGENT_API_KEY "$RUNTIME_PI_AGENT_API_KEY"
           append_env PI_AGENT_TIMEOUT_SECONDS "$RUNTIME_PI_AGENT_TIMEOUT_SECONDS"
           append_env PI_AGENT_MIN_OPPORTUNITY_CONFIDENCE "$RUNTIME_PI_AGENT_MIN_OPPORTUNITY_CONFIDENCE"
+          append_env REVENUECAT_ENABLED "$RUNTIME_REVENUECAT_ENABLED"
+          append_env REVENUECAT_SECRET_API_KEY "$RUNTIME_REVENUECAT_SECRET_API_KEY"
+          append_env REVENUECAT_PROJECT_ID "$RUNTIME_REVENUECAT_PROJECT_ID"
+          append_env REVENUECAT_WEBHOOK_AUTH_TOKEN "$RUNTIME_REVENUECAT_WEBHOOK_AUTH_TOKEN"
+          append_env REVENUECAT_WEBHOOK_HMAC_SECRET "$RUNTIME_REVENUECAT_WEBHOOK_HMAC_SECRET"
+          append_env REVENUECAT_RECONCILE_ENABLED "$RUNTIME_REVENUECAT_RECONCILE_ENABLED"
           append_env CLOUDFLARE_TUNNEL_TOKEN "$CLOUDFLARE_TUNNEL_TOKEN"
 
           ssh -i ~/.ssh/vps_deploy_key -p "$VPS_PORT" "$VPS_USER@$VPS_HOST" "mkdir -p '$VPS_DEPLOY_DIR'"

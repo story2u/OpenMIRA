@@ -352,7 +352,9 @@ class BillingEventRepository:
             BillingEventStatus.ORPHANED,
             BillingEventStatus.PROCESSING,
         }:
-            await self.session.rollback()
+            # End the read transaction without expiring objects returned by an earlier
+            # successful transition on this session.
+            await self.session.commit()
             return None
         event.status = BillingEventStatus.PROCESSING
         event.attempt_count += 1

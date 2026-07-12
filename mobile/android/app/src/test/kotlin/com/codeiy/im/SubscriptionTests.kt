@@ -78,7 +78,7 @@ class SubscriptionTests {
 
     @Test fun unconfiguredBillingCannotPurchaseAnonymously() = runTest {
         val backend = FakeBackend()
-        val billing = FakeBilling(BillingPurchaseResult.Purchased, configured = false)
+        val billing = FakeBilling(BillingPurchaseResult.Purchased, isConfigured = false)
         val model = SubscriptionViewModel(USER_ID, backend, billing)
         model.load().join()
         model.purchase(mockk(relaxed = true), option).join()

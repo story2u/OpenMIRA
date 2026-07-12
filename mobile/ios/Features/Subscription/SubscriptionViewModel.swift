@@ -1,8 +1,7 @@
 import Foundation
 import Observation
 
-@MainActor
-protocol SubscriptionAPI: AnyObject {
+protocol SubscriptionAPI: AnyObject, Sendable {
     func subscription() async throws -> SubscriptionUsage
     func subscriptionCatalog() async throws -> [SubscriptionCatalogPlan]
     func syncSubscription() async throws -> SubscriptionUsage

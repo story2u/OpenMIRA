@@ -90,8 +90,7 @@ private final class FakeBillingService: BillingService {
     func restorePurchases() async throws { restoreCount += 1 }
 }
 
-@MainActor
-private final class FakeSubscriptionAPI: SubscriptionAPI {
+private final class FakeSubscriptionAPI: SubscriptionAPI, @unchecked Sendable {
     var syncCount = 0
     func subscription() async throws -> SubscriptionUsage { Self.usage(.free) }
     func subscriptionCatalog() async throws -> [SubscriptionCatalogPlan] {

@@ -67,7 +67,7 @@ make frontend-check
 cd frontend && pnpm dev
 ```
 
-`frontend-check` 运行 ESLint、独立 `tsc --noEmit` 和 production build。独立 typecheck 是必须项，
+`frontend-check` 运行 ESLint、独立 `tsc --noEmit`、Vitest 和 production build。独立 typecheck 是必须项，
 因为当前 `next.config.mjs` 的 build 兼容设置会跳过 TypeScript 错误。
 
 ## iOS App
@@ -79,22 +79,19 @@ make ios-check
 cd mobile/ios && xcodegen generate && open OpportunityRadar.xcodeproj
 ```
 
-`ios-check` 用 xcodegen 生成工程并对 iOS Simulator 目标做完整编译（不签名）。单元测试
-（`xcodebuild test`）需要本机可用的模拟器，暂未纳入 `ios-check`，接入 CI macOS runner 时一并
-处理（见活动计划）。`make check` 不包含 `ios-check`，因为 Linux CI 无法执行。
+`ios-check` 用 xcodegen 生成工程并在 iPhone 16 Simulator 上执行 build + XCTest（不签名）。
+`make check` 不包含 `ios-check`，因为 Linux 本地环境无法执行；CI 使用独立 macOS job。
 
 ## Android App
 
-需要 JDK 17 + Android SDK（装 Android Studio 即含）；gradle wrapper 的二进制 jar 不入库，
-首次先生成：
+需要 JDK 17 + Android SDK（装 Android Studio 即含）；仓库已提交固定 Gradle wrapper：
 
 ```bash
-cd mobile/android && gradle wrapper   # 或直接用 Android Studio 打开 mobile/android/
-make android-check                    # ./gradlew lintDebug testDebugUnitTest
+make android-check                    # ./gradlew lintDebug testDebugUnitTest assembleDebug
 ```
 
-`android-check` 跑 Android Lint 与 JVM 单元测试（含 DTO 解码契约测试），可在 Linux CI
-执行，接入 CI 待办见活动计划。`make check` 暂不包含 `android-check`（避免无 SDK 环境阻塞）。
+`android-check` 跑 Android Lint、JVM 单元测试和 debug assemble。CI 使用独立 Linux/JDK 17 job；
+`make check` 暂不包含它，避免无 Android SDK 的环境阻塞。
 
 ## 完整本地检查
 
@@ -144,8 +141,9 @@ alembic downgrade -1
 ## 与 CI 的对应关系
 
 - `.github/workflows/ci.yml` 的 harness job：`python scripts/harness_check.py`。
-- backend job：固定 uv 版本、Python 3.12、`uv sync --locked`、compileall、Ruff、pytest。
+- backend job：固定 uv 版本、Python 3.12、`uv sync --locked`、migration upgrade/downgrade/upgrade、compileall、Ruff、pytest。
 - pi-agent job：Node 22、`npm ci --ignore-scripts`、语法检查和 faux-provider 测试。
-- frontend job：Node 22、pnpm 10、frozen install、lint、独立 typecheck、build。
+- frontend job：Node 22、pnpm 10、frozen install、lint、独立 typecheck、Vitest、build。
+- ios/android jobs：xcodegen + XCTest；Gradle lint + unit test + debug assemble。
 
 若本地命令与 CI 漂移，优先统一根 Makefile和本文件，不在入口提示词复制更多命令。
