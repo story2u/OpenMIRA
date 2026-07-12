@@ -133,6 +133,7 @@ jobs:
       RUNTIME_AI_ENABLED: ${{ vars.AI_ENABLED }}
       RUNTIME_LITELLM_MODEL: ${{ vars.LITELLM_MODEL }}
       RUNTIME_OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      RUNTIME_DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
       RUNTIME_PI_AGENT_ENABLED: ${{ vars.PI_AGENT_ENABLED }}
       RUNTIME_PI_AGENT_PROVIDER: ${{ vars.PI_AGENT_PROVIDER }}
       RUNTIME_PI_AGENT_MODEL: ${{ vars.PI_AGENT_MODEL }}
@@ -191,6 +192,16 @@ jobs:
               test -n "$CLOUDFLARE_TUNNEL_TOKEN" || { echo "CLOUDFLARE_TUNNEL_TOKEN secret is required when deploying cloudflared"; exit 1; }
               ;;
           esac
+          if [ "$RUNTIME_AI_ENABLED" = "true" ]; then
+            case "$RUNTIME_LITELLM_MODEL" in
+              deepseek/*)
+                test -n "$RUNTIME_DEEPSEEK_API_KEY" || { echo "DEEPSEEK_API_KEY secret is required for the configured LiteLLM model"; exit 1; }
+                ;;
+              openai/*)
+                test -n "$RUNTIME_OPENAI_API_KEY" || { echo "OPENAI_API_KEY secret is required for the configured LiteLLM model"; exit 1; }
+                ;;
+            esac
+          fi
           test -n "$RUNTIME_REVENUECAT_SECRET_API_KEY" || { echo "REVENUECAT_SECRET_API_KEY secret is required"; exit 1; }
           test -n "$RUNTIME_REVENUECAT_WEBHOOK_HMAC_SECRET" || { echo "REVENUECAT_WEBHOOK_HMAC_SECRET secret is required"; exit 1; }
           case "$VPS_DEPLOY_DIR" in
@@ -261,6 +272,7 @@ jobs:
           append_env AI_ENABLED "$RUNTIME_AI_ENABLED"
           append_env LITELLM_MODEL "$RUNTIME_LITELLM_MODEL"
           append_env OPENAI_API_KEY "$RUNTIME_OPENAI_API_KEY"
+          append_env DEEPSEEK_API_KEY "$RUNTIME_DEEPSEEK_API_KEY"
           append_env PI_AGENT_ENABLED "$RUNTIME_PI_AGENT_ENABLED"
           append_env PI_AGENT_PROVIDER "$RUNTIME_PI_AGENT_PROVIDER"
           append_env PI_AGENT_MODEL "$RUNTIME_PI_AGENT_MODEL"
