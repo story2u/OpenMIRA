@@ -1,6 +1,5 @@
 package com.codeiy.im.feature.opportunity
 
-import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -40,6 +39,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -53,7 +53,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.codeiy.im.core.auth.SessionStore
+import com.codeiy.im.core.network.RadarApi
 import com.codeiy.im.core.network.api
 import com.codeiy.im.model.ChatMessage
 import com.codeiy.im.model.ManualReplyRequest
@@ -64,6 +66,8 @@ import com.codeiy.im.model.OpportunityStatusUpdate
 import com.codeiy.im.model.ReplyTemplate
 import com.codeiy.im.model.displayText
 import com.codeiy.im.ui.shortDateTime
+import kotlin.coroutines.cancellation.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -71,13 +75,16 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 
 class OpportunityDetailModel(
-    private val session: SessionStore,
+    private val service: RadarApi,
     private val opportunityId: String,
+    private val operatorName: () -> String?,
 ) : ViewModel() {
     data class UiState(
         val detail: Opportunity? = null,
         val messages: List<ChatMessage> = emptyList(),
         val templates: List<ReplyTemplate> = emptyList(),
+        val templatesLoaded: Boolean = false,
+        val isLoadingTemplates: Boolean = false,
         val replyText: String = "",
         val isLoading: Boolean = false,
         val isSending: Boolean = false,
@@ -88,16 +95,19 @@ class OpportunityDetailModel(
     private val _state = MutableStateFlow(UiState())
     val state: StateFlow<UiState> = _state
 
+    private var loadJob: Job? = null
+
     private val operatorId: String
-        get() = session.currentUser?.displayName?.ifBlank { null } ?: "operator"
+        get() = operatorName()?.ifBlank { null } ?: "operator"
 
     fun load() {
+        loadJob?.cancel()
         _state.value = _state.value.copy(isLoading = true)
-        viewModelScope.launch {
+        loadJob = viewModelScope.launch {
             try {
                 coroutineScope {
-                    val detail = async { api { session.api.service.opportunity(opportunityId) } }
-                    val messages = async { api { session.api.service.messages(opportunityId) } }
+                    val detail = async { api { service.opportunity(opportunityId) } }
+                    val messages = async { api { service.messages(opportunityId) } }
                     _state.value = _state.value.copy(
                         detail = detail.await(),
                         messages = messages.await(),
@@ -105,6 +115,8 @@ class OpportunityDetailModel(
                         error = null,
                     )
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 _state.value = _state.value.copy(isLoading = false, error = e.message)
             }
@@ -123,10 +135,10 @@ class OpportunityDetailModel(
         viewModelScope.launch {
             try {
                 val updated = api {
-                    session.api.service.manualReply(opportunityId, ManualReplyRequest(text, operatorId))
+                    service.manualReply(opportunityId, ManualReplyRequest(text, operatorId))
                 }
                 val messages = runCatching {
-                    api { session.api.service.messages(opportunityId) }
+                    api { service.messages(opportunityId) }
                 }.getOrDefault(_state.value.messages)
                 _state.value = _state.value.copy(
                     detail = updated,
@@ -145,7 +157,7 @@ class OpportunityDetailModel(
         _state.value = _state.value.copy(isDrafting = true)
         viewModelScope.launch {
             try {
-                val draft = api { session.api.service.aiDraft(opportunityId) }
+                val draft = api { service.aiDraft(opportunityId) }
                 _state.value = _state.value.copy(replyText = draft.draft, isDrafting = false)
             } catch (e: Exception) {
                 _state.value = _state.value.copy(isDrafting = false, error = e.message)
@@ -158,7 +170,7 @@ class OpportunityDetailModel(
         viewModelScope.launch {
             try {
                 val updated = api {
-                    session.api.service.updateStatus(opportunityId, OpportunityStatusUpdate(status))
+                    service.updateStatus(opportunityId, OpportunityStatusUpdate(status))
                 }
                 _state.value = _state.value.copy(detail = updated)
             } catch (e: Exception) {
@@ -170,7 +182,7 @@ class OpportunityDetailModel(
     fun claim() {
         viewModelScope.launch {
             try {
-                val updated = api { session.api.service.claim(opportunityId, operatorId) }
+                val updated = api { service.claim(opportunityId, operatorId) }
                 _state.value = _state.value.copy(detail = updated)
             } catch (e: Exception) {
                 _state.value = _state.value.copy(error = e.message)
@@ -178,11 +190,18 @@ class OpportunityDetailModel(
         }
     }
 
+    /** 只加载一次；失败置 templatesLoaded=false，Sheet 内可重试。 */
     fun loadTemplatesIfNeeded() {
-        if (_state.value.templates.isNotEmpty()) return
+        val current = _state.value
+        if (current.templatesLoaded || current.isLoadingTemplates) return
+        _state.value = current.copy(isLoadingTemplates = true)
         viewModelScope.launch {
-            val templates = runCatching { api { session.api.service.templates() } }.getOrDefault(emptyList())
-            _state.value = _state.value.copy(templates = templates)
+            val templates = runCatching { api { service.templates() } }
+            _state.value = _state.value.copy(
+                templates = templates.getOrDefault(emptyList()),
+                templatesLoaded = templates.isSuccess,
+                isLoadingTemplates = false,
+            )
         }
     }
 
@@ -194,13 +213,16 @@ class OpportunityDetailModel(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun OpportunityDetailScreen(session: SessionStore, opportunityId: String, onBack: () -> Unit) {
-    val model = remember(opportunityId) { OpportunityDetailModel(session, opportunityId) }
+    val model: OpportunityDetailModel = viewModel(key = opportunityId) {
+        OpportunityDetailModel(session.api.service, opportunityId) { session.currentUser?.displayName }
+    }
     val state by model.state.collectAsState()
     var showStatusMenu by remember { mutableStateOf(false) }
     var showTemplates by remember { mutableStateOf(false) }
 
-    BackHandler(onBack = onBack)
-    LaunchedEffect(opportunityId) { model.load() }
+    LaunchedEffect(Unit) { model.load() }
+    // 副作用放 LaunchedEffect，不在重组期间发请求。
+    LaunchedEffect(showTemplates) { if (showTemplates) model.loadTemplatesIfNeeded() }
 
     Scaffold(
         topBar = {
@@ -226,28 +248,52 @@ fun OpportunityDetailScreen(session: SessionStore, opportunityId: String, onBack
                         DropdownMenuItem(text = { Text("忽略") }, onClick = {
                             model.setStatus(OpportunityStatus.IGNORED); showStatusMenu = false
                         })
-                        DropdownMenuItem(text = { Text("关闭") }, onClick = {
-                            model.setStatus(OpportunityStatus.CLOSED); showStatusMenu = false
-                        })
+                        DropdownMenuItem(
+                            text = { Text("关闭", color = MaterialTheme.colorScheme.error) },
+                            onClick = { model.setStatus(OpportunityStatus.CLOSED); showStatusMenu = false },
+                        )
                     }
                 },
             )
         },
-        bottomBar = { ReplyBar(model, state, onShowTemplates = { showTemplates = true }) },
+        // 详情未加载成功前不给回复入口。
+        bottomBar = {
+            if (state.detail != null) {
+                ReplyBar(model, state, onShowTemplates = { showTemplates = true })
+            }
+        },
     ) { padding ->
         when {
             state.detail == null && state.isLoading -> Box(
                 Modifier.fillMaxSize().padding(padding),
                 contentAlignment = Alignment.Center,
             ) { CircularProgressIndicator() }
-            else -> DetailContent(state, Modifier.padding(padding))
+            state.detail == null -> Column(
+                Modifier.fillMaxSize().padding(padding).padding(24.dp),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Text(state.error ?: "加载失败", color = MaterialTheme.colorScheme.error)
+                Spacer(Modifier.height(12.dp))
+                TextButton(onClick = { model.dismissError(); model.load() }) { Text("重试") }
+            }
+            else -> PullToRefreshBox(
+                isRefreshing = state.isLoading,
+                onRefresh = { model.load() },
+                modifier = Modifier.padding(padding).fillMaxSize(),
+            ) {
+                DetailContent(state)
+            }
         }
     }
 
     if (showTemplates) {
-        model.loadTemplatesIfNeeded()
         ModalBottomSheet(onDismissRequest = { showTemplates = false }) {
-            TemplatePicker(state.templates) { template ->
+            TemplatePicker(
+                templates = state.templates,
+                isLoading = state.isLoadingTemplates,
+                onRetry = { model.loadTemplatesIfNeeded() },
+            ) { template ->
                 model.setReplyText(template.content)
                 showTemplates = false
             }
@@ -436,31 +482,50 @@ private fun ReplyBar(
 }
 
 @Composable
-private fun TemplatePicker(templates: List<ReplyTemplate>, onPick: (ReplyTemplate) -> Unit) {
-    if (templates.isEmpty()) {
-        Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
-            Text("暂无模板", color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        return
-    }
-    LazyColumn(contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 24.dp)) {
-        items(templates, key = { it.id }) { template ->
-            Column(
-                Modifier.fillMaxWidth().clickable { onPick(template) }.padding(horizontal = 16.dp, vertical = 10.dp),
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text(template.title, style = MaterialTheme.typography.titleSmall)
-                    AssistChip(onClick = {}, label = { Text(template.category) }, enabled = false)
-                }
-                Text(
-                    template.content,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 3,
-                    overflow = TextOverflow.Ellipsis,
-                )
+private fun TemplatePicker(
+    templates: List<ReplyTemplate>,
+    isLoading: Boolean,
+    onRetry: () -> Unit,
+    onPick: (ReplyTemplate) -> Unit,
+) {
+    Column {
+        Text(
+            "回复模板",
+            style = MaterialTheme.typography.titleMedium,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+        )
+        HorizontalDivider()
+        when {
+            isLoading -> Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator()
             }
-            HorizontalDivider()
+            templates.isEmpty() -> Column(
+                Modifier.fillMaxWidth().padding(32.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Text("暂无模板", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                TextButton(onClick = onRetry) { Text("重新加载") }
+            }
+            else -> LazyColumn(contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 24.dp)) {
+                items(templates, key = { it.id }) { template ->
+                    Column(
+                        Modifier.fillMaxWidth().clickable { onPick(template) }.padding(horizontal = 16.dp, vertical = 10.dp),
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text(template.title, style = MaterialTheme.typography.titleSmall)
+                            AssistChip(onClick = {}, label = { Text(template.category) }, enabled = false)
+                        }
+                        Text(
+                            template.content,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 3,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                    HorizontalDivider()
+                }
+            }
         }
     }
 }

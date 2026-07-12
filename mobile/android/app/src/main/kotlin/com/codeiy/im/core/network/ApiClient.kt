@@ -20,8 +20,13 @@ sealed class ApiError(message: String) : Exception(message) {
 /**
  * 唯一 HTTP 边界（蓝图约束，等同 iOS `Core/Network`）：
  * 所有后端调用都经 [api] 包装，统一注入 Bearer token 与错误映射。
+ * [onUnauthorized] 在带 token 的请求收到 401 时触发（登录请求本身无 token，不会误伤），
+ * 由 SessionStore 用来统一清会话回登录页。
  */
-class ApiClient(private val tokenProvider: () -> String?) {
+class ApiClient(
+    private val tokenProvider: () -> String?,
+    private val onUnauthorized: () -> Unit = {},
+) {
 
     val service: RadarApi by lazy {
         val client = OkHttpClient.Builder()
@@ -32,7 +37,9 @@ class ApiClient(private val tokenProvider: () -> String?) {
                 } else {
                     chain.request()
                 }
-                chain.proceed(request)
+                val response = chain.proceed(request)
+                if (response.code == 401 && token != null) onUnauthorized()
+                response
             }
             .build()
         Retrofit.Builder()

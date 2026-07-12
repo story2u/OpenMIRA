@@ -43,26 +43,30 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.codeiy.im.core.auth.SessionStore
+import com.codeiy.im.core.network.RadarApi
 import com.codeiy.im.core.network.api
-import com.codeiy.im.feature.opportunity.OpportunityDetailScreen
 import com.codeiy.im.feature.subscription.SubscriptionScreen
 import com.codeiy.im.model.FrontendOpportunityStatus
 import com.codeiy.im.model.IMChannel
 import com.codeiy.im.model.Opportunity
 import com.codeiy.im.model.Priority
 import com.codeiy.im.ui.relativeTime
+import kotlin.coroutines.cancellation.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 
-class InboxViewModel(private val session: SessionStore) : ViewModel() {
+class InboxViewModel(private val service: RadarApi) : ViewModel() {
     data class UiState(
         val items: List<Opportunity> = emptyList(),
         val statusFilter: FrontendOpportunityStatus? = null,
         val platformFilter: IMChannel? = null,
         val isLoading: Boolean = false,
+        val isLoadingMore: Boolean = false,
         val canLoadMore: Boolean = false,
         val error: String? = null,
     )
@@ -71,43 +75,58 @@ class InboxViewModel(private val session: SessionStore) : ViewModel() {
     val state: StateFlow<UiState> = _state
     private val pageSize = 50
 
+    // 单一在途请求：refresh 取消一切在途加载，loadMore 只在空闲时启动，避免筛选/轮询/分页互相竞态。
+    private var loadJob: Job? = null
+
+    /** 只更新筛选；请求由界面按筛选 key 的 LaunchedEffect 统一触发，避免双发。 */
     fun setFilters(status: FrontendOpportunityStatus?, platform: IMChannel?) {
         _state.value = _state.value.copy(statusFilter = status, platformFilter = platform)
-        refresh()
     }
 
-    fun refresh() = load(reset = true)
+    /** 取消在途请求后重载第一页；返回 Job 供轮询 join，保证一轮完成后再等下一轮。 */
+    fun refresh(): Job {
+        loadJob?.cancel()
+        return viewModelScope.launch { load(reset = true) }.also { loadJob = it }
+    }
 
     fun loadMoreIfNeeded(item: Opportunity) {
         val current = _state.value
-        if (current.canLoadMore && !current.isLoading && item.id == current.items.lastOrNull()?.id) {
-            load(reset = false)
+        if (current.canLoadMore && loadJob?.isActive != true && item.id == current.items.lastOrNull()?.id) {
+            loadJob = viewModelScope.launch { load(reset = false) }
         }
     }
 
-    private fun load(reset: Boolean) {
-        val filters = _state.value
-        _state.value = filters.copy(isLoading = true)
-        viewModelScope.launch {
-            try {
-                val offset = if (reset) 0 else filters.items.size
-                val page = api {
-                    session.api.service.opportunities(
-                        status = filters.statusFilter?.let { RadarEnumNames.status(it) },
-                        platform = filters.platformFilter?.let { RadarEnumNames.channel(it) },
-                        limit = pageSize,
-                        offset = offset,
-                    )
-                }
-                _state.value = _state.value.copy(
-                    items = if (reset) page else _state.value.items + page,
-                    canLoadMore = page.size == pageSize,
-                    isLoading = false,
-                    error = null,
+    private suspend fun load(reset: Boolean) {
+        val requested = _state.value
+        _state.value = requested.copy(isLoading = reset, isLoadingMore = !reset)
+        try {
+            val offset = if (reset) 0 else requested.items.size
+            val page = api {
+                service.opportunities(
+                    status = requested.statusFilter?.let { RadarEnumNames.status(it) },
+                    platform = requested.platformFilter?.let { RadarEnumNames.channel(it) },
+                    limit = pageSize,
+                    offset = offset,
                 )
-            } catch (e: Exception) {
-                _state.value = _state.value.copy(isLoading = false, error = e.message)
             }
+            val current = _state.value
+            // 写入前校验筛选未变：慢响应不得覆盖新筛选的结果。
+            if (current.statusFilter != requested.statusFilter ||
+                current.platformFilter != requested.platformFilter
+            ) {
+                return
+            }
+            _state.value = current.copy(
+                items = if (reset) page else current.items + page,
+                canLoadMore = page.size == pageSize,
+                isLoading = false,
+                isLoadingMore = false,
+                error = null,
+            )
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            _state.value = _state.value.copy(isLoading = false, isLoadingMore = false, error = e.message)
         }
     }
 }
@@ -130,10 +149,9 @@ object RadarEnumNames {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun InboxScreen(session: SessionStore) {
-    val model = remember { InboxViewModel(session) }
+fun InboxScreen(session: SessionStore, onOpenOpportunity: (String) -> Unit) {
+    val model: InboxViewModel = viewModel { InboxViewModel(session.api.service) }
     val state by model.state.collectAsState()
-    var selectedId by remember { mutableStateOf<String?>(null) }
     var showChannelMenu by remember { mutableStateOf(false) }
     var showAccountMenu by remember { mutableStateOf(false) }
     var showSubscription by remember { mutableStateOf(false) }
@@ -143,22 +161,11 @@ fun InboxScreen(session: SessionStore) {
         return
     }
 
-    val currentSelectedId = selectedId
-    if (currentSelectedId != null) {
-        OpportunityDetailScreen(
-            session = session,
-            opportunityId = currentSelectedId,
-            onBack = { selectedId = null },
-        )
-        return
-    }
-
-    // 筛选变化即重载；同一组合下 30s 轮询（推送通道落地后改为推送触发刷新）。
+    // 筛选变化重启本效应（取消上一轮）；每轮等 refresh 完成再延时，轮询不会堆叠请求。
     LaunchedEffect(state.statusFilter, state.platformFilter) {
-        model.refresh()
         while (true) {
+            model.refresh().join()
             delay(30_000)
-            model.refresh()
         }
     }
 
@@ -242,20 +249,38 @@ fun InboxScreen(session: SessionStore) {
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
+                    state.items.isEmpty() && state.isLoading -> Box(
+                        Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center,
+                    ) { CircularProgressIndicator() }
                     state.items.isEmpty() && !state.isLoading -> Box(
                         Modifier.fillMaxSize(),
                         contentAlignment = Alignment.Center,
                     ) { Text("暂无商机", color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                    else -> LazyColumn(Modifier.fillMaxSize()) {
-                        items(state.items, key = { it.id }) { opportunity ->
-                            InboxRow(opportunity) { selectedId = opportunity.id }
-                            HorizontalDivider()
-                            LaunchedEffect(opportunity.id) { model.loadMoreIfNeeded(opportunity) }
+                    else -> Column(Modifier.fillMaxSize()) {
+                        // 已有内容时的刷新失败提示：点按重试。
+                        if (state.error != null) {
+                            Text(
+                                "刷新失败：${state.error}（点按重试）",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { model.refresh() }
+                                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                            )
                         }
-                        if (state.isLoading && state.items.isEmpty()) {
-                            item {
-                                Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
-                                    CircularProgressIndicator()
+                        LazyColumn(Modifier.fillMaxSize()) {
+                            items(state.items, key = { it.id }) { opportunity ->
+                                InboxRow(opportunity) { onOpenOpportunity(opportunity.id) }
+                                HorizontalDivider()
+                                LaunchedEffect(opportunity.id) { model.loadMoreIfNeeded(opportunity) }
+                            }
+                            if (state.isLoadingMore) {
+                                item {
+                                    Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
+                                        CircularProgressIndicator()
+                                    }
                                 }
                             }
                         }

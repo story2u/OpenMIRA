@@ -20,6 +20,11 @@ android {
         versionCode = 1
         versionName = "0.1.0"
         buildConfigField("String", "REVENUECAT_ANDROID_PUBLIC_API_KEY", "\"${revenueCatPublicApiKey.get()}\"")
+
+        // Google 原生登录用的 Web Client ID（非秘密）。在 gradle.properties 或 -P 提供；
+        // 为空时登录页隐藏 Google 按钮，邮箱密码登录不受影响。
+        val googleServerClientId = (project.findProperty("GOOGLE_SERVER_CLIENT_ID") as? String).orEmpty()
+        buildConfigField("String", "GOOGLE_SERVER_CLIENT_ID", "\"$googleServerClientId\"")
     }
 
     buildTypes {
@@ -58,6 +63,12 @@ dependencies {
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)
+    implementation("androidx.navigation:navigation-compose:2.8.5")
+
+    // Google 原生登录：Credential Manager + Google ID Token
+    implementation("androidx.credentials:credentials:1.3.0")
+    implementation("androidx.credentials:credentials-play-services-auth:1.3.0")
+    implementation("com.google.android.libraries.identity.googleid:googleid:1.1.1")
 
     implementation(libs.compose.ui)
     implementation(libs.compose.ui.tooling.preview)

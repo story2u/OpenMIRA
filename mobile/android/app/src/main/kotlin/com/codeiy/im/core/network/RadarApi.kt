@@ -6,6 +6,7 @@ import com.codeiy.im.model.AuthToken
 import com.codeiy.im.model.AuthUser
 import com.codeiy.im.model.ChatMessage
 import com.codeiy.im.model.ManualReplyRequest
+import com.codeiy.im.model.NativeLoginRequest
 import com.codeiy.im.model.Opportunity
 import com.codeiy.im.model.OpportunityStatusUpdate
 import com.codeiy.im.model.PasswordLoginRequest
@@ -24,6 +25,9 @@ import retrofit2.http.Query
 interface RadarApi {
     @POST("auth/password/login")
     suspend fun passwordLogin(@Body body: PasswordLoginRequest): AuthToken
+
+    @POST("auth/oauth/google/native")
+    suspend fun googleNativeLogin(@Body body: NativeLoginRequest): AuthToken
 
     @GET("auth/me")
     suspend fun me(): AuthUser

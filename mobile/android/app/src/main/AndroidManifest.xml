@@ -17,6 +17,20 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- 深链：opportunity-radar://opportunity/{id}（推送落地后通知点击走这里） -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="opportunity-radar" android:host="opportunity" />
+            </intent-filter>
+            <!-- App Link：需在 im.story2u.xyz 发布 assetlinks.json 并加 autoVerify 才会直开 App -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="im.story2u.xyz" android:pathPrefix="/app/opportunity" />
+            </intent-filter>
         </activity>
     </application>
 

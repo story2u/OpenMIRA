@@ -23,12 +23,19 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
+import androidx.navigation.NavType
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
+import androidx.navigation.navDeepLink
 import com.codeiy.im.core.auth.SessionState
 import com.codeiy.im.core.auth.SessionStore
 import com.codeiy.im.core.auth.TokenStore
 import com.codeiy.im.core.billing.RevenueCatBillingService
 import com.codeiy.im.feature.inbox.InboxScreen
 import com.codeiy.im.feature.login.LoginScreen
+import com.codeiy.im.feature.opportunity.OpportunityDetailScreen
 
 class MainActivity : ComponentActivity() {
     private val session: SessionStore by viewModels {
@@ -69,6 +76,33 @@ private fun RootView(session: SessionStore) {
             TextButton(onClick = { session.logout() }) { Text("退出登录") }
         }
         is SessionState.LoggedOut -> LoginScreen(session)
-        is SessionState.Active -> InboxScreen(session)
+        is SessionState.Active -> AppNavHost(session)
+    }
+}
+
+@Composable
+private fun AppNavHost(session: SessionStore) {
+    val navController = rememberNavController()
+    NavHost(navController, startDestination = "inbox") {
+        composable("inbox") {
+            InboxScreen(session) { id -> navController.navigate("opportunity/$id") }
+        }
+        composable(
+            route = "opportunity/{opportunityId}",
+            arguments = listOf(navArgument("opportunityId") { type = NavType.StringType }),
+            // 推送/外链深链入口（对齐移动端计划「点击推送深链进详情」）。
+            // https App Link 需在域名下发布 assetlinks.json 后才会直开 App，见 README。
+            deepLinks = listOf(
+                navDeepLink { uriPattern = "opportunity-radar://opportunity/{opportunityId}" },
+                navDeepLink { uriPattern = "https://im.story2u.xyz/app/opportunity/{opportunityId}" },
+            ),
+        ) { entry ->
+            val opportunityId = entry.arguments?.getString("opportunityId").orEmpty()
+            OpportunityDetailScreen(
+                session = session,
+                opportunityId = opportunityId,
+                onBack = { navController.popBackStack() },
+            )
+        }
     }
 }
