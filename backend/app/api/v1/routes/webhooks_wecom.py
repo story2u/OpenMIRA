@@ -9,6 +9,7 @@ from app.api.deps import (
     get_rule_repo,
     get_subscription_repo,
     get_task_queue,
+    get_user_settings_repo,
     get_work_time_service,
 )
 from app.application.mappers import to_opportunity_read
@@ -21,6 +22,7 @@ from app.infrastructure.db.repositories import (
     OpportunityRepository,
     RuleRepository,
     SubscriptionRepository,
+    UserSettingsRepository,
 )
 from app.infrastructure.im.base import AdapterRegistry
 from app.infrastructure.im.wecom import WeComAdapter
@@ -55,6 +57,7 @@ async def wecom_webhook(
     work_time=Depends(get_work_time_service),
     task_queue: CeleryTaskQueue = Depends(get_task_queue),
     subscription_repo: SubscriptionRepository = Depends(get_subscription_repo),
+    user_settings_repo: UserSettingsRepository = Depends(get_user_settings_repo),
 ) -> dict:
     body = await request.body()
     payload = xmltodict.parse(body).get("xml", {})
@@ -75,6 +78,7 @@ async def wecom_webhook(
         work_time=work_time,
         task_queue=task_queue,
         subscription_repo=subscription_repo,
+        user_settings_repo=user_settings_repo,
     )
     result = await use_case.execute(inbound)
     response = {"ok": True, "id": str(result.id), "type": result.__class__.__name__}

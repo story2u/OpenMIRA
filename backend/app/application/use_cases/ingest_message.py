@@ -1,9 +1,10 @@
-from uuid import UUID
+from dataclasses import dataclass, field
+from uuid import UUID, uuid4
 
 from app.application.use_cases.schedule_agent_analysis import ScheduleAgentAnalysisUseCase
-from app.core.time_window import WorkTimeService
-from app.domain.enums import OpportunityStatus
-from app.domain.ports import ConversationTurn, InboundMessage, TaskQueue
+from app.core.time_window import WorkScheduleConfig, WorkScheduleService, WorkTimeService
+from app.domain.enums import OpportunityStatus, RuleType
+from app.domain.ports import ConversationTurn, DetectionRule, InboundMessage, TaskQueue
 from app.domain.services.detection_policy import OpportunityDetector
 from app.infrastructure.db.models import Message, Opportunity
 from app.infrastructure.db.repositories import (
@@ -11,7 +12,14 @@ from app.infrastructure.db.repositories import (
     OpportunityRepository,
     RuleRepository,
     SubscriptionRepository,
+    UserSettingsRepository,
 )
+
+
+@dataclass(frozen=True, slots=True)
+class _DetectionPrefs:
+    extra_rules: list[DetectionRule] = field(default_factory=list)
+    ai_semantics_enabled: bool = True
 
 
 class IngestMessageUseCase:
@@ -25,12 +33,14 @@ class IngestMessageUseCase:
         work_time: WorkTimeService,
         task_queue: TaskQueue,
         subscription_repo: SubscriptionRepository,
+        user_settings_repo: UserSettingsRepository | None = None,
     ) -> None:
         self.message_repo = message_repo
         self.opportunity_repo = opportunity_repo
         self.rule_repo = rule_repo
         self.detector = detector
         self.work_time = work_time
+        self.user_settings_repo = user_settings_repo
         self.task_queue = task_queue
         self.agent_scheduler = ScheduleAgentAnalysisUseCase(
             message_repo=message_repo,
@@ -53,9 +63,15 @@ class IngestMessageUseCase:
             message.owner_user_id,
             limit=7,
         )
-        detection = await self.detector.detect(
+
+        detection_prefs = await self._detection_prefs(inbound.owner_user_id)
+        rules = await self.rule_repo.enabled_detection_rules()
+        rules = rules + detection_prefs.extra_rules
+        detector = self.detector if detection_prefs.ai_semantics_enabled else OpportunityDetector(ai_classifier=None)
+
+        detection = await detector.detect(
             text=inbound.text or "",
-            rules=await self.rule_repo.enabled_detection_rules(),
+            rules=rules,
             conversation=self._detection_context(conversation, current_message_id=message.id),
             source_type=inbound.source_type,
             group_name=inbound.group_name,
@@ -69,7 +85,8 @@ class IngestMessageUseCase:
             )
             return message
 
-        if detection.requires_human_review or self.work_time.is_working_time():
+        working_time = await self._is_working_time(inbound.owner_user_id)
+        if detection.requires_human_review or working_time:
             status = OpportunityStatus.PENDING_HUMAN
         else:
             status = OpportunityStatus.AI_AUTO_REPLY
@@ -106,6 +123,45 @@ class IngestMessageUseCase:
         )
 
         return opportunity
+
+    async def _detection_prefs(self, owner_user_id: UUID | None) -> "_DetectionPrefs":
+        """把用户自定义关键词转成 KEYWORD 规则叠加到全局规则；无 owner 或无偏好则用默认。"""
+        if not owner_user_id or not self.user_settings_repo:
+            return _DetectionPrefs(extra_rules=[], ai_semantics_enabled=True)
+        pref = await self.user_settings_repo.get_detection(owner_user_id)
+        if not pref:
+            return _DetectionPrefs(extra_rules=[], ai_semantics_enabled=True)
+        extra_rules: list[DetectionRule] = []
+        if pref.keywords:
+            extra_rules.append(
+                DetectionRule(
+                    id=uuid4(),
+                    name="用户关键词",
+                    rule_type=RuleType.KEYWORD,
+                    pattern=",".join(pref.keywords),
+                    score=0.5,
+                    priority=10,
+                )
+            )
+        return _DetectionPrefs(
+            extra_rules=extra_rules,
+            ai_semantics_enabled=pref.ai_semantics_enabled,
+        )
+
+    async def _is_working_time(self, owner_user_id: UUID | None) -> bool:
+        """优先用用户级工作时间；无 owner 或无用户设置时回退到全局 WorkTimeService。"""
+        if owner_user_id and self.user_settings_repo:
+            schedule = await self.user_settings_repo.get_work_schedule(owner_user_id)
+            if schedule:
+                service = WorkScheduleService(
+                    WorkScheduleConfig(
+                        timezone=schedule.timezone,
+                        slots=schedule.slots,
+                        auto_reply_outside_hours=schedule.auto_reply_outside_hours,
+                    )
+                )
+                return service.is_working_time()
+        return self.work_time.is_working_time()
 
     def _detection_context(
         self,

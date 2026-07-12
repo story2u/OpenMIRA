@@ -7,6 +7,7 @@ from app.api.v1.routes import (
     messages,
     opportunities,
     rules,
+    settings,
     stats,
     subscriptions,
     telegram_connections,
@@ -30,6 +31,7 @@ api_router.include_router(configs.router, prefix="/configs", tags=["configs"])
 api_router.include_router(templates.router, prefix="/templates", tags=["templates"])
 api_router.include_router(stats.router, prefix="/stats", tags=["stats"])
 api_router.include_router(subscriptions.router, prefix="/subscriptions", tags=["subscriptions"])
+api_router.include_router(settings.router, prefix="/settings", tags=["settings"])
 api_router.include_router(
     telegram_connections.router,
     prefix="/integrations/telegram",

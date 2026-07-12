@@ -13,6 +13,7 @@ from app.api.deps import (
     get_telegram_connection_repo,
     get_telegram_user_config_repo,
     get_task_queue,
+    get_user_settings_repo,
     get_work_time_service,
 )
 from app.application.mappers import to_opportunity_read
@@ -34,6 +35,7 @@ from app.infrastructure.db.repositories import (
     SubscriptionRepository,
     TelegramConnectionRepository,
     TelegramUserConfigRepository,
+    UserSettingsRepository,
 )
 from app.infrastructure.im.base import AdapterRegistry
 from app.infrastructure.im.telegram_connector import TelegramBotConnector
@@ -76,6 +78,7 @@ async def telegram_webhook(
     subscription_repo: SubscriptionRepository = Depends(get_subscription_repo),
     connection_repo: TelegramConnectionRepository = Depends(get_telegram_connection_repo),
     legacy_repo: TelegramUserConfigRepository = Depends(get_telegram_user_config_repo),
+    user_settings_repo: UserSettingsRepository = Depends(get_user_settings_repo),
 ) -> dict:
     # Reject unauthenticated requests before parsing or persisting their JSON body.
     require_secret(
@@ -127,6 +130,7 @@ async def telegram_webhook(
         work_time=work_time,
         task_queue=task_queue,
         subscription_repo=subscription_repo,
+        user_settings_repo=user_settings_repo,
     )
     business_message = payload.get("business_message") or payload.get("edited_business_message")
     if isinstance(business_message, dict):

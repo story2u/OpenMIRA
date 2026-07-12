@@ -23,6 +23,15 @@ class WorkTimeConfig(BaseModel):
         )
 
 
+class WorkScheduleConfig(BaseModel):
+    """用户级工作时间：任意人工审核时段列表；未落入任一时段则视为非工作时间。"""
+
+    timezone: str = "Asia/Shanghai"
+    # 每个元素 {"weekday": 1-7, "start": "HH:MM", "end": "HH:MM"}
+    slots: list[dict] = Field(default_factory=list)
+    auto_reply_outside_hours: bool = True
+
+
 def parse_hhmm(value: str) -> time:
     hour, minute = value.split(":", maxsplit=1)
     return time(hour=int(hour), minute=int(minute))
@@ -49,3 +58,24 @@ class WorkTimeService:
 
         # Overnight window, for example 22:00-06:00.
         return current_time >= start or current_time <= end
+
+
+class WorkScheduleService:
+    """基于用户自定义时段判断"当前是否人工审核时间"。空时段=始终非工作时间。"""
+
+    def __init__(self, config: WorkScheduleConfig) -> None:
+        self.config = config
+
+    def is_working_time(self, at: datetime | None = None) -> bool:
+        tz = ZoneInfo(self.config.timezone)
+        current = at.astimezone(tz) if at else datetime.now(tz)
+        iso_weekday = current.isoweekday()
+        current_time = current.time()
+        for slot in self.config.slots:
+            if slot.get("weekday") != iso_weekday:
+                continue
+            start = parse_hhmm(slot["start"])
+            end = parse_hhmm(slot["end"])
+            if start <= current_time <= end:
+                return True
+        return False

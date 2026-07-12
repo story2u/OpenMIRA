@@ -1,3 +1,4 @@
+from datetime import datetime
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
@@ -15,6 +16,7 @@ from app.api.deps import (
 from app.application.dto import (
     AgentAnalysisEnqueueRead,
     AIDraftResponse,
+    DashboardRead,
     ManualReplyRequest,
     OpportunityDetailRead,
     OpportunityRead,
@@ -40,6 +42,91 @@ from app.infrastructure.im.base import AdapterRegistry
 from app.worker.queue import CeleryTaskQueue
 
 router = APIRouter()
+
+
+# 与 Web frontend/lib/sop.ts 的 trustLevel 边界严格一致。
+TRUST_LEVEL_RANGES: dict[str, tuple[int, int]] = {
+    "trusted": (80, 100),
+    "unverified": (60, 79),
+    "suspicious": (40, 59),
+    "risky": (0, 39),
+}
+DASHBOARD_SORTS = {"newest", "oldest", "confidence", "trust"}
+SOURCE_TYPES = {"group", "private"}
+
+
+@router.get("/dashboard", response_model=DashboardRead)
+async def dashboard(
+    status_filter: FrontendOpportunityStatus | None = Query(default=None, alias="status"),
+    platform: IMChannel | None = None,
+    source_type: str | None = Query(default=None, alias="source_type"),
+    created_from: datetime | None = Query(default=None, alias="created_from"),
+    created_to: datetime | None = Query(default=None, alias="created_to"),
+    trust_levels: list[str] | None = Query(default=None, alias="trust_levels"),
+    sop_stages: list[str] | None = Query(default=None, alias="sop_stages"),
+    keywords: list[str] | None = Query(default=None, alias="keywords"),
+    sort: str = Query(default="newest"),
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    current_user: User = Depends(require_user),
+    repo: OpportunityRepository = Depends(get_opportunity_repo),
+) -> DashboardRead:
+    """商机看板聚合端点：数据库层完成筛选/排序/分页，所有结果按 owner 隔离。
+
+    数组参数用重复 query（?trust_levels=trusted&trust_levels=risky）。旧的 GET
+    /opportunities 保持不变，Web 与旧版 App 不受影响。
+    """
+    if sort not in DASHBOARD_SORTS:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"sort must be one of {sorted(DASHBOARD_SORTS)}",
+        )
+    if source_type is not None and source_type not in SOURCE_TYPES:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"source_type must be one of {sorted(SOURCE_TYPES)}",
+        )
+    trust_ranges: list[tuple[int, int]] | None = None
+    if trust_levels:
+        try:
+            trust_ranges = [TRUST_LEVEL_RANGES[level] for level in trust_levels]
+        except KeyError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"unknown trust level: {exc.args[0]}",
+            ) from exc
+    if created_from and created_to and created_from > created_to:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="created_from must not be after created_to",
+        )
+
+    items, total = await repo.dashboard(
+        owner_user_id=current_user.id,
+        frontend_status=status_filter,
+        channel=platform,
+        source_type=source_type,
+        created_from=created_from,
+        created_to=created_to,
+        trust_ranges=trust_ranges,
+        sop_stages=sop_stages or None,
+        keywords=keywords or None,
+        sort=sort,
+        limit=limit,
+        offset=offset,
+    )
+    pending_count = await repo.count_pending(current_user.id)
+    attention = await repo.list_attention(current_user.id)
+    keyword_options = await repo.keyword_options(current_user.id)
+    return DashboardRead(
+        items=[to_opportunity_read(item) for item in items],
+        total=total,
+        limit=limit,
+        offset=offset,
+        pendingCount=pending_count,
+        attentionItems=[to_opportunity_read(item) for item in attention],
+        keywordOptions=keyword_options,
+    )
 
 
 @router.get("", response_model=list[OpportunityRead])

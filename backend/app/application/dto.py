@@ -68,6 +68,18 @@ class OpportunityDetailRead(OpportunityRead):
     detectionReason: str | None = None
 
 
+class DashboardRead(BaseModel):
+    """商机看板聚合响应：分页结果 + 不受分页影响的总量/重大商机/关键词选项。"""
+
+    items: list[OpportunityRead]
+    total: int
+    limit: int
+    offset: int
+    pendingCount: int
+    attentionItems: list[OpportunityRead] = Field(default_factory=list)
+    keywordOptions: list[str] = Field(default_factory=list)
+
+
 class ChatMessageRead(BaseModel):
     id: UUID
     senderName: str
@@ -395,3 +407,109 @@ class TelegramMtprotoDialogRead(BaseModel):
 
 class TelegramMtprotoSourceCreate(BaseModel):
     chatId: str = Field(min_length=1, max_length=128)
+
+
+# MARK: 用户级设置（detection / work-schedule / notifications）
+
+MAX_DETECTION_KEYWORDS = 50
+MAX_DETECTION_KEYWORD_LEN = 64
+
+
+def _normalize_keywords(values: list[str]) -> list[str]:
+    """去空格、丢空串、按首次出现顺序去重，并限制单个长度。"""
+    seen: set[str] = set()
+    result: list[str] = []
+    for raw in values:
+        keyword = raw.strip()
+        if not keyword:
+            continue
+        if len(keyword) > MAX_DETECTION_KEYWORD_LEN:
+            raise ValueError(f"关键词长度不能超过 {MAX_DETECTION_KEYWORD_LEN} 个字符")
+        lowered = keyword.lower()
+        if lowered in seen:
+            continue
+        seen.add(lowered)
+        result.append(keyword)
+    if len(result) > MAX_DETECTION_KEYWORDS:
+        raise ValueError(f"关键词数量不能超过 {MAX_DETECTION_KEYWORDS} 个")
+    return result
+
+
+class DetectionSettingsRead(BaseModel):
+    keywords: list[str] = Field(default_factory=list)
+    aiSemanticsEnabled: bool = True
+
+
+class DetectionSettingsUpdate(BaseModel):
+    keywords: list[str] = Field(default_factory=list, max_length=200)
+    aiSemanticsEnabled: bool = True
+
+    @field_validator("keywords")
+    @classmethod
+    def validate_keywords(cls, value: list[str]) -> list[str]:
+        return _normalize_keywords(value)
+
+
+class WorkScheduleSlot(BaseModel):
+    """一个连续人工审核时段：weekday 为 ISO 星期(1=周一..7=周日)，端点为 HH:MM。"""
+
+    weekday: int = Field(ge=1, le=7)
+    start: str = Field(pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
+    end: str = Field(pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
+
+    @field_validator("end")
+    @classmethod
+    def end_after_start(cls, value: str, info) -> str:
+        start = info.data.get("start")
+        if start and value <= start:
+            raise ValueError("结束时间必须晚于开始时间")
+        return value
+
+
+class WorkScheduleRead(BaseModel):
+    timezone: str = "Asia/Shanghai"
+    slots: list[WorkScheduleSlot] = Field(default_factory=list)
+    autoReplyOutsideHours: bool = True
+    isDefault: bool = False
+
+
+class WorkScheduleUpdate(BaseModel):
+    timezone: str = Field(min_length=1, max_length=64)
+    slots: list[WorkScheduleSlot] = Field(default_factory=list, max_length=168)
+    autoReplyOutsideHours: bool = True
+
+    @field_validator("timezone")
+    @classmethod
+    def validate_timezone(cls, value: str) -> str:
+        from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+        try:
+            ZoneInfo(value)
+        except (ZoneInfoNotFoundError, ValueError) as exc:
+            raise ValueError("无效的 IANA 时区标识") from exc
+        return value
+
+
+class NotificationSettingsRead(BaseModel):
+    newOpportunityEnabled: bool = True
+    aiRepliedEnabled: bool = True
+    dailyDigestEnabled: bool = False
+    urgentOnly: bool = False
+
+
+class NotificationSettingsUpdate(NotificationSettingsRead):
+    pass
+
+
+class SettingsCapabilitiesRead(BaseModel):
+    """能力位：诚实告诉客户端哪些下游能力尚未开放，避免伪装可用。"""
+
+    pushAvailable: bool = False
+    wecomUserBindingAvailable: bool = False
+
+
+class SettingsBundleRead(BaseModel):
+    detection: DetectionSettingsRead
+    workSchedule: WorkScheduleRead
+    notifications: NotificationSettingsRead
+    capabilities: SettingsCapabilitiesRead

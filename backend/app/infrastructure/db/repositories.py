@@ -59,6 +59,9 @@ from app.infrastructure.db.models import (
     TelegramWebhookEvent,
     UsageLedger,
     User,
+    UserDetectionPreference,
+    UserNotificationPreference,
+    UserWorkSchedule,
     utc_now,
 )
 
@@ -1015,6 +1018,136 @@ class OpportunityRepository:
         result = await self.session.exec(statement)
         return list(result.all())
 
+    def _dashboard_filters(
+        self,
+        *,
+        owner_user_id: UUID,
+        frontend_status: FrontendOpportunityStatus | None,
+        channel: IMChannel | None,
+        source_type: str | None,
+        created_from: datetime | None,
+        created_to: datetime | None,
+        trust_ranges: list[tuple[int, int]] | None,
+        sop_stages: list[str] | None,
+        keywords: list[str] | None,
+    ) -> list:
+        """把看板筛选翻译成 SQL 谓词；所有查询都在数据库层完成，绝不先取全量再内存过滤。"""
+        from sqlalchemy import and_, or_
+
+        clauses = [Opportunity.owner_user_id == owner_user_id]
+        if frontend_status:
+            clauses.append(Opportunity.status.in_(FRONTEND_STATUS_MAP[frontend_status]))
+        if channel:
+            clauses.append(Opportunity.channel == channel)
+        if source_type:
+            clauses.append(Opportunity.source_type == source_type)
+        if created_from:
+            clauses.append(Opportunity.created_at >= created_from)
+        if created_to:
+            clauses.append(Opportunity.created_at <= created_to)
+        if trust_ranges:
+            clauses.append(
+                or_(
+                    *[
+                        and_(Opportunity.trust_score >= low, Opportunity.trust_score <= high)
+                        for low, high in trust_ranges
+                    ]
+                )
+            )
+        if sop_stages:
+            clauses.append(Opportunity.sop_stage.in_(sop_stages))
+        if keywords:
+            # matched_keywords 是 JSONB 数组，任一关键词命中即保留（?| 存在性运算符）。
+            clauses.append(col(Opportunity.matched_keywords).op("?|")(list(keywords)))
+        return clauses
+
+    async def dashboard(
+        self,
+        *,
+        owner_user_id: UUID,
+        frontend_status: FrontendOpportunityStatus | None = None,
+        channel: IMChannel | None = None,
+        source_type: str | None = None,
+        created_from: datetime | None = None,
+        created_to: datetime | None = None,
+        trust_ranges: list[tuple[int, int]] | None = None,
+        sop_stages: list[str] | None = None,
+        keywords: list[str] | None = None,
+        sort: str = "newest",
+        limit: int = 20,
+        offset: int = 0,
+    ) -> tuple[list[Opportunity], int]:
+        """返回(当前页, 当前筛选下总数)。排序与分页均由数据库完成。"""
+        clauses = self._dashboard_filters(
+            owner_user_id=owner_user_id,
+            frontend_status=frontend_status,
+            channel=channel,
+            source_type=source_type,
+            created_from=created_from,
+            created_to=created_to,
+            trust_ranges=trust_ranges,
+            sop_stages=sop_stages,
+            keywords=keywords,
+        )
+        base = select(Opportunity)
+        for clause in clauses:
+            base = base.where(clause)
+
+        order_map = {
+            "newest": col(Opportunity.created_at).desc(),
+            "oldest": col(Opportunity.created_at).asc(),
+            "confidence": col(Opportunity.confidence).desc(),
+            "trust": col(Opportunity.trust_score).desc(),
+        }
+        order_by = order_map.get(sort, order_map["newest"])
+        # 次级排序稳定分页，避免同值行在翻页时错序。
+        page_statement = base.order_by(order_by, col(Opportunity.id).desc()).offset(offset).limit(limit)
+        page_result = await self.session.exec(page_statement)
+        items = list(page_result.all())
+
+        count_statement = select(func.count()).select_from(base.subquery())
+        total = int((await self.session.exec(count_statement)).one())
+        return items, total
+
+    async def count_pending(self, owner_user_id: UUID) -> int:
+        """该用户所有待处理商机数，不受当前筛选/分页影响。"""
+        statement = select(func.count()).select_from(Opportunity).where(
+            Opportunity.owner_user_id == owner_user_id,
+            Opportunity.status.in_(FRONTEND_STATUS_MAP[FrontendOpportunityStatus.PENDING]),
+        )
+        return int((await self.session.exec(statement)).one())
+
+    async def list_attention(self, owner_user_id: UUID, *, limit: int = 20) -> list[Opportunity]:
+        """待处理的重大商机（attention_required），最新优先。"""
+        statement = (
+            select(Opportunity)
+            .where(
+                Opportunity.owner_user_id == owner_user_id,
+                Opportunity.attention_required.is_(True),
+                Opportunity.status.in_(FRONTEND_STATUS_MAP[FrontendOpportunityStatus.PENDING]),
+            )
+            .order_by(col(Opportunity.created_at).desc())
+            .limit(limit)
+        )
+        result = await self.session.exec(statement)
+        return list(result.all())
+
+    async def keyword_options(self, owner_user_id: UUID, *, limit: int = 200) -> list[str]:
+        """当前用户真实商机里出现过的关键词并集（用于筛选面板选项）。"""
+        statement = select(Opportunity.matched_keywords).where(
+            Opportunity.owner_user_id == owner_user_id,
+            func.jsonb_array_length(col(Opportunity.matched_keywords)) > 0,
+        )
+        result = await self.session.exec(statement)
+        seen: dict[str, None] = {}
+        for row in result.all():
+            for keyword in row or []:
+                if isinstance(keyword, str) and keyword not in seen:
+                    seen[keyword] = None
+                    if len(seen) >= limit:
+                        return list(seen.keys())
+        return list(seen.keys())
+
     async def update_status(
         self,
         opportunity: Opportunity,
@@ -1118,6 +1251,92 @@ class ConfigRepository:
         await self.session.commit()
         await self.session.refresh(config)
         return config
+
+
+class UserSettingsRepository:
+    """用户级设置持久化（detection / work-schedule / notifications）。owner 由登录用户确定。"""
+
+    def __init__(self, session: AsyncSession) -> None:
+        self.session = session
+
+    # detection ------------------------------------------------------------
+    async def get_detection(self, user_id: UUID) -> UserDetectionPreference | None:
+        statement = select(UserDetectionPreference).where(
+            UserDetectionPreference.user_id == user_id
+        )
+        return (await self.session.exec(statement)).first()
+
+    async def upsert_detection(
+        self,
+        *,
+        user_id: UUID,
+        keywords: list[str],
+        ai_semantics_enabled: bool,
+    ) -> UserDetectionPreference:
+        pref = await self.get_detection(user_id)
+        if not pref:
+            pref = UserDetectionPreference(user_id=user_id)
+        pref.keywords = keywords
+        pref.ai_semantics_enabled = ai_semantics_enabled
+        pref.updated_at = utc_now()
+        self.session.add(pref)
+        await self.session.commit()
+        await self.session.refresh(pref)
+        return pref
+
+    # work schedule --------------------------------------------------------
+    async def get_work_schedule(self, user_id: UUID) -> UserWorkSchedule | None:
+        statement = select(UserWorkSchedule).where(UserWorkSchedule.user_id == user_id)
+        return (await self.session.exec(statement)).first()
+
+    async def upsert_work_schedule(
+        self,
+        *,
+        user_id: UUID,
+        timezone: str,
+        slots: list[dict],
+        auto_reply_outside_hours: bool,
+    ) -> UserWorkSchedule:
+        schedule = await self.get_work_schedule(user_id)
+        if not schedule:
+            schedule = UserWorkSchedule(user_id=user_id)
+        schedule.timezone = timezone
+        schedule.slots = slots
+        schedule.auto_reply_outside_hours = auto_reply_outside_hours
+        schedule.updated_at = utc_now()
+        self.session.add(schedule)
+        await self.session.commit()
+        await self.session.refresh(schedule)
+        return schedule
+
+    # notifications --------------------------------------------------------
+    async def get_notifications(self, user_id: UUID) -> UserNotificationPreference | None:
+        statement = select(UserNotificationPreference).where(
+            UserNotificationPreference.user_id == user_id
+        )
+        return (await self.session.exec(statement)).first()
+
+    async def upsert_notifications(
+        self,
+        *,
+        user_id: UUID,
+        new_opportunity_enabled: bool,
+        ai_replied_enabled: bool,
+        daily_digest_enabled: bool,
+        urgent_only: bool,
+    ) -> UserNotificationPreference:
+        pref = await self.get_notifications(user_id)
+        if not pref:
+            pref = UserNotificationPreference(user_id=user_id)
+        pref.new_opportunity_enabled = new_opportunity_enabled
+        pref.ai_replied_enabled = ai_replied_enabled
+        pref.daily_digest_enabled = daily_digest_enabled
+        pref.urgent_only = urgent_only
+        pref.updated_at = utc_now()
+        self.session.add(pref)
+        await self.session.commit()
+        await self.session.refresh(pref)
+        return pref
 
 
 class TelegramUserConfigRepository:

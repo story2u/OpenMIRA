@@ -23,6 +23,7 @@ from app.infrastructure.db.repositories import (
     TelegramConnectionRepository,
     TelegramUserConfigRepository,
     UserRepository,
+    UserSettingsRepository,
 )
 from app.infrastructure.db.session import get_session
 from app.infrastructure.im.base import AdapterRegistry
@@ -101,6 +102,10 @@ def get_user_repo(session: AsyncSession = Depends(get_session)) -> UserRepositor
 
 def get_subscription_repo(session: AsyncSession = Depends(get_session)) -> SubscriptionRepository:
     return SubscriptionRepository(session)
+
+
+def get_user_settings_repo(session: AsyncSession = Depends(get_session)) -> UserSettingsRepository:
+    return UserSettingsRepository(session)
 
 
 def get_billing_event_repo(session: AsyncSession = Depends(get_session)) -> BillingEventRepository:

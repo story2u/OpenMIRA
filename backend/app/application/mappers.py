@@ -2,6 +2,8 @@ from app.application.dto import (
     AgentActionRead,
     AuthUserRead,
     ChatMessageRead,
+    DetectionSettingsRead,
+    NotificationSettingsRead,
     OpportunityDetailRead,
     OpportunityRead,
     ReplyTemplateRead,
@@ -10,6 +12,8 @@ from app.application.dto import (
     TelegramMonitorRead,
     TelegramSourceRead,
     TelegramUserConfigRead,
+    WorkScheduleRead,
+    WorkScheduleSlot,
 )
 from app.domain.enums import (
     FrontendOpportunityStatus,
@@ -26,6 +30,9 @@ from app.infrastructure.db.models import (
     TelegramSource,
     TelegramUserConfig,
     User,
+    UserDetectionPreference,
+    UserNotificationPreference,
+    UserWorkSchedule,
 )
 
 
@@ -86,6 +93,43 @@ def to_opportunity_detail(opportunity: Opportunity) -> OpportunityDetailRead:
         aiReplyDraft=opportunity.ai_reply_draft,
         finalReply=opportunity.final_reply,
         detectionReason=opportunity.detection_reason,
+    )
+
+
+def to_detection_settings_read(pref: UserDetectionPreference | None) -> DetectionSettingsRead:
+    if not pref:
+        return DetectionSettingsRead(keywords=[], aiSemanticsEnabled=True)
+    return DetectionSettingsRead(
+        keywords=list(pref.keywords),
+        aiSemanticsEnabled=pref.ai_semantics_enabled,
+    )
+
+
+def to_work_schedule_read(
+    schedule: UserWorkSchedule | None,
+    *,
+    default_timezone: str,
+) -> WorkScheduleRead:
+    if not schedule:
+        return WorkScheduleRead(timezone=default_timezone, slots=[], isDefault=True)
+    return WorkScheduleRead(
+        timezone=schedule.timezone,
+        slots=[WorkScheduleSlot(**slot) for slot in schedule.slots],
+        autoReplyOutsideHours=schedule.auto_reply_outside_hours,
+        isDefault=False,
+    )
+
+
+def to_notification_settings_read(
+    pref: UserNotificationPreference | None,
+) -> NotificationSettingsRead:
+    if not pref:
+        return NotificationSettingsRead()
+    return NotificationSettingsRead(
+        newOpportunityEnabled=pref.new_opportunity_enabled,
+        aiRepliedEnabled=pref.ai_replied_enabled,
+        dailyDigestEnabled=pref.daily_digest_enabled,
+        urgentOnly=pref.urgent_only,
     )
 
 
