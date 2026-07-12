@@ -10,3 +10,4 @@
 - [2026-07-10：集成 pi 消息后处理 Agent](2026-07-10-integrate-pi-agent.md)
 - [2026-07-12：发布迁移前收敛数据库客户端](2026-07-12-quiesce-db-clients-before-migration.md)
 - [2026-07-12：iOS 邮箱密码登录](2026-07-12-ios-email-password-login.md)
+- [2026-07-12：商机语义识别增强](2026-07-12-opportunity-semantic-detection.md)

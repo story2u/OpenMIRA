@@ -117,11 +117,15 @@ sequenceDiagram
     IM->>E: 外部消息
     E->>U: InboundMessage
     U->>DB: 按 channel + external_message_id 去重并落 Message
-    U->>D: 文本 + 已启用规则
+    U->>DB: 按 owner 读取有限同会话历史
+    U->>D: 当前文本 + 历史 + 来源 + 已启用规则
+    opt 规则未达到高置信且 AI_ENABLED
+        D->>D: LiteLLM 语义复核 + AI hint
+    end
     D-->>U: DetectionResult
     alt 非商机
         U->>DB: 标记 processed
-    else 工作时间商机
+    else 工作时间或 AI 新发现商机
         U->>DB: 创建 PENDING_HUMAN Opportunity
         U->>Q: 通知审核者（当前为队列接口）
     else 非工作时间商机
@@ -142,6 +146,13 @@ sequenceDiagram
         Q->>DB: 创建 PENDING_HUMAN 商机
     end
 ```
+
+- 高置信规则命中保持低延迟直通；其余非空消息在 `AI_ENABLED=true` 时均可进入语义复核，不再要求
+  先达到关键词灰区分数。AI 关闭、输出非法或 provider 失败时回退到同一确定性规则结果。
+- 语义复核最多使用当前 owner 同会话最近 6 条、合计 4000 字符的规范化历史；不传 raw payload、
+  token 或 session。`AI_HINT` 规则既保留原匹配分数，也作为模型的领域正例提示。
+- 语义模型新发现的商机始终进入 `PENDING_HUMAN`，即使处于非工作时间也不能直接触发自动回复；
+  只有确定性规则识别路径继续遵循工作时间路由。
 
 ### Telegram 原生连接
 
