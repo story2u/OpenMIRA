@@ -6,6 +6,7 @@ import {
   Smartphone, Sparkles, UserCheck,
 } from 'lucide-react'
 import Link from 'next/link'
+import { BrandLogo } from '@/components/brand-logo'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 
@@ -31,7 +32,7 @@ const steps = [
 function Brand() {
   return (
     <span className="flex items-center gap-2.5">
-      <span className="grid size-9 place-items-center rounded-md bg-primary text-primary-foreground"><Radar className="size-5" /></span>
+      <BrandLogo size={36} priority />
       <span className="leading-tight"><strong className="block text-sm">商机雷达</strong><span className="block text-[10px] text-muted-foreground">Opportunity Radar</span></span>
     </span>
   )

@@ -29,6 +29,7 @@ Kotlin + Compose 原生 app，作为后端 v1 REST API 的瘦客户端，与 `mo
 | `model/Models.kt` | DTO 镜像 + 容错枚举 + `RadarJson` 配置（含看板/设置/Telegram DTO） |
 | `ui/theme/` | 语义色/可信度/SOP、DayNight 主题、AppBadge/AppCard/ConfidenceBadge |
 | `feature/login/LoginScreen.kt` | 邮箱密码 / Google 原生登录（本地校验 + IME 流转） |
+| `app/src/main/res/` | 与 iOS 1024px AppIcon 母版同源的登录页 Logo 与多密度 launcher icon |
 | `feature/dashboard/` | 商机看板：DashboardScreen/ViewModel/OpportunityCard/FilterSheet/Models |
 | `feature/settings/` | 设置中心 + 识别规则/工作时间/通知/Telegram 子页 |
 | `feature/opportunity/OpportunityDetailScreen.kt` | 详情、消息历史、Agent 发现、回复、状态流转、下拉刷新 |

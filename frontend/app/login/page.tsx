@@ -4,6 +4,7 @@ import { Loader2 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
+import { BrandLogo } from '@/components/brand-logo'
 import { fetchOAuthAuthorizeUrl } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
 import type { OAuthProvider } from '@/lib/types'
@@ -91,6 +92,7 @@ export default function LoginPage() {
     <div className="flex min-h-svh justify-center bg-[#202020] px-5 py-10 text-white sm:items-center sm:px-8 sm:py-14">
       <section className="flex w-full max-w-xl flex-col text-center" aria-labelledby="login-heading">
         <div className="mx-auto max-w-lg">
+          <BrandLogo size={72} priority className="mx-auto mb-8" />
           <h1 id="login-heading" className="text-4xl font-semibold tracking-tight sm:text-5xl">
             登录或注册
           </h1>

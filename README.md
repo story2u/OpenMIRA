@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="frontend/public/icon.svg" width="72" alt="商机雷达 Logo">
+  <img src="frontend/public/logo-512.png" width="72" alt="商机雷达 Logo">
   <h1>商机雷达 · Opportunity Radar</h1>
   <p>多 IM 渠道商机识别与 AI 辅助跟进工具</p>
   <p>

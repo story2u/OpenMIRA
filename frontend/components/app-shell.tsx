@@ -1,11 +1,12 @@
 'use client'
 
-import { BookText, LayoutGrid, LogOut, Moon, Radar, Settings, Sun, UserRound } from 'lucide-react'
+import { BookText, LayoutGrid, LogOut, Moon, Settings, Sun, UserRound } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useTheme } from 'next-themes'
 import { useEffect, useState } from 'react'
 import { ModeStatusBar } from '@/components/mode-status-bar'
+import { BrandLogo } from '@/components/brand-logo'
 import { Button } from '@/components/ui/button'
 import { useAuth } from '@/lib/auth'
 import { cn } from '@/lib/utils'
@@ -67,9 +68,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         {/* 桌面端侧边栏 */}
         <aside className="sticky top-0 hidden h-svh w-56 shrink-0 flex-col border-r bg-sidebar md:flex">
           <div className="flex items-center gap-2 px-5 py-5">
-            <span className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-              <Radar className="size-4.5" />
-            </span>
+            <BrandLogo size={32} />
             <div className="leading-tight">
               <p className="text-sm font-semibold text-sidebar-foreground">商机雷达</p>
               <p className="text-[11px] text-muted-foreground">IM 商机助手</p>
@@ -126,9 +125,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           {/* 移动端顶栏 */}
           <header className="flex items-center justify-between border-b bg-card px-4 py-3 md:hidden">
             <div className="flex items-center gap-2">
-              <span className="flex size-7 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-                <Radar className="size-4" />
-              </span>
+              <BrandLogo size={28} />
               <span className="text-sm font-semibold">商机雷达</span>
             </div>
             <ThemeToggle />

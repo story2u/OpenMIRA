@@ -105,6 +105,23 @@ final class DashboardSettingsTests: XCTestCase {
         XCTAssertEqual(query.activeAdvancedCount, 2)
     }
 
+    func testLegacyEndpointCompatibilityRequiresEquivalentQuery() {
+        var query = DashboardQuery()
+        XCTAssertTrue(query.supportsLegacyEndpoint)
+
+        query.status = .pending
+        query.platform = .telegram
+        XCTAssertTrue(query.supportsLegacyEndpoint)
+
+        query.sort = .confidence
+        XCTAssertFalse(query.supportsLegacyEndpoint)
+    }
+
+    func testNavigationTitleDefaultsAreChinese() {
+        XCTAssertEqual(String(localized: "dashboard.title", defaultValue: "商机"), "商机")
+        XCTAssertEqual(String(localized: "settings.title", defaultValue: "设置"), "设置")
+    }
+
     func testTrustLevelBoundaries() {
         XCTAssertEqual(TrustLevel.from(score: 80), .trusted)
         XCTAssertEqual(TrustLevel.from(score: 79), .unverified)
