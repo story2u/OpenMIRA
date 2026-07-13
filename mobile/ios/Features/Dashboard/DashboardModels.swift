@@ -98,6 +98,17 @@ struct DashboardQuery: Equatable, Sendable {
         return from <= to
     }
 
+    /// 旧版服务端仅支持 status/platform/分页，并固定按最新排序。
+    /// 只有能保持筛选语义时才允许降级，避免悄悄忽略用户选择。
+    var supportsLegacyEndpoint: Bool {
+        source == .all
+            && timeRange == .all
+            && trustLevels.isEmpty
+            && stages.isEmpty
+            && keywords.isEmpty
+            && sort == .newest
+    }
+
     var queryItems: [URLQueryItem] {
         var items: [URLQueryItem] = [
             URLQueryItem(name: "sort", value: sort.rawValue),

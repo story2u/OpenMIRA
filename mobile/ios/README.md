@@ -96,4 +96,9 @@ Release 构建已就绪：生产 API 地址烧进 Info.plist（`RadarAPIBaseURL`
 Apple 登录直连线上后端；若报 401，检查 Apple 开发者后台该 App ID 是否开启 Sign in with
 Apple。邮箱密码登录只适用于已有 `password_hash` 的账户。
 
+iOS 访问公网 HTTPS 不需要应用声明或主动请求“网络权限”；系统限制蜂窝数据或设备离线时，App 会
+显示可操作的中文网络错误。若生产后端尚未滚动到包含 `/opportunities/dashboard` 与
+`/settings/me` 的版本，商机页会安全降级到旧 `/opportunities`（仅支持等价的基础筛选），设置页
+会明确提示需要升级服务端，不会把 404/422 误报为设备网络故障。
+
 版本号在 `project.yml` 的 `MARKETING_VERSION` / `CURRENT_PROJECT_VERSION`，每次上传按需 bump。

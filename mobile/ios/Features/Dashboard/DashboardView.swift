@@ -14,7 +14,7 @@ struct DashboardView: View {
                     ProgressView()
                 }
             }
-            .navigationTitle(Text("dashboard.title", bundle: .main))
+            .navigationTitle(Text(String(localized: "dashboard.title", defaultValue: "商机")))
             .navigationDestination(for: Opportunity.self) { opportunity in
                 OpportunityDetailView(opportunityID: opportunity.id)
             }
@@ -44,6 +44,7 @@ private struct DashboardContent: View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 12) {
                 header
+                if model.usesLegacyAPI { legacyAPINotice }
                 if !model.attentionItems.isEmpty { attentionBanner }
                 primaryFilters
                 resultSummary
@@ -79,6 +80,20 @@ private struct DashboardContent: View {
             .accessibilityLabel(Text("action.refresh", bundle: .main))
         }
         .padding(.top, 8)
+    }
+
+    // MARK: 兼容提示
+
+    private var legacyAPINotice: some View {
+        Label(
+            String(localized: "dashboard.legacy_notice", defaultValue: "服务端正在升级，当前显示基础商机列表；高级筛选暂不可用。"),
+            systemImage: "server.rack"
+        )
+        .font(.caption)
+        .foregroundStyle(.secondary)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(10)
+        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 10))
     }
 
     // MARK: 重大商机提醒
@@ -147,6 +162,7 @@ private struct DashboardContent: View {
                 } label: {
                     filterChip(title: model.query.sort.label, systemImage: "arrow.up.arrow.down")
                 }
+                .disabled(model.usesLegacyAPI)
 
                 Spacer()
 
@@ -165,6 +181,7 @@ private struct DashboardContent: View {
                     }
                 }
                 .accessibilityLabel(Text("filter.advanced", bundle: .main))
+                .disabled(model.usesLegacyAPI)
             }
         }
     }

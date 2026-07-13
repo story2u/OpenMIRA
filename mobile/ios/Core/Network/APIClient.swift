@@ -2,12 +2,18 @@ import Foundation
 
 enum APIError: Error, LocalizedError {
     case unauthorized
+    case networkUnavailable
+    case connectionTimedOut
+    case cannotReachServer
     case server(status: Int, message: String)
     case invalidResponse
 
     var errorDescription: String? {
         switch self {
         case .unauthorized: "登录已过期，请重新登录"
+        case .networkUnavailable: "网络不可用，请检查无线局域网或蜂窝数据连接"
+        case .connectionTimedOut: "连接超时，请稍后重试"
+        case .cannotReachServer: "暂时无法连接服务器，请稍后重试"
         case .server(_, let message): message
         case .invalidResponse: "服务返回了无法解析的数据"
         }
@@ -73,7 +79,23 @@ final class APIClient: Sendable {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
 
-        let (data, response) = try await session.data(for: request)
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await session.data(for: request)
+        } catch let error as URLError {
+            switch error.code {
+            case .cancelled:
+                throw CancellationError()
+            case .notConnectedToInternet, .networkConnectionLost, .dataNotAllowed,
+                 .internationalRoamingOff:
+                throw APIError.networkUnavailable
+            case .timedOut:
+                throw APIError.connectionTimedOut
+            default:
+                throw APIError.cannotReachServer
+            }
+        }
         guard let http = response as? HTTPURLResponse else { throw APIError.invalidResponse }
         switch http.statusCode {
         case 200..<300:
