@@ -1177,6 +1177,19 @@ class OpportunityRepository:
         await self.session.refresh(opportunity)
         return opportunity
 
+    async def set_friend_request(self, opportunity: Opportunity, *, status: str) -> Opportunity:
+        """持久化好友申请进度；pending/accepted 同步推进 SOP 阶段，其余不回退阶段。"""
+        opportunity.friend_request_status = status
+        if status == "pending":
+            opportunity.sop_stage = "friend_requested"
+        elif status == "accepted":
+            opportunity.sop_stage = "ready_to_chat"
+        opportunity.updated_at = utc_now()
+        self.session.add(opportunity)
+        await self.session.commit()
+        await self.session.refresh(opportunity)
+        return opportunity
+
     async def pending_human_older_than(self, minutes: int) -> list[Opportunity]:
         cutoff = datetime.now(timezone.utc) - timedelta(minutes=minutes)
         statement = select(Opportunity).where(

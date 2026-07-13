@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -107,6 +108,16 @@ class AgentAnalysisEnqueueRead(BaseModel):
 
 class OpportunityStatusUpdate(BaseModel):
     status: OpportunityStatus
+
+
+class FriendRequestUpdate(BaseModel):
+    """好友申请状态流转（operator 手动驱动：发送/确认通过/确认被拒/重试）。
+
+    平台侧没有自动发好友申请的 IM 能力；本端点只持久化操作员声明的真实进度，
+    对方是否通过由操作员在 IM 客户端确认后回填，禁止任何自动伪造"已通过"。
+    """
+
+    status: Literal["not_sent", "pending", "accepted", "rejected"]
 
 
 class RuleCreate(BaseModel):

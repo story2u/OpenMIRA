@@ -161,6 +161,18 @@ export async function fetchOpportunity(opportunityId: string): Promise<Opportuni
   return toOpportunity(await fetchJson<ApiOpportunity>(`/api/v1/opportunities/${opportunityId}`))
 }
 
+/** 好友申请状态流转（发送/确认通过/确认被拒/重试）；非法流转后端返回 409。 */
+export async function updateFriendRequest(
+  opportunityId: string,
+  status: Exclude<Opportunity['friendRequestStatus'], 'n/a'>,
+): Promise<Opportunity> {
+  const item = await fetchJson<ApiOpportunity>(`/api/v1/opportunities/${opportunityId}/friend-request`, {
+    method: 'POST',
+    body: JSON.stringify({ status }),
+  })
+  return toOpportunity(item)
+}
+
 export async function enqueueAgentAnalysis(opportunityId: string): Promise<{
   messageId: string
   status: AgentAnalysisStatus

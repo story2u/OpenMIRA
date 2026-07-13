@@ -394,10 +394,25 @@ export function StepContacts({ opportunity, step }: { opportunity: Opportunity; 
 
 // ===== Step 4：建立联系 =====
 export function StepFriendRequest({ opportunity, step }: { opportunity: Opportunity; step: SopStep }) {
-  const { templates, sendFriendRequest, updateOpportunity, closeOpportunity } = useAppStore()
+  const { templates, setFriendRequestStatus, closeOpportunity } = useAppStore()
   const [greeting, setGreeting] = useState(
     `您好 ${opportunity.contactName}，我在「${opportunity.groupName ?? '群聊'}」看到您发布的需求，我们正好提供相关解决方案，希望能加个好友详细沟通。`,
   )
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [actionError, setActionError] = useState<string | null>(null)
+
+  // 真实持久化：非法流转由后端 409 拒绝，错误原样展示，不做本地伪造。
+  const transition = async (status: Exclude<Opportunity['friendRequestStatus'], 'n/a'>) => {
+    setIsSubmitting(true)
+    setActionError(null)
+    try {
+      await setFriendRequestStatus(opportunity.id, status)
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : '操作失败，请重试')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
 
   if (step.state === 'skipped') {
     return <SkippedNote text="该商机来自私聊，双方已可直接对话，无需发送好友申请。" />
@@ -418,6 +433,13 @@ export function StepFriendRequest({ opportunity, step }: { opportunity: Opportun
           {frStatus.label}
         </Badge>
       </div>
+
+      {actionError && (
+        <div className="flex items-start gap-2 rounded-lg border border-destructive/40 bg-destructive/10 p-3">
+          <AlertTriangle className="mt-0.5 size-4 shrink-0 text-destructive" />
+          <p className="text-sm text-destructive">{actionError}</p>
+        </div>
+      )}
 
       {opportunity.friendRequestStatus === 'not_sent' && (
         <div className="flex flex-col gap-2.5">
@@ -449,19 +471,38 @@ export function StepFriendRequest({ opportunity, step }: { opportunity: Opportun
               </button>
             ))}
           </div>
-          <Button size="sm" onClick={() => sendFriendRequest(opportunity.id)} className="w-fit gap-1.5">
-            <UserPlus className="size-3.5" />
+          <Button size="sm" disabled={isSubmitting} onClick={() => transition('pending')} className="w-fit gap-1.5">
+            {isSubmitting ? <Loader2 className="size-3.5 animate-spin" /> : <UserPlus className="size-3.5" />}
             发送好友申请
           </Button>
         </div>
       )}
 
       {opportunity.friendRequestStatus === 'pending' && (
-        <div className="flex items-center gap-3 rounded-lg border bg-warning/5 p-4">
-          <Loader2 className="size-5 animate-spin text-warning" />
-          <div>
-            <p className="text-sm font-medium">好友申请已发送，等待对方通过</p>
-            <p className="mt-0.5 text-xs text-muted-foreground">通过后将自动解锁对话步骤（演示环境约 4 秒后自动通过）</p>
+        <div className="flex flex-col gap-3">
+          <div className="flex items-center gap-3 rounded-lg border bg-warning/5 p-4">
+            <Loader2 className="size-5 animate-spin text-warning" />
+            <div>
+              <p className="text-sm font-medium">好友申请已发送，等待对方通过</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                对方在 IM 中通过或拒绝后，请在此确认结果以解锁后续步骤。
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" disabled={isSubmitting} onClick={() => transition('accepted')} className="gap-1.5">
+              <ShieldCheck className="size-3.5" />
+              对方已通过
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={isSubmitting}
+              className="bg-transparent"
+              onClick={() => transition('rejected')}
+            >
+              对方已拒绝
+            </Button>
           </div>
         </div>
       )}
@@ -483,8 +524,9 @@ export function StepFriendRequest({ opportunity, step }: { opportunity: Opportun
             <Button
               variant="outline"
               size="sm"
+              disabled={isSubmitting}
               className="gap-1.5 bg-transparent"
-              onClick={() => updateOpportunity(opportunity.id, { friendRequestStatus: 'not_sent' })}
+              onClick={() => transition('not_sent')}
             >
               <RefreshCw className="size-3.5" />
               更换渠道重试

@@ -45,7 +45,7 @@
 | 联系方式提取 | 详情页 SOP | pi Agent 结果投影 | 部分实现 | 消息/公开网页中的联系方式可持久化；详情页手工编辑仍只更新浏览器状态 |
 | 后续行动建议 | 详情页发现步骤 | pi Agent 结构化 actions | 已实现 | 可建议邮件、加好友、私信和内部提醒；外部动作强制标记需人工批准，不会自动执行 |
 | 重大商机提醒 | 商机看板 | Opportunity attention projection | 已实现 | Agent 判定紧急/高影响或建议通知时展示 owner 隔离的看板提醒 |
-| 好友申请执行 | 详情页 SOP | 无 | 仅演示 | Agent 只提供建议；现有按钮仍是 timer 演示，不能视为真实发送 |
+| 好友申请状态流转 | 详情页 SOP Step 4 | `POST /opportunities/{id}/friend-request` | 部分实现 | 发送/通过/被拒/重试真实持久化并推进 SOP（pending→friend_requested、accepted→ready_to_chat），非法流转 409，owner 隔离；已移除 4 秒假自动通过 timer。"已通过/已拒绝"由操作员在 IM 内确认后手动回填——平台无自动发送好友申请的 IM 能力，实际发送仍是人工动作 |
 | 通知偏好/每日摘要 | Web/iOS/Android 设置 | `/settings/notifications` | 部分实现 | 偏好真实持久化（见上"用户级通知偏好"）；每日摘要与推送投递未实现，不能声称已生效 |
 
 ## 后端能力入口

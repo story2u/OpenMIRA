@@ -17,6 +17,7 @@ from app.application.dto import (
     AgentAnalysisEnqueueRead,
     AIDraftResponse,
     DashboardRead,
+    FriendRequestUpdate,
     ManualReplyRequest,
     OpportunityDetailRead,
     OpportunityRead,
@@ -253,6 +254,41 @@ async def enqueue_agent_analysis(
         messageId=result.message_id,
         status=result.status,
     )
+
+
+# operator 手动驱动的合法流转；发送→等待→人工确认结果，被拒可重试。
+FRIEND_REQUEST_TRANSITIONS: dict[str, set[str]] = {
+    "not_sent": {"pending"},
+    "pending": {"accepted", "rejected"},
+    "rejected": {"not_sent"},
+}
+
+
+@router.post("/{opportunity_id}/friend-request", response_model=OpportunityDetailRead)
+async def update_friend_request(
+    payload: FriendRequestUpdate,
+    _: User = Depends(require_user),
+    opportunity: Opportunity = Depends(get_opportunity_or_404),
+    repo: OpportunityRepository = Depends(get_opportunity_repo),
+) -> OpportunityDetailRead:
+    """持久化好友申请进度（发送/通过/被拒/重试），非法流转返回 409。
+
+    平台没有自动发送好友申请的 IM 能力，本端点只记录操作员声明的真实进度；
+    "已通过"必须由操作员确认回填，服务端不做任何定时伪造。
+    """
+    if opportunity.source_type != "group" or opportunity.friend_request_status == "n/a":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="该商机来自私聊，无需好友申请",
+        )
+    allowed = FRIEND_REQUEST_TRANSITIONS.get(opportunity.friend_request_status, set())
+    if payload.status not in allowed:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"好友申请状态不能从 {opportunity.friend_request_status} 变为 {payload.status}",
+        )
+    updated = await repo.set_friend_request(opportunity, status=payload.status)
+    return to_opportunity_detail(updated)
 
 
 @router.patch("/{opportunity_id}/status", response_model=OpportunityDetailRead)
