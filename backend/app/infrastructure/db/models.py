@@ -17,6 +17,7 @@ from app.domain.enums import (
     IMChannel,
     MessageDirection,
     MessageSource,
+    OpportunityArchiveAction,
     OpportunityStatus,
     PlanCode,
     Priority,
@@ -234,6 +235,12 @@ class Opportunity(TimestampMixin, table=True):
     __table_args__ = (
         Index("ix_opportunities_channel_conversation", "channel", "conversation_id"),
         Index("ix_opportunities_status_created", "status", "created_at"),
+        Index(
+            "ix_opportunities_owner_archived_last_message",
+            "owner_user_id",
+            "archived_at",
+            "last_message_at",
+        ),
     )
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
@@ -313,6 +320,27 @@ class Opportunity(TimestampMixin, table=True):
         default_factory=utc_now,
         sa_column=Column(DateTime(timezone=True), nullable=False, index=True),
     )
+    archived_at: datetime | None = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True, index=True),
+    )
+    archived_by_user_id: UUID | None = Field(default=None, foreign_key="users.id", index=True)
+    archive_reason: str | None = Field(default=None, max_length=500)
+
+
+class OpportunityArchiveEvent(TimestampMixin, table=True):
+    __tablename__ = "opportunity_archive_events"
+    __table_args__ = (
+        Index("ix_opportunity_archive_events_owner_created", "owner_user_id", "created_at"),
+    )
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    opportunity_id: UUID = Field(foreign_key="opportunities.id", index=True)
+    owner_user_id: UUID = Field(foreign_key="users.id", index=True)
+    action: OpportunityArchiveAction = Field(
+        sa_column=Column(SAEnum(OpportunityArchiveAction, native_enum=False), nullable=False, index=True)
+    )
+    reason: str | None = Field(default=None, max_length=500)
 
 
 class Message(TimestampMixin, table=True):

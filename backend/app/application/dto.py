@@ -60,6 +60,9 @@ class OpportunityRead(BaseModel):
     agentAnalysisError: str | None = None
     agentAnalyzedAt: datetime | None = None
     attentionRequired: bool = False
+    archivedAt: datetime | None = None
+    archivedByUserId: UUID | None = None
+    archiveReason: str | None = None
 
 
 class OpportunityDetailRead(OpportunityRead):
@@ -95,6 +98,26 @@ class AgentAnalysisEnqueueRead(BaseModel):
 
 class OpportunityStatusUpdate(BaseModel):
     status: OpportunityStatus
+
+
+class OpportunityArchiveRequest(BaseModel):
+    reason: str | None = Field(default=None, max_length=500)
+
+
+class OpportunityBulkArchiveRequest(OpportunityArchiveRequest):
+    opportunityIds: list[UUID] = Field(min_length=1, max_length=100)
+
+    @field_validator("opportunityIds")
+    @classmethod
+    def require_unique_opportunity_ids(cls, value: list[UUID]) -> list[UUID]:
+        if len(set(value)) != len(value):
+            raise ValueError("opportunityIds must be unique")
+        return value
+
+
+class OpportunityBulkArchiveRead(BaseModel):
+    archivedCount: int
+    opportunities: list[OpportunityRead]
 
 
 class RuleCreate(BaseModel):

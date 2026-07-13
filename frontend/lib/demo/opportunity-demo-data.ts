@@ -22,6 +22,9 @@ const base = {
   agentAnalysisError: null,
   agentAnalyzedAt: DEMO_CLOCK,
   attentionRequired: false,
+  archivedAt: null,
+  archivedByUserId: null,
+  archiveReason: null,
 } satisfies Partial<Opportunity>
 
 function opportunity(item: Partial<Opportunity> & Pick<Opportunity, 'id' | 'platform' | 'contactName' | 'summary'>): Opportunity {

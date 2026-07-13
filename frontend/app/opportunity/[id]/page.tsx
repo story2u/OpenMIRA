@@ -1,8 +1,9 @@
 'use client'
 
-import { ArrowLeft, MessageCircle, MessageCircleOff, Users } from 'lucide-react'
+import { Archive, ArchiveRestore, ArrowLeft, Loader2, MessageCircle, MessageCircleOff, Users } from 'lucide-react'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
+import { useState } from 'react'
 import { ConfidenceRing } from '@/components/confidence-ring'
 import { PlatformIcon, platformLabel } from '@/components/platform-icon'
 import { SopStepper } from '@/components/sop-stepper'
@@ -16,7 +17,9 @@ import { sopStageConfig } from '@/lib/sop'
 
 export default function OpportunityDetailPage() {
   const params = useParams<{ id: string }>()
-  const { opportunities, setOpportunityStatus } = useAppStore()
+  const { opportunities, setOpportunityStatus, archiveOpportunity, restoreOpportunity } = useAppStore()
+  const [archivePending, setArchivePending] = useState(false)
+  const [archiveError, setArchiveError] = useState<string | null>(null)
   const opportunity = opportunities.find((o) => o.id === params.id)
 
   if (!opportunity) {
@@ -33,6 +36,19 @@ export default function OpportunityDetailPage() {
 
   const stage = sopStageConfig[opportunity.sopStage]
 
+  async function toggleArchive(opportunityId: string, archived: boolean) {
+    setArchivePending(true)
+    setArchiveError(null)
+    try {
+      if (archived) await restoreOpportunity(opportunityId)
+      else await archiveOpportunity(opportunityId)
+    } catch (error) {
+      setArchiveError(error instanceof Error ? error.message : '归档操作失败，请稍后重试。')
+    } finally {
+      setArchivePending(false)
+    }
+  }
+
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-4 md:px-8 md:py-6">
       <div className="mb-4 flex items-center gap-2">
@@ -44,7 +60,26 @@ export default function OpportunityDetailPage() {
           <span className={`size-1.5 rounded-full ${stage.dotClass}`} aria-hidden="true" />
           {stage.label}
         </Badge>
+        {opportunity.archivedAt && <Badge variant="outline">已归档</Badge>}
+        <Button variant="outline" size="sm" className="ml-auto gap-1.5" disabled={archivePending} onClick={() => toggleArchive(opportunity.id, Boolean(opportunity.archivedAt))}>
+          {archivePending ? <Loader2 className="size-3.5 animate-spin" /> : opportunity.archivedAt ? <ArchiveRestore className="size-3.5" /> : <Archive className="size-3.5" />}
+          {opportunity.archivedAt ? '恢复' : '归档'}
+        </Button>
       </div>
+
+      {archiveError && (
+        <p role="alert" className="mb-4 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          {archiveError}
+        </p>
+      )}
+
+      {opportunity.archivedAt && (
+        <div className="mb-4 rounded-lg border bg-muted/40 px-4 py-3 text-sm">
+          <p className="font-medium">该商机已归档</p>
+          <p className="mt-1 text-xs text-muted-foreground">原状态和历史记录均已保留。恢复后才能继续分析、回复或修改状态。</p>
+          {opportunity.archiveReason && <p className="mt-2 text-xs text-muted-foreground">归档原因：{opportunity.archiveReason}</p>}
+        </div>
+      )}
 
       {/* 联系人基础信息卡 */}
       <Card className="mb-4 gap-3 rounded-xl p-4 shadow-sm">
@@ -91,7 +126,7 @@ export default function OpportunityDetailPage() {
               {keyword}
             </Badge>
           ))}
-          {opportunity.status === 'pending' && opportunity.sopStage !== 'closed' && (
+          {!opportunity.archivedAt && opportunity.status === 'pending' && opportunity.sopStage !== 'closed' && (
             <Button
               variant="ghost"
               size="sm"
@@ -104,7 +139,7 @@ export default function OpportunityDetailPage() {
         </div>
       </Card>
 
-      <SopStepper opportunity={opportunity} />
+      {!opportunity.archivedAt && <SopStepper opportunity={opportunity} />}
     </div>
   )
 }

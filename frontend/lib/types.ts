@@ -79,6 +79,9 @@ export interface Opportunity {
   agentAnalysisError: string | null
   agentAnalyzedAt: string | null
   attentionRequired: boolean
+  archivedAt: string | null
+  archivedByUserId: string | null
+  archiveReason: string | null
 }
 
 export interface ChatMessage {

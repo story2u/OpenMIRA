@@ -40,6 +40,8 @@ class AIAutoReplyUseCase:
         self.reply_generator = reply_generator
 
     async def execute(self, opportunity: Opportunity) -> Opportunity:
+        if opportunity.archived_at is not None:
+            return opportunity
         if opportunity.status in {
             OpportunityStatus.REPLIED,
             OpportunityStatus.FOLLOWING,
@@ -80,6 +82,8 @@ async def transition_pending_to_ai(
     opportunity = await opportunity_repo.get(opportunity_id)
     if not opportunity:
         return None
+    if opportunity.archived_at is not None:
+        return opportunity
     if opportunity.status == OpportunityStatus.PENDING_HUMAN:
         ensure_transition_allowed(opportunity.status, OpportunityStatus.AI_AUTO_REPLY)
         return await opportunity_repo.update_status(opportunity, OpportunityStatus.AI_AUTO_REPLY)

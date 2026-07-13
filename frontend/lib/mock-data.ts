@@ -2,7 +2,14 @@ import type { ChatMessage, ExtractedContacts, LinkVerification, Opportunity, Rep
 
 type OpportunitySeed = Omit<
   Opportunity,
-  'agentActions' | 'agentAnalysisStatus' | 'agentAnalysisError' | 'agentAnalyzedAt' | 'attentionRequired'
+  | 'agentActions'
+  | 'agentAnalysisStatus'
+  | 'agentAnalysisError'
+  | 'agentAnalyzedAt'
+  | 'attentionRequired'
+  | 'archivedAt'
+  | 'archivedByUserId'
+  | 'archiveReason'
 >
 
 function withAgentDefaults(opportunity: OpportunitySeed): Opportunity {
@@ -13,6 +20,9 @@ function withAgentDefaults(opportunity: OpportunitySeed): Opportunity {
     agentAnalysisError: null,
     agentAnalyzedAt: null,
     attentionRequired: false,
+    archivedAt: null,
+    archivedByUserId: null,
+    archiveReason: null,
   }
 }
 

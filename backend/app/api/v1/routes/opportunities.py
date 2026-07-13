@@ -16,6 +16,9 @@ from app.application.dto import (
     AgentAnalysisEnqueueRead,
     AIDraftResponse,
     ManualReplyRequest,
+    OpportunityArchiveRequest,
+    OpportunityBulkArchiveRead,
+    OpportunityBulkArchiveRequest,
     OpportunityDetailRead,
     OpportunityRead,
     OpportunityStatusUpdate,
@@ -24,7 +27,12 @@ from app.application.mappers import to_opportunity_detail, to_opportunity_read
 from app.application.use_cases.ai_reply import AIDraftUseCase
 from app.application.use_cases.manual_reply import ManualReplyUseCase
 from app.application.use_cases.schedule_agent_analysis import ScheduleAgentAnalysisUseCase
-from app.domain.enums import AgentAnalysisStatus, FrontendOpportunityStatus, IMChannel
+from app.domain.enums import (
+    AgentAnalysisStatus,
+    FrontendOpportunityStatus,
+    IMChannel,
+    OpportunityArchiveScope,
+)
 from app.domain.services.opportunity_state import (
     InvalidOpportunityTransition,
     ensure_transition_allowed,
@@ -46,6 +54,10 @@ router = APIRouter()
 async def list_opportunities(
     status_filter: FrontendOpportunityStatus | None = Query(default=None, alias="status"),
     platform: IMChannel | None = None,
+    archive_scope: OpportunityArchiveScope = Query(
+        default=OpportunityArchiveScope.ACTIVE,
+        alias="archive",
+    ),
     limit: int = Query(default=100, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     current_user: User = Depends(require_user),
@@ -55,10 +67,34 @@ async def list_opportunities(
         frontend_status=status_filter,
         channel=platform,
         owner_user_id=current_user.id,
+        archive_scope=archive_scope,
         limit=limit,
         offset=offset,
     )
     return [to_opportunity_read(opportunity) for opportunity in opportunities]
+
+
+@router.post("/bulk-archive", response_model=OpportunityBulkArchiveRead)
+async def bulk_archive_opportunities(
+    payload: OpportunityBulkArchiveRequest,
+    current_user: User = Depends(require_user),
+    repo: OpportunityRepository = Depends(get_opportunity_repo),
+) -> OpportunityBulkArchiveRead:
+    try:
+        opportunities, archived_count = await repo.archive_many(
+            owner_user_id=current_user.id,
+            opportunity_ids=payload.opportunityIds,
+            reason=payload.reason,
+        )
+    except LookupError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="one or more opportunities were not found",
+        ) from exc
+    return OpportunityBulkArchiveRead(
+        archivedCount=archived_count,
+        opportunities=[to_opportunity_read(opportunity) for opportunity in opportunities],
+    )
 
 
 @router.get("/{opportunity_id}", response_model=OpportunityDetailRead)
@@ -66,6 +102,39 @@ async def get_opportunity(
     opportunity: Opportunity = Depends(get_opportunity_or_404),
 ) -> OpportunityDetailRead:
     return to_opportunity_detail(opportunity)
+
+
+@router.post("/{opportunity_id}/archive", response_model=OpportunityDetailRead)
+async def archive_opportunity(
+    payload: OpportunityArchiveRequest,
+    current_user: User = Depends(require_user),
+    opportunity: Opportunity = Depends(get_opportunity_or_404),
+    repo: OpportunityRepository = Depends(get_opportunity_repo),
+) -> OpportunityDetailRead:
+    updated = await repo.archive(
+        opportunity,
+        actor_user_id=current_user.id,
+        reason=payload.reason,
+    )
+    return to_opportunity_detail(updated)
+
+
+@router.post("/{opportunity_id}/restore", response_model=OpportunityDetailRead)
+async def restore_opportunity(
+    current_user: User = Depends(require_user),
+    opportunity: Opportunity = Depends(get_opportunity_or_404),
+    repo: OpportunityRepository = Depends(get_opportunity_repo),
+) -> OpportunityDetailRead:
+    updated = await repo.restore(opportunity, actor_user_id=current_user.id)
+    return to_opportunity_detail(updated)
+
+
+def ensure_opportunity_is_active(opportunity: Opportunity) -> None:
+    if opportunity.archived_at is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="restore the archived opportunity before modifying it",
+        )
 
 
 @router.post("/{opportunity_id}/manual-reply", response_model=OpportunityDetailRead)
@@ -77,6 +146,7 @@ async def manual_reply(
     message_repo: MessageRepository = Depends(get_message_repo),
     adapters: AdapterRegistry = Depends(get_adapter_registry),
 ) -> OpportunityDetailRead:
+    ensure_opportunity_is_active(opportunity)
     use_case = ManualReplyUseCase(
         opportunity_repo=opportunity_repo,
         message_repo=message_repo,
@@ -101,6 +171,7 @@ async def generate_ai_draft(
     opportunity_repo: OpportunityRepository = Depends(get_opportunity_repo),
     reply_generator: LiteLLMReplyGenerator = Depends(get_reply_generator),
 ) -> AIDraftResponse:
+    ensure_opportunity_is_active(opportunity)
     use_case = AIDraftUseCase(
         opportunity_repo=opportunity_repo,
         reply_generator=reply_generator,
@@ -122,6 +193,7 @@ async def enqueue_agent_analysis(
     task_queue: CeleryTaskQueue = Depends(get_task_queue),
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ) -> AgentAnalysisEnqueueRead:
+    ensure_opportunity_is_active(opportunity)
     if not opportunity.source_message_id:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -175,6 +247,7 @@ async def update_status(
     opportunity: Opportunity = Depends(get_opportunity_or_404),
     repo: OpportunityRepository = Depends(get_opportunity_repo),
 ) -> OpportunityDetailRead:
+    ensure_opportunity_is_active(opportunity)
     try:
         ensure_transition_allowed(opportunity.status, payload.status)
     except InvalidOpportunityTransition as exc:
@@ -191,6 +264,7 @@ async def claim_opportunity(
     opportunity: Opportunity = Depends(get_opportunity_or_404),
     repo: OpportunityRepository = Depends(get_opportunity_repo),
 ) -> OpportunityDetailRead:
+    ensure_opportunity_is_active(opportunity)
     if opportunity.id != opportunity_id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="id mismatch")
     updated = await repo.update_status(opportunity, opportunity.status, assigned_to=operator_id)

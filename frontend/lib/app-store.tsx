@@ -1,7 +1,15 @@
 'use client'
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
-import { enqueueAgentAnalysis, fetchOpportunities, fetchOpportunity, fetchReplyTemplates } from './api'
+import {
+  archiveOpportunity as archiveOpportunityRequest,
+  bulkArchiveOpportunities as bulkArchiveOpportunitiesRequest,
+  enqueueAgentAnalysis,
+  fetchOpportunities,
+  fetchOpportunity,
+  fetchReplyTemplates,
+  restoreOpportunity as restoreOpportunityRequest,
+} from './api'
 import { useAuth } from './auth'
 import { mockMessages, mockOpportunities, mockTemplates } from './mock-data'
 import type {
@@ -31,6 +39,9 @@ interface AppStore {
   sendFriendRequest: (id: string) => void
   overrideRiskAndContinue: (id: string) => void
   closeOpportunity: (id: string) => void
+  archiveOpportunity: (id: string) => Promise<void>
+  restoreOpportunity: (id: string) => Promise<void>
+  bulkArchiveOpportunities: (ids: string[]) => Promise<void>
 }
 
 const AppStoreContext = createContext<AppStore | null>(null)
@@ -54,7 +65,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
       }
       try {
         const [backendOpportunities, backendTemplates] = await Promise.all([
-          fetchOpportunities(),
+          fetchOpportunities('all'),
           fetchReplyTemplates(),
         ])
         if (cancelled) return
@@ -62,7 +73,11 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
         setTemplates(backendTemplates.length > 0 ? backendTemplates : mockTemplates)
         setMessagesByOpportunity({})
       } catch (error) {
-        console.warn('Failed to load backend data, using mock data.', error)
+        console.warn('Failed to load backend data.', error)
+        if (!cancelled) {
+          setOpportunities([])
+          setMessagesByOpportunity({})
+        }
       }
     }
 
@@ -190,6 +205,22 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
     )
   }, [])
 
+  const archiveOpportunity = useCallback(async (id: string) => {
+    const updated = await archiveOpportunityRequest(id)
+    setOpportunities((prev) => prev.map((item) => (item.id === id ? updated : item)))
+  }, [])
+
+  const restoreOpportunity = useCallback(async (id: string) => {
+    const updated = await restoreOpportunityRequest(id)
+    setOpportunities((prev) => prev.map((item) => (item.id === id ? updated : item)))
+  }, [])
+
+  const bulkArchiveOpportunities = useCallback(async (ids: string[]) => {
+    const updated = await bulkArchiveOpportunitiesRequest(ids)
+    const byId = new Map(updated.map((item) => [item.id, item]))
+    setOpportunities((prev) => prev.map((item) => byId.get(item.id) ?? item))
+  }, [])
+
   const sendMessage = useCallback((opportunityId: string, content: string, source: 'human' | 'ai') => {
     const message: ChatMessage = {
       id: `msg-${Date.now()}`,
@@ -238,6 +269,9 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
       sendFriendRequest,
       overrideRiskAndContinue,
       closeOpportunity,
+      archiveOpportunity,
+      restoreOpportunity,
+      bulkArchiveOpportunities,
     }),
     [
       opportunities,
@@ -256,6 +290,9 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
       sendFriendRequest,
       overrideRiskAndContinue,
       closeOpportunity,
+      archiveOpportunity,
+      restoreOpportunity,
+      bulkArchiveOpportunities,
     ],
   )
 

@@ -1,6 +1,6 @@
 'use client'
 
-import { AlertTriangle, MessageCircle, Users } from 'lucide-react'
+import { AlertTriangle, Archive, ArchiveRestore, Loader2, MessageCircle, Users } from 'lucide-react'
 import Link from 'next/link'
 import { ConfidenceRing } from '@/components/confidence-ring'
 import { PlatformIcon } from '@/components/platform-icon'
@@ -8,6 +8,8 @@ import { TrustBadge } from '@/components/trust-badge'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import { MOCK_NOW } from '@/lib/dashboard-filters'
 import { sopStageConfig } from '@/lib/sop'
 import type { Opportunity, Priority } from '@/lib/types'
@@ -37,7 +39,23 @@ function formatTime(iso: string) {
   return `${Math.floor(diffHour / 24)} 天前`
 }
 
-export function OpportunityCard({ opportunity, isNew }: { opportunity: Opportunity; isNew?: boolean }) {
+export function OpportunityCard({
+  opportunity,
+  isNew,
+  selected = false,
+  actionPending = false,
+  onSelectedChange,
+  onArchive,
+  onRestore,
+}: {
+  opportunity: Opportunity
+  isNew?: boolean
+  selected?: boolean
+  actionPending?: boolean
+  onSelectedChange?: (selected: boolean) => void
+  onArchive?: () => void
+  onRestore?: () => void
+}) {
   const priority = priorityConfig[opportunity.priority]
   const status = statusConfig[opportunity.status]
   const stage = sopStageConfig[opportunity.sopStage]
@@ -46,13 +64,13 @@ export function OpportunityCard({ opportunity, isNew }: { opportunity: Opportuni
     (opportunity.linkVerification.status === 'unverified' || opportunity.linkVerification.status === 'verifying')
 
   return (
-    <Link href={`/opportunity/${opportunity.id}`} className="block">
-      <Card
-        className={cn(
-          'gap-3 rounded-xl border p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md',
-          isNew && 'animate-card-enter ring-2 ring-primary/40',
-        )}
-      >
+    <Card
+      className={cn(
+        'gap-0 overflow-hidden rounded-xl border p-0 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md',
+        isNew && 'animate-card-enter ring-2 ring-primary/40',
+      )}
+    >
+      <Link href={`/opportunity/${opportunity.id}`} className="flex flex-col gap-3 p-4">
         <div className="flex items-start justify-between gap-3">
           <div className="flex min-w-0 items-center gap-3">
             <div className="relative shrink-0">
@@ -72,6 +90,7 @@ export function OpportunityCard({ opportunity, isNew }: { opportunity: Opportuni
                   {priority.label}
                 </Badge>
                 <TrustBadge score={opportunity.trustScore} showScore={false} />
+                {opportunity.archivedAt && <Badge variant="outline" className="h-5 px-1.5 text-[10px]">已归档</Badge>}
               </div>
               <p className="mt-0.5 flex items-center gap-1 text-[11px] text-muted-foreground">
                 {opportunity.sourceType === 'group' ? (
@@ -118,7 +137,26 @@ export function OpportunityCard({ opportunity, isNew }: { opportunity: Opportuni
             </Badge>
           ))}
         </div>
-      </Card>
-    </Link>
+      </Link>
+      <div className="flex min-h-11 items-center justify-between gap-3 border-t px-4 py-2">
+        {onSelectedChange ? (
+          <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
+            <Checkbox checked={selected} onCheckedChange={(checked) => onSelectedChange(checked === true)} />
+            选择
+          </label>
+        ) : <span />}
+        {opportunity.archivedAt ? (
+          <Button variant="ghost" size="sm" className="h-7 gap-1.5 text-xs" disabled={actionPending} onClick={onRestore}>
+            {actionPending ? <Loader2 className="size-3.5 animate-spin" /> : <ArchiveRestore className="size-3.5" />}
+            恢复
+          </Button>
+        ) : (
+          <Button variant="ghost" size="sm" className="h-7 gap-1.5 text-xs text-muted-foreground" disabled={actionPending} onClick={onArchive}>
+            {actionPending ? <Loader2 className="size-3.5 animate-spin" /> : <Archive className="size-3.5" />}
+            归档
+          </Button>
+        )}
+      </div>
+    </Card>
   )
 }
