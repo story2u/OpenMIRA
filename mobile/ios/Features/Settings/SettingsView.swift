@@ -14,7 +14,7 @@ struct SettingsView: View {
                     ProgressView()
                 }
             }
-            .navigationTitle(Text("settings.title", bundle: .main))
+            .navigationTitle(Text(String(localized: "settings.title", defaultValue: "设置")))
         }
         .task {
             if model == nil {
@@ -42,6 +42,23 @@ private struct SettingsList: View {
                         Text(error)
                     } actions: {
                         Button(String(localized: "action.retry", defaultValue: "重试")) { Task { await model.load() } }
+                    }
+                }
+            }
+
+            if model.serverRequiresUpgrade, model.bundle == nil {
+                Section {
+                    Label {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(String(localized: "settings.upgrade_required", defaultValue: "设置同步暂不可用"))
+                                .font(.headline)
+                            Text(String(localized: "settings.upgrade_required_detail", defaultValue: "当前服务端版本较旧，升级后即可管理识别规则、工作时间和通知偏好。"))
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    } icon: {
+                        Image(systemName: "server.rack")
+                            .foregroundStyle(AppColors.warning)
                     }
                 }
             }

@@ -9,6 +9,7 @@ final class SettingsViewModel {
     var bundle: SettingsBundle?
     var isLoading = false
     var loadError: String?
+    var serverRequiresUpgrade = false
 
     init(api: APIClient) {
         self.api = api
@@ -20,9 +21,15 @@ final class SettingsViewModel {
         do {
             bundle = try await api.settings()
             loadError = nil
+            serverRequiresUpgrade = false
+        } catch APIError.server(let status, _) where status == 404 {
+            // 老版本服务端尚未注册 /settings/me；不要把它误报成网络故障。
+            loadError = nil
+            serverRequiresUpgrade = true
         } catch {
             // 加载失败不显示默认值冒充服务端值。
             loadError = error.localizedDescription
+            serverRequiresUpgrade = false
         }
     }
 

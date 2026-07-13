@@ -20,6 +20,7 @@ final class DashboardViewModel {
     var pendingCount = 0
     var attentionItems: [Opportunity] = []
     var keywordOptions: [String] = []
+    var usesLegacyAPI = false
 
     var query = DashboardQuery() {
         didSet { if query != oldValue { queryDidChange() } }
@@ -43,7 +44,10 @@ final class DashboardViewModel {
 
     /// 当前筛选下总数（来自服务端，非当前已加载条数）。
     var totalLabel: String {
-        String(localized: "dashboard.result_count", defaultValue: "共 \(total) 条商机")
+        if usesLegacyAPI && canLoadMore {
+            return String(localized: "dashboard.loaded_count", defaultValue: "已加载 \(items.count) 条商机")
+        }
+        return String(localized: "dashboard.result_count", defaultValue: "共 \(total) 条商机")
     }
 
     private func queryDidChange() {
@@ -74,9 +78,10 @@ final class DashboardViewModel {
     private func fetchPage(reset: Bool, generation: Int) async {
         let pagedQuery = query
         do {
-            let response = try await api.dashboard(
+            let page = try await api.dashboard(
                 pagedQueryItems(base: pagedQuery, offset: reset ? 0 : offset)
             )
+            let response = page.response
             // 慢响应竞态防护：仅接受最新一次请求的结果。
             guard generation == loadGeneration else { return }
             if reset {
@@ -84,12 +89,21 @@ final class DashboardViewModel {
             } else {
                 items += response.items
             }
-            total = response.total
-            pendingCount = response.pendingCount
-            attentionItems = response.attentionItems
-            keywordOptions = response.keywordOptions
+            usesLegacyAPI = page.usesLegacyAPI
+            if page.usesLegacyAPI {
+                // 旧接口没有聚合字段；只根据当前已加载数据展示，不伪造服务端总数。
+                total = items.count
+                pendingCount = items.filter { $0.status == .pending }.count
+                attentionItems = items.filter(\.attentionRequired)
+                keywordOptions = Array(Set(items.flatMap(\.matchedKeywords))).sorted()
+            } else {
+                total = response.total
+                pendingCount = response.pendingCount
+                attentionItems = response.attentionItems
+                keywordOptions = response.keywordOptions
+            }
             offset = items.count
-            canLoadMore = items.count < response.total && !response.items.isEmpty
+            canLoadMore = page.hasMore && !response.items.isEmpty
             initialError = nil
             pageError = nil
         } catch is CancellationError {
@@ -127,7 +141,47 @@ struct DashboardQueryPaged: Sendable {
 }
 
 extension APIClient {
-    func dashboard(_ paged: DashboardQueryPaged) async throws -> DashboardResponse {
-        try await get("opportunities/dashboard", query: paged.queryItems)
+    func dashboard(_ paged: DashboardQueryPaged) async throws -> DashboardPage {
+        do {
+            let response: DashboardResponse = try await get(
+                "opportunities/dashboard",
+                query: paged.queryItems
+            )
+            return DashboardPage(
+                response: response,
+                usesLegacyAPI: false,
+                hasMore: response.offset + response.items.count < response.total
+            )
+        } catch APIError.server(let status, _) where [404, 422].contains(status)
+            && paged.query.supportsLegacyEndpoint {
+            // 生产后端滚动升级期间，新路径可能尚未注册：404，或被旧的
+            // /opportunities/{opportunity_id} 动态路由当作 UUID 而返回 422。
+            let items = try await opportunities(
+                status: paged.query.status,
+                platform: paged.query.platform,
+                limit: paged.limit,
+                offset: paged.offset
+            )
+            let response = DashboardResponse(
+                items: items,
+                total: paged.offset + items.count,
+                limit: paged.limit,
+                offset: paged.offset,
+                pendingCount: items.filter { $0.status == .pending }.count,
+                attentionItems: items.filter(\.attentionRequired),
+                keywordOptions: Array(Set(items.flatMap(\.matchedKeywords))).sorted()
+            )
+            return DashboardPage(
+                response: response,
+                usesLegacyAPI: true,
+                hasMore: items.count == paged.limit
+            )
+        }
     }
+}
+
+struct DashboardPage: Sendable {
+    let response: DashboardResponse
+    let usesLegacyAPI: Bool
+    let hasMore: Bool
 }
