@@ -52,11 +52,13 @@ async def archive_subject() -> AsyncIterator[
     session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
     owner = User(email=f"archive-owner-{os.urandom(8).hex()}@example.test")
     other_owner = User(email=f"archive-other-{os.urandom(8).hex()}@example.test")
-    owned = make_opportunity(owner.id, title="owned")
-    foreign = make_opportunity(other_owner.id, title="foreign")
     async with session_factory() as session:
         session.add(owner)
         session.add(other_owner)
+        await session.commit()
+
+        owned = make_opportunity(owner.id, title="owned")
+        foreign = make_opportunity(other_owner.id, title="foreign")
         session.add(owned)
         session.add(foreign)
         await session.commit()
