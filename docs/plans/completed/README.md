@@ -12,3 +12,4 @@
 - [2026-07-12：iOS 邮箱密码登录](2026-07-12-ios-email-password-login.md)
 - [2026-07-12：商机语义识别增强](2026-07-12-opportunity-semantic-detection.md)
 - [2026-07-13：商机归档功能](2026-07-13-opportunity-archive.md)
+- [2026-07-14：企业微信消息收发 P0](2026-07-14-wecom-message-integration.md)
