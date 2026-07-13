@@ -44,10 +44,6 @@ flowchart LR
 后端 Python 版本与直接依赖声明在 `backend/pyproject.toml`，`backend/uv.lock` 是跨平台精确锁；
 本地、CI 和 Docker 均通过 uv 同步同一依赖图。
 
-产品资产流水线独立于生产运行时：`frontend/e2e/demo/` 在双重 Demo 开关下访问 `/demo/*`，
-`demo-video/` 使用 Playwright 原始录屏和固定截图渲染 Remotion 时间线，`scripts/demo/` 再由 FFmpeg
-输出 Release 资产。Demo 路由不读取认证 token、不调用业务 API，且 Release 默认关闭。
-
 ## 后端分层
 
 项目是“实用型分层 + 领域端口”，并非严格的 Clean Architecture：application 当前可直接使用

@@ -8,7 +8,6 @@ export default defineConfig([
   {
     rules: {
       // Existing UI effects intentionally synchronize hydration, dialog, and workflow view state.
-      // Keep the broader React Hooks ruleset while these flows are migrated away from local demo state.
       'react-hooks/set-state-in-effect': 'off',
     },
   },

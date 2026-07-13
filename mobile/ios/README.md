@@ -74,9 +74,7 @@ make ios-check                                                          # 生成
 ```
 
 DEBUG 默认连本地后端 `http://127.0.0.1:8000/api/v1`；要连线上联调，在 scheme 里设环境变量
-`RADAR_API_URL=https://im.story2u.xyz/api/v1`。本地创建演示账户密码：起后端后运行
-`docker compose run --rm api python scripts/dev_login.py`，再用脚本输出的邮箱和临时密码登录（详见
-[开发命令](../../docs/development/commands.md)）。
+`RADAR_API_URL=https://im.story2u.xyz/api/v1`。请使用已配置的邮箱密码账户或 Apple 账户登录。
 
 RevenueCat Public iOS API Key 通过构建设置 `REVENUECAT_IOS_PUBLIC_API_KEY` 注入。该值是平台
 Public SDK Key，不得填 RevenueCat 服务端 Secret；未配置时 App 正常运行但不能购买或恢复。
