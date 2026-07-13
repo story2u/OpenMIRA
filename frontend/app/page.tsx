@@ -1,6 +1,6 @@
 'use client'
 
-import { AlertTriangle, ChevronLeft, ChevronRight, Inbox } from 'lucide-react'
+import { AlertTriangle, Archive, ChevronLeft, ChevronRight, Inbox, Loader2 } from 'lucide-react'
 import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
 import { FilterPanel } from '@/components/filter-panel'
@@ -34,11 +34,25 @@ export default function DashboardPage() {
 }
 
 function AuthenticatedDashboard() {
-  const { opportunities, newOpportunityId } = useAppStore()
+  const {
+    opportunities,
+    newOpportunityId,
+    archiveOpportunity,
+    restoreOpportunity,
+    bulkArchiveOpportunities,
+  } = useAppStore()
   const [filters, setFilters] = useState<DashboardFilters>(defaultFilters)
   const [page, setPage] = useState(1)
+  const [archiveView, setArchiveView] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [pendingIds, setPendingIds] = useState<Set<string>>(new Set())
+  const [archiveError, setArchiveError] = useState<string | null>(null)
 
-  const filtered = useMemo(() => applyFilters(opportunities, filters), [opportunities, filters])
+  const visibleOpportunities = useMemo(
+    () => opportunities.filter((item) => Boolean(item.archivedAt) === archiveView),
+    [archiveView, opportunities],
+  )
+  const filtered = useMemo(() => applyFilters(visibleOpportunities, filters), [visibleOpportunities, filters])
   const keywordOptions = useMemo(
     () => Array.from(new Set(opportunities.flatMap((o) => o.matchedKeywords))).sort(),
     [opportunities],
@@ -51,10 +65,50 @@ function AuthenticatedDashboard() {
   // 筛选变化时回到第一页
   useEffect(() => {
     setPage(1)
-  }, [filters])
+  }, [archiveView, filters])
 
-  const pendingCount = opportunities.filter((o) => o.status === 'pending').length
-  const attentionOpportunities = opportunities.filter((o) => o.attentionRequired && o.status === 'pending')
+  const pendingCount = opportunities.filter((o) => !o.archivedAt && o.status === 'pending').length
+  const archivedCount = opportunities.filter((o) => o.archivedAt).length
+  const attentionOpportunities = opportunities.filter(
+    (o) => !o.archivedAt && o.attentionRequired && o.status === 'pending',
+  )
+
+  async function runArchiveAction(id: string, action: 'archive' | 'restore') {
+    setArchiveError(null)
+    setPendingIds((current) => new Set(current).add(id))
+    try {
+      if (action === 'archive') await archiveOpportunity(id)
+      else await restoreOpportunity(id)
+      setSelectedIds((current) => {
+        const next = new Set(current)
+        next.delete(id)
+        return next
+      })
+    } catch (error) {
+      setArchiveError(error instanceof Error ? error.message : '归档操作失败，请稍后重试。')
+    } finally {
+      setPendingIds((current) => {
+        const next = new Set(current)
+        next.delete(id)
+        return next
+      })
+    }
+  }
+
+  async function archiveSelected() {
+    const ids = Array.from(selectedIds)
+    if (ids.length === 0) return
+    setArchiveError(null)
+    setPendingIds(new Set(ids))
+    try {
+      await bulkArchiveOpportunities(ids)
+      setSelectedIds(new Set())
+    } catch (error) {
+      setArchiveError(error instanceof Error ? error.message : '批量归档失败，请稍后重试。')
+    } finally {
+      setPendingIds(new Set())
+    }
+  }
 
   return (
     <div className="mx-auto w-full max-w-5xl px-4 py-6 md:px-8">
@@ -102,12 +156,23 @@ function AuthenticatedDashboard() {
       )}
 
       <div className="mb-3 flex flex-wrap items-center gap-2.5">
-        <Tabs value={filters.status} onValueChange={(v) => setFilters({ ...filters, status: v as DashboardFilters['status'] })}>
+        <Tabs
+          value={archiveView ? 'archived' : filters.status}
+          onValueChange={(value) => {
+            setArchiveView(value === 'archived')
+            setFilters({
+              ...filters,
+              status: value === 'archived' ? 'all' : value as DashboardFilters['status'],
+            })
+            setSelectedIds(new Set())
+          }}
+        >
           <TabsList>
             <TabsTrigger value="all">全部</TabsTrigger>
             <TabsTrigger value="pending">待处理</TabsTrigger>
             <TabsTrigger value="replied">已回复</TabsTrigger>
             <TabsTrigger value="ignored">已忽略</TabsTrigger>
+            <TabsTrigger value="archived">归档{archivedCount > 0 ? ` ${archivedCount}` : ''}</TabsTrigger>
           </TabsList>
         </Tabs>
         <Select
@@ -143,6 +208,25 @@ function AuthenticatedDashboard() {
         </Select>
       </div>
 
+      {selectedIds.size > 0 && !archiveView && (
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-muted/40 px-3 py-2">
+          <p className="text-sm">已选择 {selectedIds.size} 条商机</p>
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" onClick={() => setSelectedIds(new Set())}>取消选择</Button>
+            <Button size="sm" className="gap-1.5" disabled={pendingIds.size > 0} onClick={archiveSelected}>
+              {pendingIds.size > 0 ? <Loader2 className="size-3.5 animate-spin" /> : <Archive className="size-3.5" />}
+              批量归档
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {archiveError && (
+        <p role="alert" className="mb-4 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          {archiveError}
+        </p>
+      )}
+
       <p className="mb-4 text-xs text-muted-foreground" aria-live="polite">
         当前筛选下共 <span className="font-semibold text-foreground">{filtered.length}</span> 条商机
         {totalPages > 1 && `，第 ${safePage} / ${totalPages} 页`}
@@ -156,7 +240,7 @@ function AuthenticatedDashboard() {
           <div>
             <p className="text-sm font-medium">暂无匹配的商机</p>
             <p className="mt-1 text-xs text-muted-foreground">
-              调整筛选条件，或等待系统从聊天中识别新的商机
+              {archiveView ? '归档后的商机会显示在这里，并可随时恢复' : '调整筛选条件，或等待系统从聊天中识别新的商机'}
             </p>
           </div>
         </div>
@@ -169,6 +253,18 @@ function AuthenticatedDashboard() {
                 <OpportunityCard
                   opportunity={opportunity}
                   isNew={opportunity.id === newOpportunityId}
+                  selected={selectedIds.has(opportunity.id)}
+                  actionPending={pendingIds.has(opportunity.id)}
+                  onSelectedChange={archiveView ? undefined : (selected) => {
+                    setSelectedIds((current) => {
+                      const next = new Set(current)
+                      if (selected) next.add(opportunity.id)
+                      else next.delete(opportunity.id)
+                      return next
+                    })
+                  }}
+                  onArchive={() => runArchiveAction(opportunity.id, 'archive')}
+                  onRestore={() => runArchiveAction(opportunity.id, 'restore')}
                 />
               </div>
             ))}

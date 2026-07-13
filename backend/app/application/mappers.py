@@ -83,6 +83,9 @@ def to_opportunity_read(opportunity: Opportunity) -> OpportunityRead:
         agentAnalysisError=opportunity.agent_analysis_error,
         agentAnalyzedAt=opportunity.agent_analyzed_at,
         attentionRequired=opportunity.attention_required,
+        archivedAt=opportunity.archived_at,
+        archivedByUserId=opportunity.archived_by_user_id,
+        archiveReason=opportunity.archive_reason,
     )
 
 

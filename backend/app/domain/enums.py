@@ -31,6 +31,17 @@ class FrontendOpportunityStatus(StrEnum):
     IGNORED = "ignored"
 
 
+class OpportunityArchiveScope(StrEnum):
+    ACTIVE = "active"
+    ARCHIVED = "archived"
+    ALL = "all"
+
+
+class OpportunityArchiveAction(StrEnum):
+    ARCHIVED = "archived"
+    RESTORED = "restored"
+
+
 class Priority(StrEnum):
     LOW = "low"
     NORMAL = "normal"

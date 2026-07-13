@@ -93,7 +93,7 @@ ADR 和迁移计划，不要在单个功能中半途改造。
 | `BillingSubscription` / `BillingEvent` / `BillingProduct` | RevenueCat 渠道事实、幂等事件与产品映射审计 | 多渠道订阅；provider external key 与 event ID 唯一；不长期保存 raw webhook |
 | `UsageLedger` | AI 功能额度的可审计账本 | user + feature + idempotency key 唯一；reserved/consumed/released |
 | `Message` | 收发消息审计记录 | channel + external_message_id 幂等；保存 pi 分析状态/结果；可关联 opportunity |
-| `Opportunity` | 商机聚合根 | 持有来源、检测结果、Agent 投影、状态、草稿与最终回复；source_message 唯一 |
+| `Opportunity` / `OpportunityArchiveEvent` | 商机聚合根与归档审计 | 状态表达业务生命周期；nullable 归档字段独立控制看板可见性，恢复不改变状态；source_message 唯一 |
 | `Rule` | 关键词/正则/AI hint 规则 | 启用、优先级、分数驱动检测策略 |
 | `AppConfig` | 运行期业务配置 | JSONB value；当前包含工作时间等配置 |
 | `ReplyTemplate` | 人工回复模板 | 可启用、分类 |
@@ -150,6 +150,11 @@ sequenceDiagram
         Q->>DB: 创建 PENDING_HUMAN 商机
     end
 ```
+
+商机归档是独立于状态机的可见性维度。默认列表和统计只查询未归档记录，归档区可读取并恢复原记录；
+归档不删除 Message、不停止 Telegram/企微来源，也不改变 replied/following/closed 等业务状态。归档后
+API 拒绝回复、分析、认领和状态更新，已排队的 SLA/AI 自动回复任务也会跳过，避免隐藏记录继续发送。
+每次实际归档或恢复都写 `OpportunityArchiveEvent`，重复请求保持幂等。
 
 - 高置信规则命中保持低延迟直通；其余非空消息在 `AI_ENABLED=true` 时均可进入语义复核，不再要求
   先达到关键词灰区分数。AI 关闭、输出非法或 provider 失败时回退到同一确定性规则结果。

@@ -22,6 +22,8 @@ from app.domain.enums import (
     IMChannel,
     MessageDirection,
     MessageSource,
+    OpportunityArchiveAction,
+    OpportunityArchiveScope,
     OpportunityStatus,
     PlanCode,
     Priority,
@@ -49,6 +51,7 @@ from app.infrastructure.db.models import (
     BillingEvent,
     Message,
     Opportunity,
+    OpportunityArchiveEvent,
     ReplyTemplate,
     Rule,
     SubscriptionAccount,
@@ -1005,6 +1008,7 @@ class OpportunityRepository:
         frontend_status: FrontendOpportunityStatus | None = None,
         channel: IMChannel | None = None,
         owner_user_id: UUID | None = None,
+        archive_scope: OpportunityArchiveScope = OpportunityArchiveScope.ACTIVE,
         limit: int = 100,
         offset: int = 0,
     ) -> list[Opportunity]:
@@ -1015,6 +1019,10 @@ class OpportunityRepository:
             statement = statement.where(Opportunity.channel == channel)
         if owner_user_id:
             statement = statement.where(Opportunity.owner_user_id == owner_user_id)
+        if archive_scope == OpportunityArchiveScope.ACTIVE:
+            statement = statement.where(Opportunity.archived_at.is_(None))
+        elif archive_scope == OpportunityArchiveScope.ARCHIVED:
+            statement = statement.where(Opportunity.archived_at.is_not(None))
         statement = statement.order_by(col(Opportunity.last_message_at).desc()).offset(offset).limit(limit)
         result = await self.session.exec(statement)
         return list(result.all())
@@ -1035,7 +1043,10 @@ class OpportunityRepository:
         """把看板筛选翻译成 SQL 谓词；所有查询都在数据库层完成，绝不先取全量再内存过滤。"""
         from sqlalchemy import and_, or_
 
-        clauses = [Opportunity.owner_user_id == owner_user_id]
+        clauses = [
+            Opportunity.owner_user_id == owner_user_id,
+            Opportunity.archived_at.is_(None),
+        ]
         if frontend_status:
             clauses.append(Opportunity.status.in_(FRONTEND_STATUS_MAP[frontend_status]))
         if channel:
@@ -1114,6 +1125,7 @@ class OpportunityRepository:
         """该用户所有待处理商机数，不受当前筛选/分页影响。"""
         statement = select(func.count()).select_from(Opportunity).where(
             Opportunity.owner_user_id == owner_user_id,
+            Opportunity.archived_at.is_(None),
             Opportunity.status.in_(FRONTEND_STATUS_MAP[FrontendOpportunityStatus.PENDING]),
         )
         return int((await self.session.exec(statement)).one())
@@ -1124,6 +1136,7 @@ class OpportunityRepository:
             select(Opportunity)
             .where(
                 Opportunity.owner_user_id == owner_user_id,
+                Opportunity.archived_at.is_(None),
                 Opportunity.attention_required.is_(True),
                 Opportunity.status.in_(FRONTEND_STATUS_MAP[FrontendOpportunityStatus.PENDING]),
             )
@@ -1137,6 +1150,7 @@ class OpportunityRepository:
         """当前用户真实商机里出现过的关键词并集（用于筛选面板选项）。"""
         statement = select(Opportunity.matched_keywords).where(
             Opportunity.owner_user_id == owner_user_id,
+            Opportunity.archived_at.is_(None),
             func.jsonb_array_length(col(Opportunity.matched_keywords)) > 0,
         )
         result = await self.session.exec(statement)
@@ -1148,6 +1162,92 @@ class OpportunityRepository:
                     if len(seen) >= limit:
                         return list(seen.keys())
         return list(seen.keys())
+    async def archive(
+        self,
+        opportunity: Opportunity,
+        *,
+        actor_user_id: UUID,
+        reason: str | None,
+    ) -> Opportunity:
+        if opportunity.archived_at is not None:
+            return opportunity
+        now = utc_now()
+        opportunity.archived_at = now
+        opportunity.archived_by_user_id = actor_user_id
+        opportunity.archive_reason = reason
+        opportunity.updated_at = now
+        self.session.add(opportunity)
+        self.session.add(
+            OpportunityArchiveEvent(
+                opportunity_id=opportunity.id,
+                owner_user_id=actor_user_id,
+                action=OpportunityArchiveAction.ARCHIVED,
+                reason=reason,
+            )
+        )
+        await self.session.commit()
+        await self.session.refresh(opportunity)
+        return opportunity
+
+    async def restore(self, opportunity: Opportunity, *, actor_user_id: UUID) -> Opportunity:
+        if opportunity.archived_at is None:
+            return opportunity
+        now = utc_now()
+        opportunity.archived_at = None
+        opportunity.archived_by_user_id = None
+        opportunity.archive_reason = None
+        opportunity.updated_at = now
+        self.session.add(opportunity)
+        self.session.add(
+            OpportunityArchiveEvent(
+                opportunity_id=opportunity.id,
+                owner_user_id=actor_user_id,
+                action=OpportunityArchiveAction.RESTORED,
+            )
+        )
+        await self.session.commit()
+        await self.session.refresh(opportunity)
+        return opportunity
+
+    async def archive_many(
+        self,
+        *,
+        owner_user_id: UUID,
+        opportunity_ids: list[UUID],
+        reason: str | None,
+    ) -> tuple[list[Opportunity], int]:
+        statement = select(Opportunity).where(
+            Opportunity.owner_user_id == owner_user_id,
+            col(Opportunity.id).in_(opportunity_ids),
+        )
+        result = await self.session.exec(statement)
+        opportunities = list(result.all())
+        if len(opportunities) != len(opportunity_ids):
+            raise LookupError("one or more opportunities were not found")
+
+        now = utc_now()
+        archived_count = 0
+        for opportunity in opportunities:
+            if opportunity.archived_at is not None:
+                continue
+            archived_count += 1
+            opportunity.archived_at = now
+            opportunity.archived_by_user_id = owner_user_id
+            opportunity.archive_reason = reason
+            opportunity.updated_at = now
+            self.session.add(opportunity)
+            self.session.add(
+                OpportunityArchiveEvent(
+                    opportunity_id=opportunity.id,
+                    owner_user_id=owner_user_id,
+                    action=OpportunityArchiveAction.ARCHIVED,
+                    reason=reason,
+                )
+            )
+        await self.session.commit()
+        for opportunity in opportunities:
+            await self.session.refresh(opportunity)
+        return opportunities, archived_count
 
     async def update_status(
         self,
@@ -1195,6 +1295,7 @@ class OpportunityRepository:
         cutoff = datetime.now(timezone.utc) - timedelta(minutes=minutes)
         statement = select(Opportunity).where(
             Opportunity.status == OpportunityStatus.PENDING_HUMAN,
+            Opportunity.archived_at.is_(None),
             Opportunity.created_at <= cutoff,
         )
         result = await self.session.exec(statement)

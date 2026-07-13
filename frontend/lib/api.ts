@@ -54,6 +54,9 @@ interface ApiOpportunity {
   agentAnalysisError?: string | null
   agentAnalyzedAt?: string | null
   attentionRequired?: boolean
+  archivedAt?: string | null
+  archivedByUserId?: string | null
+  archiveReason?: string | null
 }
 
 const defaultLinkVerification: LinkVerification = {
@@ -149,11 +152,14 @@ export function toOpportunity(item: ApiOpportunity): Opportunity {
     agentAnalysisError: item.agentAnalysisError ?? null,
     agentAnalyzedAt: item.agentAnalyzedAt ?? null,
     attentionRequired: item.attentionRequired ?? false,
+    archivedAt: item.archivedAt ?? null,
+    archivedByUserId: item.archivedByUserId ?? null,
+    archiveReason: item.archiveReason ?? null,
   }
 }
 
-export async function fetchOpportunities(): Promise<Opportunity[]> {
-  const items = await fetchJson<ApiOpportunity[]>('/api/v1/opportunities?limit=200')
+export async function fetchOpportunities(archive: 'active' | 'archived' | 'all' = 'active'): Promise<Opportunity[]> {
+  const items = await fetchJson<ApiOpportunity[]>(`/api/v1/opportunities?limit=200&archive=${archive}`)
   return items.map(toOpportunity)
 }
 
@@ -171,6 +177,32 @@ export async function updateFriendRequest(
     body: JSON.stringify({ status }),
   })
   return toOpportunity(item)
+}
+
+export async function archiveOpportunity(opportunityId: string, reason?: string): Promise<Opportunity> {
+  return toOpportunity(
+    await fetchJson<ApiOpportunity>(`/api/v1/opportunities/${opportunityId}/archive`, {
+      method: 'POST',
+      body: JSON.stringify({ reason: reason || null }),
+    }),
+  )
+}
+
+export async function restoreOpportunity(opportunityId: string): Promise<Opportunity> {
+  return toOpportunity(
+    await fetchJson<ApiOpportunity>(`/api/v1/opportunities/${opportunityId}/restore`, { method: 'POST' }),
+  )
+}
+
+export async function bulkArchiveOpportunities(opportunityIds: string[]): Promise<Opportunity[]> {
+  const result = await fetchJson<{ archivedCount: number; opportunities: ApiOpportunity[] }>(
+    '/api/v1/opportunities/bulk-archive',
+    {
+      method: 'POST',
+      body: JSON.stringify({ opportunityIds, reason: null }),
+    },
+  )
+  return result.opportunities.map(toOpportunity)
 }
 
 export async function enqueueAgentAnalysis(opportunityId: string): Promise<{
