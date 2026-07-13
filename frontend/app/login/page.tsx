@@ -1,6 +1,6 @@
 'use client'
 
-import { Apple, Loader2 } from 'lucide-react'
+import { Loader2 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
@@ -32,6 +32,15 @@ const googleIcon = (
       d="M12 5.94c1.47 0 2.79.5 3.83 1.5l2.87-2.87A9.63 9.63 0 0 0 12 2a10 10 0 0 0-8.96 5.45l3.35 2.62C7.18 7.7 9.39 5.94 12 5.94Z"
     />
   </svg>
+)
+
+const appleIcon = (
+  <span
+    aria-hidden="true"
+    className="shrink-0 font-sans text-[1.7rem] leading-none"
+  >
+    
+  </span>
 )
 
 export default function LoginPage() {
@@ -113,7 +122,7 @@ export default function LoginPage() {
             {loadingProvider === 'apple' ? (
               <Loader2 className="size-5 animate-spin" />
             ) : (
-              <Apple className="size-5.5 fill-current stroke-[1.5]" />
+              appleIcon
             )}
             {providerLabels.apple}
           </Button>
