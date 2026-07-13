@@ -67,7 +67,11 @@ class IngestMessageUseCase:
         detection_prefs = await self._detection_prefs(inbound.owner_user_id)
         rules = await self.rule_repo.enabled_detection_rules()
         rules = rules + detection_prefs.extra_rules
-        detector = self.detector if detection_prefs.ai_semantics_enabled else OpportunityDetector(ai_classifier=None)
+        detector = (
+            self.detector
+            if detection_prefs.ai_semantics_enabled
+            else OpportunityDetector(ai_classifier=None)
+        )
 
         detection = await detector.detect(
             text=inbound.text or "",
@@ -86,7 +90,7 @@ class IngestMessageUseCase:
             return message
 
         working_time = await self._is_working_time(inbound.owner_user_id)
-        if detection.requires_human_review or working_time:
+        if inbound.force_human_review or detection.requires_human_review or working_time:
             status = OpportunityStatus.PENDING_HUMAN
         else:
             status = OpportunityStatus.AI_AUTO_REPLY

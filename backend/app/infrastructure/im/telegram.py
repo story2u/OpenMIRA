@@ -77,7 +77,16 @@ class TelegramAdapter:
             raw_payload=payload,
         )
 
-    async def send_message(self, conversation_id: str, text: str) -> SendReceipt:
+    async def send_message(
+        self,
+        conversation_id: str,
+        text: str,
+        *,
+        idempotency_key: str | None = None,
+        opportunity_id: UUID | None = None,
+        owner_user_id: UUID | None = None,
+    ) -> SendReceipt:
+        del idempotency_key, opportunity_id, owner_user_id
         if not self.settings.im_send_enabled:
             return SendReceipt(
                 provider_message_id=None,

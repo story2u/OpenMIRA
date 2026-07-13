@@ -133,7 +133,8 @@ export default function SettingsPage() {
                 <ChevronRight className="size-4 text-muted-foreground" />
               </Card>
             </Link>
-            <Card className="flex-row items-center gap-3 rounded-xl p-4 shadow-sm">
+            <Link href="/settings/wecom" className="block">
+            <Card className="flex-row items-center gap-3 rounded-xl p-4 shadow-sm transition-shadow hover:shadow-md">
               <span className="flex size-10 items-center justify-center rounded-lg bg-success/15 text-success">
                 <MessageSquare className="size-5" />
               </span>
@@ -147,6 +148,7 @@ export default function SettingsPage() {
                 {wecomBindingAvailable ? '可管理' : '仅管理员'}
               </Badge>
             </Card>
+            </Link>
           </div>
         </section>
 

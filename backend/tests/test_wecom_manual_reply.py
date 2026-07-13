@@ -1,0 +1,77 @@
+from types import SimpleNamespace
+from uuid import uuid4
+
+import pytest
+
+from app.application.use_cases.manual_reply import ManualReplyUseCase
+from app.domain.enums import IMChannel, OpportunityStatus
+from app.domain.ports import SendReceipt
+from app.infrastructure.db.models import Opportunity
+from app.infrastructure.im.base import AdapterRegistry
+
+
+class FakeWeComAdapter:
+    channel = IMChannel.WECOM
+
+    def __init__(self) -> None:
+        self.calls: list[dict] = []
+
+    async def send_message(self, conversation_id, text, **kwargs):
+        self.calls.append({"conversation_id": conversation_id, "text": text, **kwargs})
+        return SendReceipt(raw_response={"dry_run": True})
+
+
+class FakeMessageRepository:
+    def __init__(self) -> None:
+        self.messages: dict[tuple[IMChannel, str], SimpleNamespace] = {}
+
+    async def get_by_external_id(self, channel, external_message_id):
+        return self.messages.get((channel, external_message_id))
+
+    async def create_outgoing(self, **kwargs):
+        message = SimpleNamespace(**kwargs)
+        self.messages[(kwargs["channel"], kwargs["external_message_id"])] = message
+        return message
+
+
+class FakeOpportunityRepository:
+    async def update_status(self, opportunity, status, **kwargs):
+        opportunity.status = status
+        opportunity.final_reply = kwargs.get("final_reply")
+        opportunity.assigned_to = kwargs.get("assigned_to")
+        return opportunity
+
+
+@pytest.mark.asyncio
+async def test_wecom_manual_reply_passes_owner_context_and_is_idempotent() -> None:
+    owner_id = uuid4()
+    connection_id = uuid4()
+    opportunity = Opportunity(
+        owner_user_id=owner_id,
+        channel=IMChannel.WECOM,
+        conversation_id=f"wecom:{connection_id}:zhangsan",
+        title="采购咨询",
+        status=OpportunityStatus.PENDING_HUMAN,
+    )
+    adapter = FakeWeComAdapter()
+    messages = FakeMessageRepository()
+    use_case = ManualReplyUseCase(
+        opportunity_repo=FakeOpportunityRepository(),
+        message_repo=messages,
+        adapters=AdapterRegistry([adapter]),
+    )
+
+    for _ in range(2):
+        await use_case.execute(
+            opportunity=opportunity,
+            text="您好，可以安排产品演示。",
+            operator_id=str(owner_id),
+            mark_following=True,
+            idempotency_key="reply-request-001",
+        )
+
+    assert len(messages.messages) == 1
+    assert len(adapter.calls) == 2
+    assert adapter.calls[0]["owner_user_id"] == owner_id
+    assert adapter.calls[0]["opportunity_id"] == opportunity.id
+    assert adapter.calls[0]["idempotency_key"] == "reply-request-001"

@@ -23,6 +23,8 @@ import type {
   WorkSchedule,
   NotificationSettings,
   SettingsBundle,
+  WeComConnection,
+  WeComConnectionCreate,
 } from './types'
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? ''
@@ -165,6 +167,21 @@ export async function fetchOpportunities(archive: 'active' | 'archived' | 'all' 
 
 export async function fetchOpportunity(opportunityId: string): Promise<Opportunity> {
   return toOpportunity(await fetchJson<ApiOpportunity>(`/api/v1/opportunities/${opportunityId}`))
+}
+
+export async function sendManualReply(
+  opportunityId: string,
+  text: string,
+): Promise<Opportunity> {
+  const item = await fetchJson<ApiOpportunity>(
+    `/api/v1/opportunities/${opportunityId}/manual-reply`,
+    {
+      method: 'POST',
+      headers: { 'Idempotency-Key': crypto.randomUUID() },
+      body: JSON.stringify({ text, mark_following: true }),
+    },
+  )
+  return toOpportunity(item)
 }
 
 /** 好友申请状态流转（发送/确认通过/确认被拒/重试）；非法流转后端返回 409。 */
@@ -358,6 +375,32 @@ export async function addTelegramMtprotoSource(
   return fetchJson<TelegramConnection>(`/api/v1/integrations/telegram/connections/${connectionId}/sources`, {
     method: 'POST',
     body: JSON.stringify({ chatId }),
+  })
+}
+
+export async function fetchWeComConnections(): Promise<WeComConnection[]> {
+  return fetchJson<WeComConnection[]>('/api/v1/integrations/wecom/connections')
+}
+
+export async function createWeComConnection(
+  body: WeComConnectionCreate,
+): Promise<WeComConnection> {
+  return fetchJson<WeComConnection>('/api/v1/integrations/wecom/connections', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
+export async function verifyWeComConnection(connectionId: string): Promise<WeComConnection> {
+  return fetchJson<WeComConnection>(
+    `/api/v1/integrations/wecom/connections/${connectionId}/verify`,
+    { method: 'POST' },
+  )
+}
+
+export async function deleteWeComConnection(connectionId: string): Promise<void> {
+  return fetchJson<void>(`/api/v1/integrations/wecom/connections/${connectionId}`, {
+    method: 'DELETE',
   })
 }
 

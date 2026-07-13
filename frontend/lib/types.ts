@@ -226,6 +226,53 @@ export interface TelegramMtprotoDialog {
   username: string | null
 }
 
+export type WeComConnectionStatus = 'pending' | 'active' | 'disabled' | 'error'
+export type WeComSourceType =
+  | 'private'
+  | 'internal_group'
+  | 'external_group'
+  | 'customer_service'
+
+export interface WeComSource {
+  id: string
+  connectionId: string
+  sourceType: WeComSourceType
+  externalConversationId: string
+  displayName: string
+  receiveCapability: 'app_callback' | 'message_archive' | 'customer_service'
+  sendCapability: 'app_message' | 'customer_service' | 'manual_only'
+  enabled: boolean
+  quotaPaused: boolean
+  quotaReason: string | null
+  lastMessageAt: string | null
+  lastError: string | null
+}
+
+export interface WeComConnection {
+  id: string
+  connectionType: 'internal_app' | 'message_archive' | 'customer_service'
+  status: WeComConnectionStatus
+  enabled: boolean
+  displayName: string
+  corpId: string
+  agentId: string
+  callbackUrl: string
+  credentialConfigured: boolean
+  lastVerifiedAt: string | null
+  lastError: string | null
+  updatedAt: string
+  sources: WeComSource[]
+}
+
+export interface WeComConnectionCreate {
+  displayName: string
+  corpId: string
+  agentId: string
+  secret: string
+  token: string
+  encodingAesKey: string
+}
+
 export interface PlanEntitlements {
   planCode: PlanCode
   telegramGroupLimit: number | null

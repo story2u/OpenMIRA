@@ -15,6 +15,14 @@ class CeleryTaskQueue:
     def notify_reviewers(self, opportunity_id: UUID) -> None:
         logger.info("opportunity.pending_review", opportunity_id=str(opportunity_id))
 
+    def enqueue_wecom_event(self, event_id: UUID) -> bool:
+        try:
+            celery_app.send_task("wecom.process_webhook_event", args=[str(event_id)])
+        except Exception:
+            logger.exception("wecom.event_enqueue_failed", event_id=str(event_id))
+            return False
+        return True
+
     def enqueue_agent_analysis(
         self,
         message_id: UUID,

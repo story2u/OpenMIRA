@@ -8,7 +8,8 @@ from uuid import uuid4
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from app.api.deps import get_user_settings_repo, get_settings as get_settings_dep, require_user
+from app.api.deps import get_settings as get_settings_dep
+from app.api.deps import get_user_settings_repo, require_user
 from app.api.v1.routes import settings as settings_route
 from app.core.config import Settings
 from app.infrastructure.db.models import (
@@ -52,7 +53,13 @@ class FakeSettingsRepo:
         return self.notifications.get(user_id)
 
     async def upsert_notifications(
-        self, *, user_id, new_opportunity_enabled, ai_replied_enabled, daily_digest_enabled, urgent_only
+        self,
+        *,
+        user_id,
+        new_opportunity_enabled,
+        ai_replied_enabled,
+        daily_digest_enabled,
+        urgent_only,
     ):
         pref = UserNotificationPreference(
             user_id=user_id,
@@ -98,7 +105,7 @@ def test_get_me_returns_defaults_when_unset() -> None:
     assert body["workSchedule"]["timezone"] == "Asia/Shanghai"
     assert body["capabilities"] == {
         "pushAvailable": False,
-        "wecomUserBindingAvailable": False,
+        "wecomUserBindingAvailable": True,
     }
 
 

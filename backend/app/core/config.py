@@ -69,6 +69,9 @@ class Settings(BaseSettings):
     wecom_secret: str = ""
     wecom_token: str = ""
     wecom_aes_key: str = ""
+    wecom_connection_limit: int = Field(default=1, ge=1, le=20)
+    wecom_webhook_tolerance_seconds: int = Field(default=300, ge=30, le=3600)
+    wecom_webhook_max_body_bytes: int = Field(default=256_000, ge=1024, le=1_000_000)
 
     ai_enabled: bool = False
     litellm_model: str = "openai/gpt-4o-mini"

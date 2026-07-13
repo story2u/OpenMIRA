@@ -20,10 +20,11 @@ function buildAiDraft(opportunity: Opportunity) {
 }
 
 export function ReplyComposer({ opportunity }: { opportunity: Opportunity }) {
-  const { templates, sendMessage, workMode } = useAppStore()
+  const { templates, sendMessage } = useAppStore()
   const [draft, setDraft] = useState('')
   const [sending, setSending] = useState(false)
   const [generating, setGenerating] = useState(false)
+  const [error, setError] = useState('')
 
   const quickTemplates = templates.slice(0, 6)
 
@@ -42,15 +43,19 @@ export function ReplyComposer({ opportunity }: { opportunity: Opportunity }) {
     }, 25)
   }
 
-  const handleSend = () => {
+  const handleSend = async () => {
     const content = draft.trim()
     if (!content || sending) return
+    setError('')
     setSending(true)
-    setTimeout(() => {
-      sendMessage(opportunity.id, content, workMode === 'ai' ? 'ai' : 'human')
+    try {
+      await sendMessage(opportunity.id, content, 'human')
       setDraft('')
+    } catch (exc) {
+      setError(exc instanceof Error ? exc.message : '消息发送失败')
+    } finally {
       setSending(false)
-    }, 400)
+    }
   }
 
   return (
@@ -79,19 +84,20 @@ export function ReplyComposer({ opportunity }: { opportunity: Opportunity }) {
             e.keyCode !== 229
           ) {
             e.preventDefault()
-            handleSend()
+            void handleSend()
           }
         }}
         placeholder="输入回复内容，或选择模板 / 使用 AI 生成草稿…"
         className="min-h-20 resize-none text-sm"
         aria-label="回复内容"
       />
+      {error && <p className="text-xs text-destructive">{error}</p>}
       <div className="flex items-center justify-between gap-2">
         <Button variant="outline" size="sm" onClick={handleGenerate} disabled={generating} className="gap-1.5 bg-transparent">
           <Sparkles className="size-3.5" />
           {generating ? '生成中…' : 'AI 生成草稿'}
         </Button>
-        <Button size="sm" onClick={handleSend} disabled={!draft.trim() || sending} className="gap-1.5">
+        <Button size="sm" onClick={() => void handleSend()} disabled={!draft.trim() || sending} className="gap-1.5">
           <Send className="size-3.5" />
           {sending ? '发送中…' : '发送'}
         </Button>

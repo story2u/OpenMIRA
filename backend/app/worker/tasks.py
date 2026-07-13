@@ -5,23 +5,31 @@ import structlog
 
 from app.application.use_cases.ai_reply import AIAutoReplyUseCase, transition_pending_to_ai
 from app.application.use_cases.analyze_message import AnalyzeMessageUseCase
+from app.application.use_cases.ingest_message import IngestMessageUseCase
 from app.application.use_cases.sync_revenuecat_customer import SyncRevenueCatCustomer
 from app.core.config import get_settings
+from app.core.security import decrypt_secret
 from app.core.time_window import WorkTimeConfig, WorkTimeService
+from app.domain.ports import InboundMessage
+from app.domain.services.detection_policy import OpportunityDetector
 from app.infrastructure.agent.link_inspector import SafeLinkInspector
 from app.infrastructure.agent.pi_client import PiAgentClient
-from app.infrastructure.ai.litellm_client import LiteLLMReplyGenerator
+from app.infrastructure.ai.litellm_client import LiteLLMOpportunityClassifier, LiteLLMReplyGenerator
+from app.infrastructure.billing.revenuecat_client import RevenueCatClient
 from app.infrastructure.db.repositories import (
     BillingEventRepository,
     ConfigRepository,
     MessageRepository,
     OpportunityRepository,
+    RuleRepository,
     SubscriptionRepository,
     TelegramConnectionRepository,
     TelegramUserConfigRepository,
     UserRepository,
+    UserSettingsRepository,
+    WeComConnectionRepository,
+    WeComEventRepository,
 )
-from app.infrastructure.billing.revenuecat_client import RevenueCatClient
 from app.infrastructure.db.session import AsyncSessionLocal
 from app.infrastructure.im.base import AdapterRegistry
 from app.infrastructure.im.telegram import TelegramAdapter
@@ -63,7 +71,9 @@ def analyze_message(
     except Exception as exc:
         if task.request.retries >= task.max_retries:
             if ledger_id:
-                asyncio.run(_release_agent_usage(ledger_id, "pi agent analysis failed after retries"))
+                asyncio.run(
+                    _release_agent_usage(ledger_id, "pi agent analysis failed after retries")
+                )
             raise
         raise task.retry(exc=exc, countdown=min(2 ** (task.request.retries + 1), 30)) from exc
 
@@ -98,6 +108,24 @@ def reconcile_revenuecat_subscriptions() -> None:
     asyncio.run(_enqueue_revenuecat_reconciliation())
 
 
+@celery_app.task(
+    bind=True,
+    name="wecom.process_webhook_event",
+    queue="im",
+    max_retries=3,
+)
+def process_wecom_event(task, event_id: str) -> None:
+    event_uuid = UUID(event_id)
+    try:
+        asyncio.run(_process_wecom_event(event_uuid))
+    except Exception as exc:
+        final = task.request.retries >= task.max_retries
+        asyncio.run(_fail_wecom_event(event_uuid, exc.__class__.__name__, final=final))
+        if final:
+            raise
+        raise task.retry(exc=exc, countdown=min(2 ** (task.request.retries + 1), 30)) from exc
+
+
 async def _generate_and_send_reply(opportunity_id: UUID) -> None:
     settings = get_settings()
     async with AsyncSessionLocal() as session:
@@ -126,6 +154,62 @@ async def _generate_and_send_reply(opportunity_id: UUID) -> None:
             reply_generator=reply_generator,
         )
         await use_case.execute(opportunity)
+
+
+async def _process_wecom_event(event_id: UUID) -> None:
+    settings = get_settings()
+    async with AsyncSessionLocal() as session:
+        event_repo = WeComEventRepository(session)
+        event = await event_repo.begin_processing(event_id)
+        if not event:
+            return
+        connection_repo = WeComConnectionRepository(session)
+        connection = await connection_repo.get(event.connection_id)
+        if (
+            not connection
+            or not connection.enabled
+            or connection.owner_user_id != event.owner_user_id
+        ):
+            raise RuntimeError("wecom connection is unavailable")
+        assert event.normalized_payload_encrypted
+        inbound = InboundMessage.model_validate_json(
+            decrypt_secret(event.normalized_payload_encrypted, settings)
+        )
+        if inbound.owner_user_id != connection.owner_user_id or not inbound.sender_external_id:
+            raise RuntimeError("wecom event owner context is invalid")
+        await connection_repo.ensure_private_source(
+            connection=connection,
+            external_conversation_id=inbound.sender_external_id,
+            display_name=inbound.sender_display_name or inbound.sender_external_id,
+        )
+
+        config_repo = ConfigRepository(session)
+        raw_config = await config_repo.get_value("working_hours")
+        work_config = (
+            WorkTimeConfig.model_validate(raw_config)
+            if raw_config
+            else WorkTimeConfig.from_settings(settings)
+        )
+        await IngestMessageUseCase(
+            message_repo=MessageRepository(session),
+            opportunity_repo=OpportunityRepository(session),
+            rule_repo=RuleRepository(session),
+            detector=OpportunityDetector(ai_classifier=LiteLLMOpportunityClassifier(settings)),
+            work_time=WorkTimeService(work_config),
+            task_queue=CeleryTaskQueue(),
+            subscription_repo=SubscriptionRepository(session),
+            user_settings_repo=UserSettingsRepository(session),
+        ).execute(inbound)
+        await event_repo.finish(event.id)
+
+
+async def _fail_wecom_event(event_id: UUID, error: str, *, final: bool) -> None:
+    async with AsyncSessionLocal() as session:
+        await WeComEventRepository(session).fail(
+            event_id,
+            f"WeCom event processing failed: {error}",
+            final=final,
+        )
 
 
 async def _analyze_message(

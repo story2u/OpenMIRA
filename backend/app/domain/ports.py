@@ -26,6 +26,7 @@ class InboundMessage(BaseModel):
     group_name: str | None = None
     raw_message_links: list[str] = Field(default_factory=list)
     raw_payload: dict[str, Any] = Field(default_factory=dict)
+    force_human_review: bool = False
 
 
 class SendReceipt(BaseModel):
@@ -145,42 +146,42 @@ class IMAdapter(Protocol):
         payload: dict[str, Any],
         headers: dict[str, str],
         query: dict[str, str] | None = None,
-    ) -> InboundMessage | None:
-        ...
+    ) -> InboundMessage | None: ...
 
-    async def send_message(self, conversation_id: str, text: str) -> SendReceipt:
-        ...
+    async def send_message(
+        self,
+        conversation_id: str,
+        text: str,
+        *,
+        idempotency_key: str | None = None,
+        opportunity_id: UUID | None = None,
+        owner_user_id: UUID | None = None,
+    ) -> SendReceipt: ...
 
 
 class OpportunityAIClassifier(Protocol):
     async def classify(
         self,
         request: OpportunityClassificationRequest,
-    ) -> DetectionResult | None:
-        ...
+    ) -> DetectionResult | None: ...
 
 
 class ReplyGenerator(Protocol):
-    async def generate_reply(self, opportunity_id: UUID) -> str:
-        ...
+    async def generate_reply(self, opportunity_id: UUID) -> str: ...
 
 
 class MessageAgent(Protocol):
-    async def analyze(self, request: AgentAnalysisRequest) -> AgentAnalysisResult:
-        ...
+    async def analyze(self, request: AgentAnalysisRequest) -> AgentAnalysisResult: ...
 
 
 class LinkInspector(Protocol):
-    async def inspect_many(self, urls: list[str]) -> list[LinkInspection]:
-        ...
+    async def inspect_many(self, urls: list[str]) -> list[LinkInspection]: ...
 
 
 class TaskQueue(Protocol):
-    def enqueue_ai_reply(self, opportunity_id: UUID) -> None:
-        ...
+    def enqueue_ai_reply(self, opportunity_id: UUID) -> None: ...
 
-    def notify_reviewers(self, opportunity_id: UUID) -> None:
-        ...
+    def notify_reviewers(self, opportunity_id: UUID) -> None: ...
 
     def enqueue_agent_analysis(
         self,
@@ -188,5 +189,4 @@ class TaskQueue(Protocol):
         *,
         force: bool = False,
         usage_ledger_id: UUID | None = None,
-    ) -> bool:
-        ...
+    ) -> bool: ...

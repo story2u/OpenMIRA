@@ -1,7 +1,6 @@
-from uuid import UUID
-from uuid import uuid4
+from uuid import UUID, uuid4
 
-from app.domain.enums import MessageSource, OpportunityStatus
+from app.domain.enums import IMChannel, MessageSource, OpportunityStatus
 from app.domain.services.opportunity_state import ensure_transition_allowed
 from app.infrastructure.ai.litellm_client import LiteLLMReplyGenerator
 from app.infrastructure.db.models import Opportunity
@@ -49,9 +48,13 @@ class AIAutoReplyUseCase:
             OpportunityStatus.IGNORED,
         }:
             return opportunity
+        if _requires_manual_wecom_reply(opportunity):
+            return opportunity
 
         ensure_transition_allowed(opportunity.status, OpportunityStatus.REPLIED)
-        draft = opportunity.ai_reply_draft or await self.reply_generator.generate_reply(opportunity.id)
+        draft = opportunity.ai_reply_draft or await self.reply_generator.generate_reply(
+            opportunity.id
+        )
         await self.opportunity_repo.save_ai_draft(opportunity, draft)
 
         adapter = self.adapters.get(opportunity.channel)
@@ -84,7 +87,15 @@ async def transition_pending_to_ai(
         return None
     if opportunity.archived_at is not None:
         return opportunity
+    if _requires_manual_wecom_reply(opportunity):
+        return None
     if opportunity.status == OpportunityStatus.PENDING_HUMAN:
         ensure_transition_allowed(opportunity.status, OpportunityStatus.AI_AUTO_REPLY)
         return await opportunity_repo.update_status(opportunity, OpportunityStatus.AI_AUTO_REPLY)
     return opportunity
+
+
+def _requires_manual_wecom_reply(opportunity: Opportunity) -> bool:
+    return opportunity.channel == IMChannel.WECOM and opportunity.conversation_id.startswith(
+        "wecom:"
+    )

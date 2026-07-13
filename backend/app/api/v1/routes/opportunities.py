@@ -48,6 +48,7 @@ from app.infrastructure.db.repositories import (
     SubscriptionRepository,
 )
 from app.infrastructure.im.base import AdapterRegistry
+from app.infrastructure.im.wecom import WeComProviderError
 from app.worker.queue import CeleryTaskQueue
 
 router = APIRouter()
@@ -228,13 +229,23 @@ def ensure_opportunity_is_active(opportunity: Opportunity) -> None:
 @router.post("/{opportunity_id}/manual-reply", response_model=OpportunityDetailRead)
 async def manual_reply(
     payload: ManualReplyRequest,
-    _: User = Depends(require_user),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    current_user: User = Depends(require_user),
     opportunity: Opportunity = Depends(get_opportunity_or_404),
     opportunity_repo: OpportunityRepository = Depends(get_opportunity_repo),
     message_repo: MessageRepository = Depends(get_message_repo),
     adapters: AdapterRegistry = Depends(get_adapter_registry),
 ) -> OpportunityDetailRead:
     ensure_opportunity_is_active(opportunity)
+    is_dynamic_wecom = (
+        opportunity.channel == IMChannel.WECOM
+        and opportunity.conversation_id.startswith("wecom:")
+    )
+    if is_dynamic_wecom and (not idempotency_key or not 8 <= len(idempotency_key) <= 128):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Idempotency-Key must contain 8 to 128 characters",
+        )
     use_case = ManualReplyUseCase(
         opportunity_repo=opportunity_repo,
         message_repo=message_repo,
@@ -244,10 +255,13 @@ async def manual_reply(
         updated = await use_case.execute(
             opportunity=opportunity,
             text=payload.text,
-            operator_id=payload.operator_id,
+            operator_id=str(current_user.id),
             mark_following=payload.mark_following,
+            idempotency_key=idempotency_key,
         )
     except InvalidOpportunityTransition as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except WeComProviderError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     return to_opportunity_detail(updated)
 

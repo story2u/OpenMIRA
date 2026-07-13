@@ -14,8 +14,8 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from app.domain.enums import (
     AgentAnalysisStatus,
     BillingEventStatus,
-    BillingProvider,
     BillingInterval,
+    BillingProvider,
     BillingStore,
     BillingSubscriptionStatus,
     FrontendOpportunityStatus,
@@ -34,6 +34,12 @@ from app.domain.enums import (
     TelegramSourceType,
     UsageFeature,
     UsageStatus,
+    WeComConnectionStatus,
+    WeComDeliveryStatus,
+    WeComEventStatus,
+    WeComReceiveCapability,
+    WeComSendCapability,
+    WeComSourceType,
 )
 from app.domain.ports import AgentAnalysisProjection, DetectionRule, InboundMessage
 from app.domain.services.subscription_policy import (
@@ -47,8 +53,8 @@ from app.domain.services.subscription_policy import (
 from app.infrastructure.db.models import (
     AppConfig,
     AuthAccount,
-    BillingSubscription,
     BillingEvent,
+    BillingSubscription,
     Message,
     Opportunity,
     OpportunityArchiveEvent,
@@ -66,6 +72,10 @@ from app.infrastructure.db.models import (
     UserDetectionPreference,
     UserNotificationPreference,
     UserWorkSchedule,
+    WeComConnection,
+    WeComOutboundDelivery,
+    WeComSource,
+    WeComWebhookEvent,
     utc_now,
 )
 
@@ -392,14 +402,18 @@ class BillingEventRepository:
         self.session.add(event)
         await self.session.commit()
 
-    async def reconciliation_user_ids(self, *, limit: int, now: datetime | None = None) -> list[UUID]:
+    async def reconciliation_user_ids(
+        self, *, limit: int, now: datetime | None = None
+    ) -> list[UUID]:
         current = now or utc_now()
         statement = (
             select(SubscriptionAccount.user_id)
             .where(
                 SubscriptionAccount.billing_provider == BillingProvider.REVENUECAT.value,
                 (
-                    SubscriptionAccount.status.in_([SubscriptionStatus.ACTIVE, SubscriptionStatus.TRIALING])
+                    SubscriptionAccount.status.in_(
+                        [SubscriptionStatus.ACTIVE, SubscriptionStatus.TRIALING]
+                    )
                     | (SubscriptionAccount.entitlement_expires_at <= current + timedelta(hours=48))
                     | SubscriptionAccount.billing_issue.is_(True)
                 ),
@@ -509,7 +523,11 @@ class SubscriptionRepository:
         if not account:
             account = SubscriptionAccount(user_id=user_id)
         account.plan_code = effective_plan
-        account.status = SubscriptionStatus.ACTIVE if effective_plan != PlanCode.FREE else SubscriptionStatus.INACTIVE
+        account.status = (
+            SubscriptionStatus.ACTIVE
+            if effective_plan != PlanCode.FREE
+            else SubscriptionStatus.INACTIVE
+        )
         account.billing_provider = BillingProvider.REVENUECAT.value
         account.effective_store = effective_store
         account.billing_interval = billing_interval
@@ -692,7 +710,9 @@ class MessageRepository:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
-    async def get_by_external_id(self, channel: IMChannel, external_message_id: str) -> Message | None:
+    async def get_by_external_id(
+        self, channel: IMChannel, external_message_id: str
+    ) -> Message | None:
         statement = select(Message).where(
             Message.channel == channel,
             Message.external_message_id == external_message_id,
@@ -757,7 +777,9 @@ class MessageRepository:
         await self.session.refresh(message)
         return message
 
-    async def claim_agent_analysis(self, message_id: UUID, *, force: bool = False) -> Message | None:
+    async def claim_agent_analysis(
+        self, message_id: UUID, *, force: bool = False
+    ) -> Message | None:
         message = await self.session.get(Message, message_id, with_for_update=True)
         if not message:
             return None
@@ -1014,7 +1036,9 @@ class OpportunityRepository:
     ) -> list[Opportunity]:
         statement = select(Opportunity)
         if frontend_status:
-            statement = statement.where(Opportunity.status.in_(FRONTEND_STATUS_MAP[frontend_status]))
+            statement = statement.where(
+                Opportunity.status.in_(FRONTEND_STATUS_MAP[frontend_status])
+            )
         if channel:
             statement = statement.where(Opportunity.channel == channel)
         if owner_user_id:
@@ -1023,7 +1047,9 @@ class OpportunityRepository:
             statement = statement.where(Opportunity.archived_at.is_(None))
         elif archive_scope == OpportunityArchiveScope.ARCHIVED:
             statement = statement.where(Opportunity.archived_at.is_not(None))
-        statement = statement.order_by(col(Opportunity.last_message_at).desc()).offset(offset).limit(limit)
+        statement = (
+            statement.order_by(col(Opportunity.last_message_at).desc()).offset(offset).limit(limit)
+        )
         result = await self.session.exec(statement)
         return list(result.all())
 
@@ -1070,7 +1096,9 @@ class OpportunityRepository:
             clauses.append(Opportunity.sop_stage.in_(sop_stages))
         if keywords:
             # matched_keywords 是 JSONB 数组，任一关键词命中即保留（?| 存在性运算符）。
-            clauses.append(col(Opportunity.matched_keywords).op("?|")(cast(list(keywords), ARRAY(String))))
+            clauses.append(
+                col(Opportunity.matched_keywords).op("?|")(cast(list(keywords), ARRAY(String)))
+            )
         return clauses
 
     async def dashboard(
@@ -1113,7 +1141,9 @@ class OpportunityRepository:
         }
         order_by = order_map.get(sort, order_map["newest"])
         # 次级排序稳定分页，避免同值行在翻页时错序。
-        page_statement = base.order_by(order_by, col(Opportunity.id).desc()).offset(offset).limit(limit)
+        page_statement = (
+            base.order_by(order_by, col(Opportunity.id).desc()).offset(offset).limit(limit)
+        )
         page_result = await self.session.exec(page_statement)
         items = list(page_result.all())
 
@@ -1123,10 +1153,14 @@ class OpportunityRepository:
 
     async def count_pending(self, owner_user_id: UUID) -> int:
         """该用户所有待处理商机数，不受当前筛选/分页影响。"""
-        statement = select(func.count()).select_from(Opportunity).where(
-            Opportunity.owner_user_id == owner_user_id,
-            Opportunity.archived_at.is_(None),
-            Opportunity.status.in_(FRONTEND_STATUS_MAP[FrontendOpportunityStatus.PENDING]),
+        statement = (
+            select(func.count())
+            .select_from(Opportunity)
+            .where(
+                Opportunity.owner_user_id == owner_user_id,
+                Opportunity.archived_at.is_(None),
+                Opportunity.status.in_(FRONTEND_STATUS_MAP[FrontendOpportunityStatus.PENDING]),
+            )
         )
         return int((await self.session.exec(statement)).one())
 
@@ -1162,6 +1196,7 @@ class OpportunityRepository:
                     if len(seen) >= limit:
                         return list(seen.keys())
         return list(seen.keys())
+
     async def archive(
         self,
         opportunity: Opportunity,
@@ -1621,7 +1656,9 @@ class TelegramUserConfigRepository:
         user = await self.session.get(User, user_id, with_for_update=True)
         if not user or not user.is_active:
             raise ValueError("active user is required")
-        existing = {monitor.chat_id: monitor for monitor in await self.list_monitors_by_user(user_id)}
+        existing = {
+            monitor.chat_id: monitor for monitor in await self.list_monitors_by_user(user_id)
+        }
         desired_chat_ids = list(dict.fromkeys(str(chat) for chat in chats))
         current_active_chat_ids = {
             monitor.chat_id
@@ -1844,7 +1881,9 @@ class TelegramConnectionRepository:
         label: str,
         credential_encrypted: str,
     ) -> TelegramConnection | None:
-        attempt = await self.session.get(TelegramConnectionAttempt, attempt_id, with_for_update=True)
+        attempt = await self.session.get(
+            TelegramConnectionAttempt, attempt_id, with_for_update=True
+        )
         if not attempt or attempt.status != TelegramConnectionAttemptStatus.PENDING:
             return None
         existing_result = await self.session.exec(
@@ -1908,7 +1947,9 @@ class TelegramConnectionRepository:
         if not source:
             ensure_group_quota(
                 entitlements=entitlements,
-                telegram_groups=legacy_active_count + await self.count_active_sources_by_user(owner_user_id) + 1,
+                telegram_groups=legacy_active_count
+                + await self.count_active_sources_by_user(owner_user_id)
+                + 1,
                 wecom_groups=0,
             )
             source = TelegramSource(
@@ -2374,7 +2415,9 @@ class TelegramConnectionRepository:
             await self.session.commit()
         except IntegrityError:
             await self.session.rollback()
-            statement = select(TelegramWebhookEvent).where(TelegramWebhookEvent.update_id == update_id)
+            statement = select(TelegramWebhookEvent).where(
+                TelegramWebhookEvent.update_id == update_id
+            )
             result = await self.session.exec(statement)
             existing = result.first()
             if not existing:
@@ -2408,6 +2451,359 @@ class TelegramConnectionRepository:
             self.session.add(attempt)
             await self.session.commit()
             await self.session.refresh(attempt)
+
+
+class WeComConnectionRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self.session = session
+
+    async def list_for_owner(self, owner_user_id: UUID) -> list[WeComConnection]:
+        result = await self.session.exec(
+            select(WeComConnection)
+            .where(WeComConnection.owner_user_id == owner_user_id)
+            .order_by(col(WeComConnection.created_at).desc())
+        )
+        return list(result.all())
+
+    async def count_enabled_for_owner(self, owner_user_id: UUID) -> int:
+        result = await self.session.exec(
+            select(func.count())
+            .select_from(WeComConnection)
+            .where(
+                WeComConnection.owner_user_id == owner_user_id,
+                WeComConnection.enabled.is_(True),
+            )
+        )
+        return int(result.one())
+
+    async def get(self, connection_id: UUID) -> WeComConnection | None:
+        return await self.session.get(WeComConnection, connection_id)
+
+    async def get_for_owner(
+        self,
+        connection_id: UUID,
+        owner_user_id: UUID,
+    ) -> WeComConnection | None:
+        result = await self.session.exec(
+            select(WeComConnection).where(
+                WeComConnection.id == connection_id,
+                WeComConnection.owner_user_id == owner_user_id,
+            )
+        )
+        return result.first()
+
+    async def create(self, connection: WeComConnection) -> WeComConnection:
+        self.session.add(connection)
+        try:
+            await self.session.commit()
+        except IntegrityError as exc:
+            await self.session.rollback()
+            raise ValueError("wecom connection already exists") from exc
+        await self.session.refresh(connection)
+        return connection
+
+    async def mark_verified(self, connection: WeComConnection) -> WeComConnection:
+        connection.status = WeComConnectionStatus.ACTIVE
+        connection.enabled = True
+        connection.last_verified_at = utc_now()
+        connection.last_error = None
+        connection.updated_at = utc_now()
+        self.session.add(connection)
+        await self.session.commit()
+        await self.session.refresh(connection)
+        return connection
+
+    async def mark_error(self, connection: WeComConnection, error: str) -> WeComConnection:
+        connection.status = WeComConnectionStatus.ERROR
+        connection.last_error = error[:1000]
+        connection.updated_at = utc_now()
+        self.session.add(connection)
+        await self.session.commit()
+        await self.session.refresh(connection)
+        return connection
+
+    async def disable_and_clear_secrets(
+        self,
+        connection: WeComConnection,
+        *,
+        cleared_secret: str,
+    ) -> WeComConnection:
+        connection.status = WeComConnectionStatus.DISABLED
+        connection.enabled = False
+        connection.secret_encrypted = cleared_secret
+        connection.token_encrypted = cleared_secret
+        connection.aes_key_encrypted = cleared_secret
+        connection.last_error = None
+        connection.updated_at = utc_now()
+        self.session.add(connection)
+
+        sources = await self.session.exec(
+            select(WeComSource).where(WeComSource.connection_id == connection.id)
+        )
+        for source in sources.all():
+            source.enabled = False
+            source.updated_at = utc_now()
+            self.session.add(source)
+
+        events = await self.session.exec(
+            select(WeComWebhookEvent).where(
+                WeComWebhookEvent.connection_id == connection.id,
+                WeComWebhookEvent.status.in_(
+                    [WeComEventStatus.RECEIVED, WeComEventStatus.QUEUED, WeComEventStatus.FAILED]
+                ),
+            )
+        )
+        for event in events.all():
+            event.normalized_payload_encrypted = None
+            event.status = WeComEventStatus.FAILED
+            event.processing_error = "connection disabled"
+            event.updated_at = utc_now()
+            self.session.add(event)
+
+        await self.session.commit()
+        await self.session.refresh(connection)
+        return connection
+
+    async def list_sources_for_owner(self, owner_user_id: UUID) -> list[WeComSource]:
+        result = await self.session.exec(
+            select(WeComSource)
+            .where(WeComSource.owner_user_id == owner_user_id)
+            .order_by(col(WeComSource.last_message_at).desc().nullslast())
+        )
+        return list(result.all())
+
+    async def ensure_private_source(
+        self,
+        *,
+        connection: WeComConnection,
+        external_conversation_id: str,
+        display_name: str,
+    ) -> WeComSource:
+        result = await self.session.exec(
+            select(WeComSource).where(
+                WeComSource.connection_id == connection.id,
+                WeComSource.external_conversation_id == external_conversation_id,
+            )
+        )
+        source = result.first()
+        now = utc_now()
+        if source:
+            source.display_name = display_name[:255]
+            source.last_message_at = now
+            source.updated_at = now
+        else:
+            source = WeComSource(
+                owner_user_id=connection.owner_user_id,
+                connection_id=connection.id,
+                external_conversation_id=external_conversation_id,
+                display_name=display_name[:255],
+                source_type=WeComSourceType.PRIVATE,
+                receive_capability=WeComReceiveCapability.APP_CALLBACK,
+                send_capability=WeComSendCapability.APP_MESSAGE,
+                last_message_at=now,
+            )
+        self.session.add(source)
+        try:
+            await self.session.commit()
+        except IntegrityError:
+            await self.session.rollback()
+            result = await self.session.exec(
+                select(WeComSource).where(
+                    WeComSource.connection_id == connection.id,
+                    WeComSource.external_conversation_id == external_conversation_id,
+                )
+            )
+            source = result.one()
+        await self.session.refresh(source)
+        return source
+
+    async def get_source_for_conversation(
+        self,
+        connection_id: UUID,
+        external_conversation_id: str,
+    ) -> WeComSource | None:
+        result = await self.session.exec(
+            select(WeComSource).where(
+                WeComSource.connection_id == connection_id,
+                WeComSource.external_conversation_id == external_conversation_id,
+            )
+        )
+        return result.first()
+
+
+class WeComEventRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self.session = session
+
+    async def reserve(
+        self,
+        *,
+        connection: WeComConnection,
+        provider_event_id: str,
+        event_type: str,
+        payload_hash: str,
+        normalized_payload_encrypted: str | None,
+        ignored: bool = False,
+    ) -> tuple[WeComWebhookEvent, bool]:
+        event = WeComWebhookEvent(
+            connection_id=connection.id,
+            owner_user_id=connection.owner_user_id,
+            provider_event_id=provider_event_id,
+            event_type=event_type,
+            payload_hash=payload_hash,
+            normalized_payload_encrypted=normalized_payload_encrypted,
+            status=WeComEventStatus.IGNORED if ignored else WeComEventStatus.RECEIVED,
+            processed_at=utc_now() if ignored else None,
+        )
+        self.session.add(event)
+        try:
+            await self.session.commit()
+        except IntegrityError:
+            await self.session.rollback()
+            result = await self.session.exec(
+                select(WeComWebhookEvent).where(
+                    WeComWebhookEvent.connection_id == connection.id,
+                    WeComWebhookEvent.provider_event_id == provider_event_id,
+                )
+            )
+            existing = result.one()
+            retryable = existing.status == WeComEventStatus.FAILED
+            if retryable and normalized_payload_encrypted:
+                existing.normalized_payload_encrypted = normalized_payload_encrypted
+                existing.status = WeComEventStatus.RECEIVED
+                existing.processing_error = None
+                existing.updated_at = utc_now()
+                self.session.add(existing)
+                await self.session.commit()
+                await self.session.refresh(existing)
+            return existing, retryable
+        await self.session.refresh(event)
+        return event, not ignored
+
+    async def mark_queued(self, event: WeComWebhookEvent) -> None:
+        event.status = WeComEventStatus.QUEUED
+        event.queued_at = utc_now()
+        event.updated_at = utc_now()
+        self.session.add(event)
+        await self.session.commit()
+
+    async def begin_processing(self, event_id: UUID) -> WeComWebhookEvent | None:
+        event = await self.session.get(WeComWebhookEvent, event_id, with_for_update=True)
+        if not event or event.status in {WeComEventStatus.COMPLETED, WeComEventStatus.IGNORED}:
+            await self.session.rollback()
+            return None
+        if event.status == WeComEventStatus.PROCESSING and event.updated_at > utc_now() - timedelta(
+            minutes=10
+        ):
+            await self.session.rollback()
+            return None
+        if not event.normalized_payload_encrypted:
+            event.status = WeComEventStatus.FAILED
+            event.processing_error = "normalized payload is unavailable"
+            event.updated_at = utc_now()
+            self.session.add(event)
+            await self.session.commit()
+            return None
+        event.status = WeComEventStatus.PROCESSING
+        event.attempt_count += 1
+        event.processing_error = None
+        event.updated_at = utc_now()
+        self.session.add(event)
+        await self.session.commit()
+        await self.session.refresh(event)
+        return event
+
+    async def finish(self, event_id: UUID) -> None:
+        event = await self.session.get(WeComWebhookEvent, event_id)
+        if not event:
+            return
+        event.status = WeComEventStatus.COMPLETED
+        event.normalized_payload_encrypted = None
+        event.processing_error = None
+        event.processed_at = utc_now()
+        event.updated_at = utc_now()
+        self.session.add(event)
+        await self.session.commit()
+
+    async def fail(self, event_id: UUID, error: str, *, final: bool) -> None:
+        event = await self.session.get(WeComWebhookEvent, event_id)
+        if not event:
+            return
+        event.status = WeComEventStatus.FAILED
+        event.processing_error = error[:1000]
+        if final:
+            event.normalized_payload_encrypted = None
+            event.processed_at = utc_now()
+        event.updated_at = utc_now()
+        self.session.add(event)
+        await self.session.commit()
+
+
+class WeComDeliveryRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self.session = session
+
+    async def reserve(
+        self,
+        *,
+        owner_user_id: UUID,
+        connection_id: UUID,
+        source_id: UUID,
+        opportunity_id: UUID,
+        idempotency_key: str,
+        content_hash: str,
+    ) -> tuple[WeComOutboundDelivery, bool]:
+        delivery = WeComOutboundDelivery(
+            owner_user_id=owner_user_id,
+            connection_id=connection_id,
+            source_id=source_id,
+            opportunity_id=opportunity_id,
+            idempotency_key=idempotency_key,
+            content_hash=content_hash,
+        )
+        self.session.add(delivery)
+        try:
+            await self.session.commit()
+        except IntegrityError:
+            await self.session.rollback()
+            result = await self.session.exec(
+                select(WeComOutboundDelivery).where(
+                    WeComOutboundDelivery.owner_user_id == owner_user_id,
+                    WeComOutboundDelivery.idempotency_key == idempotency_key,
+                )
+            )
+            existing = result.one()
+            return existing, existing.status == WeComDeliveryStatus.FAILED
+        await self.session.refresh(delivery)
+        return delivery, True
+
+    async def mark_sending(self, delivery: WeComOutboundDelivery) -> None:
+        delivery.status = WeComDeliveryStatus.SENDING
+        delivery.attempt_count += 1
+        delivery.error = None
+        delivery.updated_at = utc_now()
+        self.session.add(delivery)
+        await self.session.commit()
+
+    async def mark_sent(
+        self,
+        delivery: WeComOutboundDelivery,
+        provider_message_id: str | None,
+    ) -> None:
+        delivery.status = WeComDeliveryStatus.SENT
+        delivery.provider_message_id = provider_message_id
+        delivery.sent_at = utc_now()
+        delivery.error = None
+        delivery.updated_at = utc_now()
+        self.session.add(delivery)
+        await self.session.commit()
+
+    async def mark_failed(self, delivery: WeComOutboundDelivery, error: str) -> None:
+        delivery.status = WeComDeliveryStatus.FAILED
+        delivery.error = error[:1000]
+        delivery.updated_at = utc_now()
+        self.session.add(delivery)
+        await self.session.commit()
 
 
 class ReplyTemplateRepository:

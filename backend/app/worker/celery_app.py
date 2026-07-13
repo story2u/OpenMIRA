@@ -26,6 +26,7 @@ celery_app.conf.update(
         "billing.process_revenuecat_event": {"queue": "default"},
         "billing.sync_revenuecat_customer": {"queue": "default"},
         "billing.reconcile_revenuecat_subscriptions": {"queue": "default"},
+        "wecom.process_webhook_event": {"queue": "im"},
     },
     beat_schedule={
         "sweep-pending-human-every-5-minutes": {

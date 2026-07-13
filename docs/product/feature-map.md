@@ -1,6 +1,6 @@
 # 功能地图
 
-> 状态：当前事实 · 最后核验：2026-07-13
+> 状态：当前事实 · 最后核验：2026-07-14
 
 本地图用成熟度区分“仓库里有 UI/数据结构”和“用户端到端可用”。AI 开发前必须先确认目标
 能力所在行，避免沿着 mock 或占位 DTO 继续实现。
@@ -23,7 +23,7 @@
 | 商机语义识别 | 无独立页 | 摄取用例 + `OpportunityDetector` + LiteLLM | 已实现 | 高置信规则直通；启用 AI 后对其余非空消息结合 owner 隔离的有限会话历史、来源和 AI hint 复核；模型新发现只进人工审核，provider 失败回退规则 |
 | 商机详情 | `/opportunity/[id]` | `GET /opportunities/{id}` | 部分实现 | 页面从列表 store 查找，未独立请求详情，刷新/深链能力有限 |
 | 消息历史 | 详情页 SOP | `GET /messages` | 部分实现 | API 已有；前端未调用，后端数据加载后消息 store 为空 |
-| 人工回复 | 详情页回复框 | `POST /opportunities/{id}/manual-reply` | 部分实现 | 后端真实发送/落库；前端当前只写本地 store |
+| 人工回复 | 详情页回复框 | `POST /opportunities/{id}/manual-reply` | 已实现 | Web 已调用真实 API；Telegram/企微按适配器发送，企微用户连接强制幂等键和人工审批，provider 成功后才落库并更新状态 |
 | AI 回复草稿 | 详情页回复框 | `POST /opportunities/{id}/ai-draft` | 部分实现 | 后端可生成并保存；前端以 timer 模拟生成 |
 | 非工作时间 AI 自动回复 | 无独立页 | Celery `ai.reply` | 已实现 | 受 `AI_ENABLED`、`IM_SEND_ENABLED` 与 provider 配置控制 |
 | 商机状态更新/认领 | 看板/详情部分交互 | `PATCH .../status`、`POST .../claim` | 部分实现 | 后端已实现；前端状态动作多为本地更新 |
@@ -34,7 +34,8 @@
 | Telegram Business 私聊 | `/settings/telegram` | `POST /integrations/telegram/connect/business`、`POST /webhooks/telegram` | 部分实现 | 私聊确认后按 Business connection owner 路由；需可用的平台 Bot 和 Telegram Business 权限 |
 | Telegram 普通账号 QR | `/settings/telegram` | `POST /integrations/telegram/connect/mtproto-qr`、dialogs/sources API | 部分实现 | 平台统一凭据、二维码、加密 session、独立 QR worker 和只读 listener；需生产 Telegram 隔离冒烟 |
 | Telegram 旧 MTProto 监听 | 无默认表单入口 | 独立 legacy listener | 已实现（兼容） | 已授权 session 继续监听；旧用户凭据采集 API 已删除，新页面不展示或迁移秘密 |
-| 企业微信 webhook | 设置页显示绑定卡 | `GET/POST /webhooks/wecom` | 已实现 | 后端验签/解密/摄取；无用户级绑定，前端/移动端诚实标注"由管理员统一配置"（不再硬编码"已连接"） |
+| 企业微信自建应用 | `/settings/wecom` | `/integrations/wecom/*`、`GET/POST /webhooks/wecom/{connection_id}` | 部分实现 | 用户级加密凭据、专属回调、验签/解密、幂等 Celery 摄取和成员私聊人工回复已实现；待真实企业联调，不支持普通群聊监听 |
+| 企微会话内容存档 | 无 | 仅数据模型预留 | 未实现 | 内部/外部群聊读取需企业购买会话存档、合规授权和 Finance SDK；当前不用自建应用回调冒充 |
 | 规则管理（全局） | `/settings` | CRUD `/rules` | 部分实现 | 后端 admin API 已有；面向普通用户的识别偏好改走用户级 `/settings/detection` |
 | 用户级识别规则（关键词 + AI 语义） | Web/iOS/Android 设置 | `GET /settings/me`、`PATCH /settings/detection` | 已实现 | `user_detection_preferences` 表按 owner 隔离；关键词去空格/去重/限长限量；已接入 `ingest_message` 摄取（用户关键词叠加全局规则、AI 语义开关生效），三端共享同一数据源，有 owner 隔离与规范化测试 |
 | 用户级工作时间 | `/settings/working-hours`、iOS/Android | `GET /settings/me`、`PATCH /settings/work-schedule` | 已实现 | `user_work_schedules` 表按 owner；IANA 时区 + 任意人工审核时段；`WorkScheduleService` 接入摄取决定人工/AI，无用户设置回退全局默认；三端共享，有时区/时段判定测试。旧全局 `/configs/work-mode` 保留但普通用户不再改全局 |

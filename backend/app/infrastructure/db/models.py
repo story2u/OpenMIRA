@@ -2,7 +2,16 @@ from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import BigInteger, CheckConstraint, Column, DateTime, Index, Text, UniqueConstraint, text
+from sqlalchemy import (
+    BigInteger,
+    CheckConstraint,
+    Column,
+    DateTime,
+    Index,
+    Text,
+    UniqueConstraint,
+    text,
+)
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlmodel import Field, SQLModel
@@ -29,6 +38,13 @@ from app.domain.enums import (
     TelegramSourceType,
     UsageFeature,
     UsageStatus,
+    WeComConnectionStatus,
+    WeComConnectionType,
+    WeComDeliveryStatus,
+    WeComEventStatus,
+    WeComReceiveCapability,
+    WeComSendCapability,
+    WeComSourceType,
 )
 
 
@@ -145,11 +161,15 @@ class BillingProduct(TimestampMixin, table=True):
     )
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
-    plan_code: PlanCode = Field(sa_column=Column(SAEnum(PlanCode, native_enum=False), nullable=False, index=True))
+    plan_code: PlanCode = Field(
+        sa_column=Column(SAEnum(PlanCode, native_enum=False), nullable=False, index=True)
+    )
     billing_interval: BillingInterval = Field(
         sa_column=Column(SAEnum(BillingInterval, native_enum=False), nullable=False, index=True)
     )
-    store: BillingStore = Field(sa_column=Column(SAEnum(BillingStore, native_enum=False), nullable=False, index=True))
+    store: BillingStore = Field(
+        sa_column=Column(SAEnum(BillingStore, native_enum=False), nullable=False, index=True)
+    )
     external_product_id: str = Field(max_length=255, index=True)
     external_base_plan_id: str | None = Field(default=None, max_length=255)
     revenuecat_entitlement_id: str = Field(max_length=64, index=True)
@@ -164,8 +184,12 @@ class BillingProduct(TimestampMixin, table=True):
 class BillingSubscription(TimestampMixin, table=True):
     __tablename__ = "billing_subscriptions"
     __table_args__ = (
-        UniqueConstraint("provider", "external_key", name="uq_billing_subscriptions_provider_external_key"),
-        Index("ix_billing_subscriptions_user_status_end", "user_id", "status", "current_period_end"),
+        UniqueConstraint(
+            "provider", "external_key", name="uq_billing_subscriptions_provider_external_key"
+        ),
+        Index(
+            "ix_billing_subscriptions_user_status_end", "user_id", "status", "current_period_end"
+        ),
     )
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
@@ -174,7 +198,9 @@ class BillingSubscription(TimestampMixin, table=True):
         default=BillingProvider.REVENUECAT,
         sa_column=Column(SAEnum(BillingProvider, native_enum=False), nullable=False, index=True),
     )
-    store: BillingStore = Field(sa_column=Column(SAEnum(BillingStore, native_enum=False), nullable=False, index=True))
+    store: BillingStore = Field(
+        sa_column=Column(SAEnum(BillingStore, native_enum=False), nullable=False, index=True)
+    )
     environment: str = Field(default="production", max_length=32, index=True)
     external_key: str = Field(min_length=1, max_length=512)
     external_product_id: str = Field(max_length=255, index=True)
@@ -182,30 +208,51 @@ class BillingSubscription(TimestampMixin, table=True):
     external_original_transaction_id: str | None = Field(default=None, max_length=255)
     external_subscription_id: str | None = Field(default=None, max_length=255)
     revenuecat_entitlement_id: str | None = Field(default=None, max_length=64, index=True)
-    plan_code: PlanCode = Field(sa_column=Column(SAEnum(PlanCode, native_enum=False), nullable=False, index=True))
+    plan_code: PlanCode = Field(
+        sa_column=Column(SAEnum(PlanCode, native_enum=False), nullable=False, index=True)
+    )
     billing_interval: BillingInterval = Field(
         default=BillingInterval.UNKNOWN,
         sa_column=Column(SAEnum(BillingInterval, native_enum=False), nullable=False),
     )
     status: BillingSubscriptionStatus = Field(
         default=BillingSubscriptionStatus.UNKNOWN,
-        sa_column=Column(SAEnum(BillingSubscriptionStatus, native_enum=False), nullable=False, index=True),
+        sa_column=Column(
+            SAEnum(BillingSubscriptionStatus, native_enum=False), nullable=False, index=True
+        ),
     )
-    current_period_start: datetime | None = Field(default=None, sa_column=Column(DateTime(timezone=True), nullable=True))
-    current_period_end: datetime | None = Field(default=None, sa_column=Column(DateTime(timezone=True), nullable=True))
-    grace_period_end: datetime | None = Field(default=None, sa_column=Column(DateTime(timezone=True), nullable=True))
+    current_period_start: datetime | None = Field(
+        default=None, sa_column=Column(DateTime(timezone=True), nullable=True)
+    )
+    current_period_end: datetime | None = Field(
+        default=None, sa_column=Column(DateTime(timezone=True), nullable=True)
+    )
+    grace_period_end: datetime | None = Field(
+        default=None, sa_column=Column(DateTime(timezone=True), nullable=True)
+    )
     will_renew: bool = Field(default=False)
     cancel_at_period_end: bool = Field(default=False)
-    billing_issue_detected_at: datetime | None = Field(default=None, sa_column=Column(DateTime(timezone=True), nullable=True))
-    last_provider_event_at: datetime | None = Field(default=None, sa_column=Column(DateTime(timezone=True), nullable=True))
-    last_synced_at: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True), nullable=False, index=True))
-    metadata_json: dict[str, Any] = Field(default_factory=dict, sa_column=Column("metadata", JSONB, nullable=False))
+    billing_issue_detected_at: datetime | None = Field(
+        default=None, sa_column=Column(DateTime(timezone=True), nullable=True)
+    )
+    last_provider_event_at: datetime | None = Field(
+        default=None, sa_column=Column(DateTime(timezone=True), nullable=True)
+    )
+    last_synced_at: datetime = Field(
+        default_factory=utc_now,
+        sa_column=Column(DateTime(timezone=True), nullable=False, index=True),
+    )
+    metadata_json: dict[str, Any] = Field(
+        default_factory=dict, sa_column=Column("metadata", JSONB, nullable=False)
+    )
 
 
 class BillingEvent(TimestampMixin, table=True):
     __tablename__ = "billing_events"
     __table_args__ = (
-        UniqueConstraint("provider", "provider_event_id", name="uq_billing_events_provider_event_id"),
+        UniqueConstraint(
+            "provider", "provider_event_id", name="uq_billing_events_provider_event_id"
+        ),
         Index("ix_billing_events_status_received", "status", "received_at"),
     )
 
@@ -216,7 +263,9 @@ class BillingEvent(TimestampMixin, table=True):
     )
     provider_event_id: str = Field(max_length=255)
     event_type: str = Field(max_length=128, index=True)
-    app_user_id: str | None = Field(default=None, sa_column=Column(Text(), nullable=True, index=True))
+    app_user_id: str | None = Field(
+        default=None, sa_column=Column(Text(), nullable=True, index=True)
+    )
     environment: str | None = Field(default=None, max_length=32)
     payload_hash: str = Field(min_length=64, max_length=64)
     status: BillingEventStatus = Field(
@@ -224,9 +273,15 @@ class BillingEvent(TimestampMixin, table=True):
         sa_column=Column(SAEnum(BillingEventStatus, native_enum=False), nullable=False, index=True),
     )
     attempt_count: int = Field(default=0, ge=0)
-    received_at: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True), nullable=False))
-    queued_at: datetime | None = Field(default=None, sa_column=Column(DateTime(timezone=True), nullable=True))
-    processed_at: datetime | None = Field(default=None, sa_column=Column(DateTime(timezone=True), nullable=True))
+    received_at: datetime = Field(
+        default_factory=utc_now, sa_column=Column(DateTime(timezone=True), nullable=False)
+    )
+    queued_at: datetime | None = Field(
+        default=None, sa_column=Column(DateTime(timezone=True), nullable=True)
+    )
+    processed_at: datetime | None = Field(
+        default=None, sa_column=Column(DateTime(timezone=True), nullable=True)
+    )
     processing_error: str | None = Field(default=None, max_length=1000)
 
 
@@ -258,8 +313,12 @@ class Opportunity(TimestampMixin, table=True):
     source_message_id: UUID | None = Field(default=None, index=True, unique=True)
     title: str
     summary: str | None = None
-    matched_keywords: list[str] = Field(default_factory=list, sa_column=Column(JSONB, nullable=False))
-    raw_message_links: list[str] = Field(default_factory=list, sa_column=Column(JSONB, nullable=False))
+    matched_keywords: list[str] = Field(
+        default_factory=list, sa_column=Column(JSONB, nullable=False)
+    )
+    raw_message_links: list[str] = Field(
+        default_factory=list, sa_column=Column(JSONB, nullable=False)
+    )
     trust_score: int = Field(default=70, ge=0, le=100)
     confidence: float = Field(default=0.0, ge=0.0, le=1.0)
     priority: Priority = Field(
@@ -299,7 +358,9 @@ class Opportunity(TimestampMixin, table=True):
     )
     agent_analysis_status: AgentAnalysisStatus = Field(
         default=AgentAnalysisStatus.NOT_REQUESTED,
-        sa_column=Column(SAEnum(AgentAnalysisStatus, native_enum=False), nullable=False, index=True),
+        sa_column=Column(
+            SAEnum(AgentAnalysisStatus, native_enum=False), nullable=False, index=True
+        ),
     )
     agent_analysis_error: str | None = None
     agent_analyzed_at: datetime | None = Field(
@@ -338,7 +399,9 @@ class OpportunityArchiveEvent(TimestampMixin, table=True):
     opportunity_id: UUID = Field(foreign_key="opportunities.id", index=True)
     owner_user_id: UUID = Field(foreign_key="users.id", index=True)
     action: OpportunityArchiveAction = Field(
-        sa_column=Column(SAEnum(OpportunityArchiveAction, native_enum=False), nullable=False, index=True)
+        sa_column=Column(
+            SAEnum(OpportunityArchiveAction, native_enum=False), nullable=False, index=True
+        )
     )
     reason: str | None = Field(default=None, max_length=500)
 
@@ -369,14 +432,22 @@ class Message(TimestampMixin, table=True):
     text: str | None = None
     source_type: str = Field(default="private", index=True)
     group_name: str | None = None
-    raw_message_links: list[str] = Field(default_factory=list, sa_column=Column(JSONB, nullable=False))
-    raw_payload: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSONB, nullable=False))
+    raw_message_links: list[str] = Field(
+        default_factory=list, sa_column=Column(JSONB, nullable=False)
+    )
+    raw_payload: dict[str, Any] = Field(
+        default_factory=dict, sa_column=Column(JSONB, nullable=False)
+    )
     opportunity_id: UUID | None = Field(default=None, foreign_key="opportunities.id", index=True)
     agent_analysis_status: AgentAnalysisStatus = Field(
         default=AgentAnalysisStatus.NOT_REQUESTED,
-        sa_column=Column(SAEnum(AgentAnalysisStatus, native_enum=False), nullable=False, index=True),
+        sa_column=Column(
+            SAEnum(AgentAnalysisStatus, native_enum=False), nullable=False, index=True
+        ),
     )
-    agent_result: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSONB, nullable=False))
+    agent_result: dict[str, Any] = Field(
+        default_factory=dict, sa_column=Column(JSONB, nullable=False)
+    )
     agent_error: str | None = None
     agent_started_at: datetime | None = Field(
         default=None,
@@ -453,7 +524,9 @@ class Rule(TimestampMixin, table=True):
     )
     pattern: str
     score: float = Field(default=0.5, ge=0.0, le=1.0)
-    extra_data: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSONB, nullable=False))
+    extra_data: dict[str, Any] = Field(
+        default_factory=dict, sa_column=Column(JSONB, nullable=False)
+    )
 
 
 class AppConfig(SQLModel, table=True):
@@ -472,9 +545,7 @@ class UserDetectionPreference(TimestampMixin, table=True):
     """用户级商机识别偏好：自定义关键词 + AI 语义识别开关（叠加在全局规则之上）。"""
 
     __tablename__ = "user_detection_preferences"
-    __table_args__ = (
-        UniqueConstraint("user_id", name="uq_user_detection_preferences_user_id"),
-    )
+    __table_args__ = (UniqueConstraint("user_id", name="uq_user_detection_preferences_user_id"),)
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     user_id: UUID = Field(foreign_key="users.id", index=True)
@@ -486,15 +557,15 @@ class UserWorkSchedule(TimestampMixin, table=True):
     """用户级工作时间：选中时段为人工审核，其余时段可 AI 自动回复；时区为 IANA 标识。"""
 
     __tablename__ = "user_work_schedules"
-    __table_args__ = (
-        UniqueConstraint("user_id", name="uq_user_work_schedules_user_id"),
-    )
+    __table_args__ = (UniqueConstraint("user_id", name="uq_user_work_schedules_user_id"),)
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     user_id: UUID = Field(foreign_key="users.id", index=True)
     timezone: str = Field(default="Asia/Shanghai", max_length=64)
     # 每个元素 {"weekday": 1-7, "start": "HH:MM", "end": "HH:MM"}
-    slots: list[dict[str, Any]] = Field(default_factory=list, sa_column=Column(JSONB, nullable=False))
+    slots: list[dict[str, Any]] = Field(
+        default_factory=list, sa_column=Column(JSONB, nullable=False)
+    )
     auto_reply_outside_hours: bool = Field(default=True)
 
 
@@ -502,9 +573,7 @@ class UserNotificationPreference(TimestampMixin, table=True):
     """用户级通知偏好；推送通道落地前仅持久化，不代表已生效。"""
 
     __tablename__ = "user_notification_preferences"
-    __table_args__ = (
-        UniqueConstraint("user_id", name="uq_user_notification_preferences_user_id"),
-    )
+    __table_args__ = (UniqueConstraint("user_id", name="uq_user_notification_preferences_user_id"),)
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     user_id: UUID = Field(foreign_key="users.id", index=True)
@@ -516,9 +585,7 @@ class UserNotificationPreference(TimestampMixin, table=True):
 
 class TelegramUserConfig(TimestampMixin, table=True):
     __tablename__ = "telegram_user_configs"
-    __table_args__ = (
-        UniqueConstraint("user_id", name="uq_telegram_user_configs_user_id"),
-    )
+    __table_args__ = (UniqueConstraint("user_id", name="uq_telegram_user_configs_user_id"),)
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     user_id: UUID = Field(foreign_key="users.id", index=True)
@@ -719,9 +786,7 @@ class TelegramWebhookEvent(TimestampMixin, table=True):
     """Minimal webhook audit and idempotency record; raw payload stays out of persistence."""
 
     __tablename__ = "telegram_webhook_events"
-    __table_args__ = (
-        UniqueConstraint("update_id", name="uq_telegram_webhook_events_update_id"),
-    )
+    __table_args__ = (UniqueConstraint("update_id", name="uq_telegram_webhook_events_update_id"),)
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     update_id: int = Field(sa_column=Column(BigInteger, nullable=False, index=True))
@@ -735,6 +800,149 @@ class TelegramWebhookEvent(TimestampMixin, table=True):
     processed_at: datetime | None = Field(
         default=None,
         sa_column=Column(DateTime(timezone=True), nullable=True),
+    )
+    error: str | None = Field(default=None, max_length=1000)
+
+
+class WeComConnection(TimestampMixin, table=True):
+    __tablename__ = "wecom_connections"
+    __table_args__ = (
+        UniqueConstraint(
+            "owner_user_id",
+            "corp_id",
+            "agent_id",
+            name="uq_wecom_connections_owner_corp_agent",
+        ),
+        Index("ix_wecom_connections_owner_status", "owner_user_id", "status"),
+    )
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    owner_user_id: UUID = Field(foreign_key="users.id", index=True)
+    connection_type: WeComConnectionType = Field(
+        default=WeComConnectionType.INTERNAL_APP,
+        sa_column=Column(
+            SAEnum(WeComConnectionType, native_enum=False), nullable=False, index=True
+        ),
+    )
+    status: WeComConnectionStatus = Field(
+        default=WeComConnectionStatus.PENDING,
+        sa_column=Column(
+            SAEnum(WeComConnectionStatus, native_enum=False), nullable=False, index=True
+        ),
+    )
+    enabled: bool = Field(default=True, index=True)
+    display_name: str = Field(default="企业微信自建应用", max_length=255)
+    corp_id: str = Field(max_length=128, index=True)
+    agent_id: str = Field(max_length=64)
+    secret_encrypted: str
+    token_encrypted: str
+    aes_key_encrypted: str
+    last_verified_at: datetime | None = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+    )
+    last_error: str | None = Field(default=None, max_length=1000)
+
+
+class WeComSource(TimestampMixin, table=True):
+    __tablename__ = "wecom_sources"
+    __table_args__ = (
+        UniqueConstraint(
+            "connection_id",
+            "external_conversation_id",
+            name="uq_wecom_sources_connection_conversation",
+        ),
+        Index("ix_wecom_sources_owner_enabled", "owner_user_id", "enabled", "quota_paused"),
+    )
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    owner_user_id: UUID = Field(foreign_key="users.id", index=True)
+    connection_id: UUID = Field(foreign_key="wecom_connections.id", index=True)
+    external_conversation_id: str = Field(max_length=255, index=True)
+    display_name: str = Field(default="企业微信成员", max_length=255)
+    source_type: WeComSourceType = Field(
+        default=WeComSourceType.PRIVATE,
+        sa_column=Column(SAEnum(WeComSourceType, native_enum=False), nullable=False, index=True),
+    )
+    receive_capability: WeComReceiveCapability = Field(
+        default=WeComReceiveCapability.APP_CALLBACK,
+        sa_column=Column(SAEnum(WeComReceiveCapability, native_enum=False), nullable=False),
+    )
+    send_capability: WeComSendCapability = Field(
+        default=WeComSendCapability.APP_MESSAGE,
+        sa_column=Column(SAEnum(WeComSendCapability, native_enum=False), nullable=False),
+    )
+    enabled: bool = Field(default=True, index=True)
+    quota_paused: bool = Field(default=False, index=True)
+    quota_reason: str | None = Field(default=None, max_length=500)
+    last_message_at: datetime | None = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True, index=True),
+    )
+    last_error: str | None = Field(default=None, max_length=1000)
+
+
+class WeComWebhookEvent(TimestampMixin, table=True):
+    __tablename__ = "wecom_webhook_events"
+    __table_args__ = (
+        UniqueConstraint(
+            "connection_id",
+            "provider_event_id",
+            name="uq_wecom_webhook_events_connection_provider",
+        ),
+        Index("ix_wecom_webhook_events_status_created", "status", "created_at"),
+    )
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    connection_id: UUID = Field(foreign_key="wecom_connections.id", index=True)
+    owner_user_id: UUID = Field(foreign_key="users.id", index=True)
+    provider_event_id: str = Field(max_length=255)
+    event_type: str = Field(default="unknown", max_length=64, index=True)
+    payload_hash: str = Field(max_length=64)
+    normalized_payload_encrypted: str | None = None
+    status: WeComEventStatus = Field(
+        default=WeComEventStatus.RECEIVED,
+        sa_column=Column(SAEnum(WeComEventStatus, native_enum=False), nullable=False, index=True),
+    )
+    attempt_count: int = Field(default=0, ge=0)
+    queued_at: datetime | None = Field(
+        default=None, sa_column=Column(DateTime(timezone=True), nullable=True)
+    )
+    processed_at: datetime | None = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+    )
+    processing_error: str | None = Field(default=None, max_length=1000)
+
+
+class WeComOutboundDelivery(TimestampMixin, table=True):
+    __tablename__ = "wecom_outbound_deliveries"
+    __table_args__ = (
+        UniqueConstraint(
+            "owner_user_id",
+            "idempotency_key",
+            name="uq_wecom_outbound_deliveries_owner_idempotency",
+        ),
+        Index("ix_wecom_outbound_deliveries_status_created", "status", "created_at"),
+    )
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    owner_user_id: UUID = Field(foreign_key="users.id", index=True)
+    connection_id: UUID = Field(foreign_key="wecom_connections.id", index=True)
+    source_id: UUID = Field(foreign_key="wecom_sources.id", index=True)
+    opportunity_id: UUID = Field(foreign_key="opportunities.id", index=True)
+    idempotency_key: str = Field(max_length=128)
+    content_hash: str = Field(max_length=64)
+    status: WeComDeliveryStatus = Field(
+        default=WeComDeliveryStatus.PENDING,
+        sa_column=Column(
+            SAEnum(WeComDeliveryStatus, native_enum=False), nullable=False, index=True
+        ),
+    )
+    provider_message_id: str | None = Field(default=None, max_length=255)
+    attempt_count: int = Field(default=0, ge=0)
+    sent_at: datetime | None = Field(
+        default=None, sa_column=Column(DateTime(timezone=True), nullable=True)
     )
     error: str | None = Field(default=None, max_length=1000)
 

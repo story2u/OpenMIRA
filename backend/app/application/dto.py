@@ -22,6 +22,11 @@ from app.domain.enums import (
     TelegramConnectionStatus,
     TelegramConnectionType,
     TelegramSourceType,
+    WeComConnectionStatus,
+    WeComConnectionType,
+    WeComReceiveCapability,
+    WeComSendCapability,
+    WeComSourceType,
 )
 
 
@@ -441,6 +446,46 @@ class TelegramMtprotoDialogRead(BaseModel):
 
 class TelegramMtprotoSourceCreate(BaseModel):
     chatId: str = Field(min_length=1, max_length=128)
+
+
+class WeComConnectionCreate(BaseModel):
+    displayName: str = Field(default="企业微信自建应用", min_length=1, max_length=255)
+    corpId: str = Field(min_length=2, max_length=128)
+    agentId: str = Field(pattern=r"^\d{1,20}$")
+    secret: str = Field(min_length=8, max_length=512)
+    token: str = Field(min_length=3, max_length=128)
+    encodingAesKey: str = Field(min_length=43, max_length=43)
+
+
+class WeComSourceRead(BaseModel):
+    id: UUID
+    connectionId: UUID
+    sourceType: WeComSourceType
+    externalConversationId: str
+    displayName: str
+    receiveCapability: WeComReceiveCapability
+    sendCapability: WeComSendCapability
+    enabled: bool
+    quotaPaused: bool
+    quotaReason: str | None = None
+    lastMessageAt: datetime | None = None
+    lastError: str | None = None
+
+
+class WeComConnectionRead(BaseModel):
+    id: UUID
+    connectionType: WeComConnectionType
+    status: WeComConnectionStatus
+    enabled: bool
+    displayName: str
+    corpId: str
+    agentId: str
+    callbackUrl: str
+    credentialConfigured: bool = True
+    lastVerifiedAt: datetime | None = None
+    lastError: str | None = None
+    updatedAt: datetime
+    sources: list[WeComSourceRead] = Field(default_factory=list)
 
 
 # MARK: 用户级设置（detection / work-schedule / notifications）

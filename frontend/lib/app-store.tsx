@@ -9,6 +9,7 @@ import {
   fetchOpportunity,
   fetchReplyTemplates,
   restoreOpportunity as restoreOpportunityRequest,
+  sendManualReply,
   updateFriendRequest,
 } from './api'
 import { useAuth } from './auth'
@@ -31,7 +32,7 @@ interface AppStore {
   newOpportunityId: string | null
   toggleWorkMode: () => void
   setOpportunityStatus: (id: string, status: OpportunityStatus) => void
-  sendMessage: (opportunityId: string, content: string, source: 'human' | 'ai') => void
+  sendMessage: (opportunityId: string, content: string, source: 'human' | 'ai') => Promise<void>
   addTemplate: (template: Omit<ReplyTemplate, 'id'>) => void
   updateTemplate: (template: ReplyTemplate) => void
   updateOpportunity: (id: string, patch: Partial<Opportunity>) => void
@@ -217,7 +218,12 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
     setOpportunities((prev) => prev.map((item) => byId.get(item.id) ?? item))
   }, [])
 
-  const sendMessage = useCallback((opportunityId: string, content: string, source: 'human' | 'ai') => {
+  const sendMessage = useCallback(async (
+    opportunityId: string,
+    content: string,
+    source: 'human' | 'ai',
+  ) => {
+    const updated = await sendManualReply(opportunityId, content)
     const message: ChatMessage = {
       id: `msg-${Date.now()}`,
       senderName: '商机助手',
@@ -230,13 +236,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
       ...prev,
       [opportunityId]: [...(prev[opportunityId] ?? []), message],
     }))
-    setOpportunities((prev) =>
-      prev.map((o) =>
-        o.id === opportunityId
-          ? { ...o, status: 'replied' as const, sopStage: 'chatting' as const, lastMessagePreview: content }
-          : o,
-      ),
-    )
+    setOpportunities((prev) => prev.map((item) => (item.id === opportunityId ? updated : item)))
   }, [])
 
   const addTemplate = useCallback((template: Omit<ReplyTemplate, 'id'>) => {

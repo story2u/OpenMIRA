@@ -13,8 +13,8 @@ from app.domain.services.detection_policy import OpportunityDetector
 from app.infrastructure.ai.litellm_client import LiteLLMOpportunityClassifier, LiteLLMReplyGenerator
 from app.infrastructure.db.models import Opportunity, User
 from app.infrastructure.db.repositories import (
-    ConfigRepository,
     BillingEventRepository,
+    ConfigRepository,
     MessageRepository,
     OpportunityRepository,
     ReplyTemplateRepository,
@@ -24,6 +24,9 @@ from app.infrastructure.db.repositories import (
     TelegramUserConfigRepository,
     UserRepository,
     UserSettingsRepository,
+    WeComConnectionRepository,
+    WeComDeliveryRepository,
+    WeComEventRepository,
 )
 from app.infrastructure.db.session import get_session
 from app.infrastructure.im.base import AdapterRegistry
@@ -54,7 +57,9 @@ async def _user_from_token(token: str, settings: Settings, session: AsyncSession
     try:
         user_id = UUID(str(payload["sub"]))
     except (KeyError, ValueError) as exc:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid token") from exc
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid token"
+        ) from exc
 
     user = await UserRepository(session).get(user_id)
     if not user or not user.is_active:
@@ -72,7 +77,9 @@ async def require_user(
     return await _user_from_token(credentials.credentials, settings, session)
 
 
-async def get_redis_client(settings: Settings = Depends(get_settings)) -> AsyncGenerator[Redis, None]:
+async def get_redis_client(
+    settings: Settings = Depends(get_settings),
+) -> AsyncGenerator[Redis, None]:
     redis = Redis.from_url(settings.redis_url, decode_responses=True)
     try:
         yield redis
@@ -124,6 +131,24 @@ def get_telegram_connection_repo(
     return TelegramConnectionRepository(session)
 
 
+def get_wecom_connection_repo(
+    session: AsyncSession = Depends(get_session),
+) -> WeComConnectionRepository:
+    return WeComConnectionRepository(session)
+
+
+def get_wecom_event_repo(
+    session: AsyncSession = Depends(get_session),
+) -> WeComEventRepository:
+    return WeComEventRepository(session)
+
+
+def get_wecom_delivery_repo(
+    session: AsyncSession = Depends(get_session),
+) -> WeComDeliveryRepository:
+    return WeComDeliveryRepository(session)
+
+
 async def get_work_time_service(
     session: AsyncSession = Depends(get_session),
     settings: Settings = Depends(get_settings),
@@ -146,11 +171,18 @@ def get_detector(settings: Settings = Depends(get_settings)) -> OpportunityDetec
 def get_adapter_registry(
     settings: Settings = Depends(get_settings),
     redis: Redis = Depends(get_redis_client),
+    wecom_connection_repo: WeComConnectionRepository = Depends(get_wecom_connection_repo),
+    wecom_delivery_repo: WeComDeliveryRepository = Depends(get_wecom_delivery_repo),
 ) -> AdapterRegistry:
     return AdapterRegistry(
         [
             TelegramAdapter(settings),
-            WeComAdapter(settings, redis=redis),
+            WeComAdapter(
+                settings,
+                redis=redis,
+                connection_repo=wecom_connection_repo,
+                delivery_repo=wecom_delivery_repo,
+            ),
         ]
     )
 

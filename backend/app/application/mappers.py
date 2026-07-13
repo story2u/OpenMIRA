@@ -12,6 +12,8 @@ from app.application.dto import (
     TelegramMonitorRead,
     TelegramSourceRead,
     TelegramUserConfigRead,
+    WeComConnectionRead,
+    WeComSourceRead,
     WorkScheduleRead,
     WorkScheduleSlot,
 )
@@ -33,6 +35,8 @@ from app.infrastructure.db.models import (
     UserDetectionPreference,
     UserNotificationPreference,
     UserWorkSchedule,
+    WeComConnection,
+    WeComSource,
 )
 
 
@@ -269,4 +273,43 @@ def to_telegram_connection_attempt_read(
         qrCodeUrl=qr_code_url,
         instructions=instructions or [],
         localMock=local_mock,
+    )
+
+
+def to_wecom_source_read(source: WeComSource) -> WeComSourceRead:
+    return WeComSourceRead(
+        id=source.id,
+        connectionId=source.connection_id,
+        sourceType=source.source_type,
+        externalConversationId=source.external_conversation_id,
+        displayName=source.display_name,
+        receiveCapability=source.receive_capability,
+        sendCapability=source.send_capability,
+        enabled=source.enabled,
+        quotaPaused=source.quota_paused,
+        quotaReason=source.quota_reason,
+        lastMessageAt=source.last_message_at,
+        lastError=source.last_error,
+    )
+
+
+def to_wecom_connection_read(
+    connection: WeComConnection,
+    *,
+    callback_url: str,
+    sources: list[WeComSource],
+) -> WeComConnectionRead:
+    return WeComConnectionRead(
+        id=connection.id,
+        connectionType=connection.connection_type,
+        status=connection.status,
+        enabled=connection.enabled,
+        displayName=connection.display_name,
+        corpId=connection.corp_id,
+        agentId=connection.agent_id,
+        callbackUrl=callback_url,
+        lastVerifiedAt=connection.last_verified_at,
+        lastError=connection.last_error,
+        updatedAt=connection.updated_at,
+        sources=[to_wecom_source_read(source) for source in sources],
     )

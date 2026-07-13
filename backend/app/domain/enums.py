@@ -172,3 +172,51 @@ class TelegramSourceType(StrEnum):
     GROUP = "group"
     CHANNEL = "channel"
     PRIVATE = "private"
+
+
+class WeComConnectionType(StrEnum):
+    INTERNAL_APP = "internal_app"
+    MESSAGE_ARCHIVE = "message_archive"
+    CUSTOMER_SERVICE = "customer_service"
+
+
+class WeComConnectionStatus(StrEnum):
+    PENDING = "pending"
+    ACTIVE = "active"
+    DISABLED = "disabled"
+    ERROR = "error"
+
+
+class WeComSourceType(StrEnum):
+    PRIVATE = "private"
+    INTERNAL_GROUP = "internal_group"
+    EXTERNAL_GROUP = "external_group"
+    CUSTOMER_SERVICE = "customer_service"
+
+
+class WeComReceiveCapability(StrEnum):
+    APP_CALLBACK = "app_callback"
+    MESSAGE_ARCHIVE = "message_archive"
+    CUSTOMER_SERVICE = "customer_service"
+
+
+class WeComSendCapability(StrEnum):
+    APP_MESSAGE = "app_message"
+    CUSTOMER_SERVICE = "customer_service"
+    MANUAL_ONLY = "manual_only"
+
+
+class WeComEventStatus(StrEnum):
+    RECEIVED = "received"
+    QUEUED = "queued"
+    PROCESSING = "processing"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    IGNORED = "ignored"
+
+
+class WeComDeliveryStatus(StrEnum):
+    PENDING = "pending"
+    SENDING = "sending"
+    SENT = "sent"
+    FAILED = "failed"

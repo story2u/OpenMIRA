@@ -24,9 +24,7 @@ router = APIRouter()
 
 
 def _capabilities() -> SettingsCapabilitiesRead:
-    # 诚实的能力位：推送通道与企业微信用户级绑定均未开发。写死为 False，
-    # 待对应能力落地后由后端翻转，客户端据此展示"将在启用后生效/由管理员配置"。
-    return SettingsCapabilitiesRead(pushAvailable=False, wecomUserBindingAvailable=False)
+    return SettingsCapabilitiesRead(pushAvailable=False, wecomUserBindingAvailable=True)
 
 
 @router.get("/me", response_model=SettingsBundleRead)
