@@ -29,14 +29,14 @@ Swift 6 + SwiftUI 原生 app，作为现有后端 v1 REST API 的瘦客户端。
 | `Core/Auth/Keychain.swift` | JWT 的 Keychain 读写清 |
 | `Core/Auth/SessionStore.swift` | `/auth/me` 会话恢复、邮箱密码/Apple 登录、登出 |
 | `Core/Billing/` | RevenueCat 身份、Offering、购买与恢复协议边界；只使用 Public iOS Key |
-| `Features/Auth/RadarLogoView.swift` | 应用内品牌 Logo；不依赖系统管理的 AppIcon 运行时读取 |
+| `Features/Auth/RadarLogoView.swift` | 应用内品牌 Logo；读取与 AppIcon 同源的 `BrandLogo.imageset` |
 | `Features/Auth/LoginView.swift` | 邮箱密码登录 + Sign in with Apple |
 | `Features/Inbox/InboxView.swift` | 收件箱：筛选、分页、30s 轮询 |
 | `Features/Opportunity/OpportunityDetailView.swift` | 详情、消息历史、Agent 发现、回复、状态流转 |
 | `Features/Subscription/` | App Store 套餐页；购买/恢复后由后端同步确认权益 |
 | `Models/Models.swift` | DTO 镜像 + 容错枚举 + JSONValue |
 | `Tests/ModelsDecodingTests.swift` | 解码/编码契约测试 |
-| `Assets.xcassets/` | App 图标（1024 无 alpha） |
+| `Assets.xcassets/` | App 图标母版（1024 无 alpha）与应用内多倍率品牌 Logo |
 
 ## 已实现（P0，iOS 侧）
 
