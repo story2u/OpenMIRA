@@ -2,8 +2,6 @@
 
 当前活动计划：
 
-- [产品首页、截图与演示资产](2026-07-13-product-demo-assets.md)
-
 - [RevenueCat + Paddle 统一订阅计费](2026-07-12-revenuecat-paddle-billing.md)
 
 - [订阅体系与 pi Agent 用量额度](2026-07-11-subscriptions-and-agent-quotas.md)

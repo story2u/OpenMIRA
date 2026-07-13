@@ -1,6 +1,6 @@
 # Product Demo Assets
 
-> Status: active
+> Status: completed
 > Branch: `features/product-demo-assets`
 > Baseline: `release/v2.0.0` at `9e43250`
 
@@ -38,4 +38,22 @@ release documentation without exposing production data or credentials.
 
 ## Verification Log
 
-- Pending.
+- `make check`: passed; backend 91 passed / 9 skipped, pi runtime 4 passed, frontend 5 passed,
+  harness 49 linked Markdown / 79 backend Python files.
+- Playwright screenshot suite: 3 passed; 16 Web screenshots generated and visually inspected.
+- Playwright recording: 1920×1080 raw WebM generated after deterministic nine-scene flow.
+- Remotion: 4500 frames, 1920×1080, 30fps, 150 seconds, no narration required.
+- FFmpeg/ffprobe: H.264 MP4, VP9 WebM, optimized GIF and PNG cover generated; no black-frame
+  interval detected; sampled frames at 2/12/45/100/125/148 seconds inspected.
+- Lighthouse production home: Performance 96, Accessibility 100, Best Practices 100, SEO 100.
+- Production gate: `/` returned 200 and `/demo` returned 404 without Demo environment variables.
+- GitHub CI run `29219876642`: backend, frontend + Playwright, harness, pi, iOS and Android passed.
+- Local mobile screenshots were not captured: host has no Xcode or Android SDK/adb/JDK. Both scripts
+  failed with explicit prerequisite messages; platform source builds passed in CI.
+
+## Remaining External Work
+
+- Upload the ignored MP4/WebM and optional Android demo APK through `Demo Assets` workflow or a
+  `demo-v*` GitHub tag. No Release or TestFlight distribution was claimed in this work.
+- Run the platform screenshot scripts on macOS and an Android emulator before replacing the honest
+  Beta placeholders in the video.
