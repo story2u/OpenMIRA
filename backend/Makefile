@@ -1,4 +1,4 @@
-.PHONY: dev up down migrate seed test lint format
+.PHONY: dev up down migrate test lint format
 
 dev:
 	uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
@@ -11,9 +11,6 @@ down:
 
 migrate:
 	alembic upgrade head
-
-seed:
-	python scripts/seed_demo.py
 
 test:
 	pytest

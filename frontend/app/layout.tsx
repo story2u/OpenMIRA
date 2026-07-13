@@ -14,7 +14,6 @@ export const metadata: Metadata = {
   openGraph: {
     title: '商机雷达 · Opportunity Radar',
     description: '多 IM 渠道商机识别与 AI 辅助跟进工具',
-    images: ['/demo/github-social-preview.png'],
   },
   icons: {
     icon: [

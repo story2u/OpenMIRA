@@ -174,7 +174,7 @@ struct DashboardFilterSheet: View {
     }
 }
 
-private extension Binding {
+private extension Binding where Value: Sendable {
     /// Optional Date 与非可选 DatePicker 的桥接。
     init(_ source: Binding<Value?>, default defaultValue: Value) {
         self.init(

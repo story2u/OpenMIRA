@@ -6,7 +6,7 @@
 
 | 优先级 | 缺口 | 当前证据 | 期望完成信号 |
 | --- | --- | --- | --- |
-| P1 | 前端生产数据与演示 store 混合，API 失败静默保留 mock | `frontend/lib/app-store.tsx` | 登录态失败显示明确错误；真实写 API 接通；mock 仅在显式 demo/test 模式 |
+| P1 | 前端 API 失败时的错误与本地状态边界仍需继续收敛 | `frontend/lib/app-store.tsx` | 登录态失败显示明确错误；真实写 API 接通；不以本地状态伪造生产结果 |
 | P1 | 人工回复、AI 草稿、消息历史、状态更新未从前端接后端 | `frontend/lib/api.ts` 与详情组件 | 关键旅程端到端通过，发送失败不伪造状态 |
 | P1 | Celery 发送任务的重试/幂等证据不足 | `backend/app/worker/tasks.py`、回复用例 | 重跑不会重复发消息；失败可恢复且可观察 |
 | P1 | repository/API 的用户隔离缺少集成测试 | 当前 `backend/tests/` | 临时 PostgreSQL/API 测试覆盖跨用户拒绝 |

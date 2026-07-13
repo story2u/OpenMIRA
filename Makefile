@@ -1,4 +1,4 @@
-.PHONY: harness-check backend-sync backend-check pi-agent-sync pi-agent-check frontend-check ios-check android-check demo-web demo-screenshots demo-record demo-video demo-assets demo-ios-screenshots demo-android-screenshots check
+.PHONY: harness-check backend-sync backend-check pi-agent-sync pi-agent-check frontend-check ios-check android-check check
 
 PYTHON ?= python3
 UV ?= uv
@@ -39,29 +39,5 @@ ios-check:
 # 需要 JDK 17 + Android SDK；首次运行 `cd mobile/android && gradle wrapper` 生成 wrapper。
 android-check:
 	cd mobile/android && ./gradlew --no-daemon lintDebug testDebugUnitTest assembleDebug
-
-demo-web:
-	cd frontend && DEMO_MODE=true NEXT_PUBLIC_DEMO_MODE=true $(PNPM) dev --hostname 127.0.0.1 --port 3100
-
-demo-screenshots:
-	cd frontend && $(PNPM) demo:screenshots
-
-demo-record:
-	cd frontend && $(PNPM) demo:record
-
-demo-video:
-	bash scripts/demo/render-demo.sh
-	bash scripts/demo/render-webm.sh
-	bash scripts/demo/render-gif.sh
-	bash scripts/demo/generate-cover.sh
-
-demo-assets: demo-screenshots demo-record demo-video
-	bash scripts/demo/check-assets.sh
-
-demo-ios-screenshots:
-	bash scripts/demo/capture-ios.sh
-
-demo-android-screenshots:
-	bash scripts/demo/capture-android.sh
 
 check: harness-check backend-check pi-agent-check frontend-check

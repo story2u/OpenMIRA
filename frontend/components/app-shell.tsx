@@ -40,9 +40,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const { user, loading, logout } = useAuth()
   const isLoginPage = pathname === '/login'
   const isHomePage = pathname === '/'
-  const isDemoPage = pathname.startsWith('/demo')
-  const demoEnabled = process.env.NEXT_PUBLIC_DEMO_MODE === 'true'
-  const isPublicPage = isLoginPage || isHomePage || (isDemoPage && demoEnabled)
+  const isPublicPage = isLoginPage || isHomePage
 
   useEffect(() => {
     if (!loading && !user && !isPublicPage) {
@@ -50,7 +48,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     }
   }, [isPublicPage, loading, router, user])
 
-  if (isLoginPage || isHomePage || (isDemoPage && demoEnabled)) {
+  if (isLoginPage || isHomePage) {
     return <main className="min-h-svh bg-background">{children}</main>
   }
 

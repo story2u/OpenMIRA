@@ -1,1 +1,0 @@
-export function BrandMark() { return <div style={{display:'flex',alignItems:'center',gap:16,fontSize:28,fontWeight:700}}><span style={{display:'grid',placeItems:'center',width:52,height:52,borderRadius:10,background:'#5746d9',color:'white'}}>◎</span><span>商机雷达 <small style={{fontSize:16,fontWeight:500,opacity:.55}}>Opportunity Radar</small></span></div> }

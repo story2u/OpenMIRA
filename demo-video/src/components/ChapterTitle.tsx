@@ -1,2 +1,0 @@
-import { interpolate, useCurrentFrame } from 'remotion'
-export function ChapterTitle({ eyebrow, title }: { eyebrow: string; title: string }) { const f=useCurrentFrame(); const y=interpolate(f,[0,24],[28,0],{extrapolateRight:'clamp'}); return <div style={{position:'absolute',top:54,left:92,transform:`translateY(${y}px)`}}><div style={{fontSize:16,color:'#5746d9',fontWeight:700}}>{eyebrow}</div><div style={{fontSize:38,fontWeight:750,marginTop:5}}>{title}</div></div> }

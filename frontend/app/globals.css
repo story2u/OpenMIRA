@@ -146,15 +146,6 @@
   animation: card-enter 0.35s ease-out both;
 }
 
-[data-demo-capture='true'] *,
-[data-demo-capture='true'] *::before,
-[data-demo-capture='true'] *::after {
-  scroll-behavior: auto !important;
-  animation-duration: 0.001ms !important;
-  animation-delay: 0ms !important;
-  transition-duration: 0.001ms !important;
-}
-
 #apps .text-primary {
   color: oklch(0.82 0.1 285);
 }

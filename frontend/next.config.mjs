@@ -1,6 +1,5 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  devIndicators: process.env.DEMO_MODE === 'true' ? false : undefined,
   typescript: {
     ignoreBuildErrors: true,
   },
