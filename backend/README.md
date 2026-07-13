@@ -18,7 +18,6 @@ cp .env.example .env
 docker compose build
 docker compose up -d postgres redis
 docker compose run --rm migrate
-docker compose run --rm api python scripts/seed_demo.py
 docker compose up api celery_worker celery_beat
 ```
 
