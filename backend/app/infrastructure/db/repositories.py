@@ -3025,7 +3025,6 @@ class WeComArchiveRepository:
         )
         cursor = result.first()
         if not cursor:
-            await self.session.rollback()
             return None
         cursor.lease_expires_at = now + timedelta(seconds=lease_seconds)
         cursor.updated_at = now
