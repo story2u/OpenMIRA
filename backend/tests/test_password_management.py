@@ -32,12 +32,18 @@ def make_settings(**overrides: Any) -> Settings:
         "database_url": "postgresql+asyncpg://user:password@localhost:5432/im",
         "admin_api_token": "admin-secret",
         "jwt_secret_key": "jwt-secret-for-password-tests",
-        "password_reset_enabled": True,
         "smtp_host": "smtp.example.test",
         "smtp_from_email": "no-reply@example.test",
     }
     values.update(overrides)
     return Settings(**values)
+
+
+def test_password_reset_is_enabled_by_default_but_requires_email_configuration() -> None:
+    settings = make_settings(smtp_host="", smtp_from_email="")
+
+    assert settings.password_reset_enabled is True
+    assert settings.password_reset_email_configured is False
 
 
 class FakeQueue:

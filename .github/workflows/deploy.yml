@@ -111,7 +111,6 @@ jobs:
       RUNTIME_DEBUG: ${{ vars.DEBUG || 'false' }}
       RUNTIME_ADMIN_API_TOKEN: ${{ secrets.ADMIN_API_TOKEN }}
       RUNTIME_ACCESS_TOKEN_EXPIRE_MINUTES: ${{ vars.ACCESS_TOKEN_EXPIRE_MINUTES }}
-      RUNTIME_PASSWORD_RESET_ENABLED: ${{ vars.PASSWORD_RESET_ENABLED || 'false' }}
       RUNTIME_SMTP_HOST: ${{ vars.SMTP_HOST }}
       RUNTIME_SMTP_PORT: ${{ vars.SMTP_PORT || '587' }}
       RUNTIME_SMTP_USERNAME: ${{ vars.SMTP_USERNAME }}
@@ -200,12 +199,14 @@ jobs:
             echo "Configure at least one OAuth provider through GitHub vars/secrets."
             exit 1
           fi
-          if [ "$RUNTIME_PASSWORD_RESET_ENABLED" = "true" ]; then
-            test -n "$RUNTIME_SMTP_HOST" || { echo "SMTP_HOST var is required when password reset is enabled"; exit 1; }
-            test -n "$RUNTIME_SMTP_FROM_EMAIL" || { echo "SMTP_FROM_EMAIL var is required when password reset is enabled"; exit 1; }
+          if [ -n "$RUNTIME_SMTP_HOST" ] || [ -n "$RUNTIME_SMTP_USERNAME" ] || [ -n "$RUNTIME_SMTP_PASSWORD" ] || [ -n "$RUNTIME_SMTP_FROM_EMAIL" ]; then
+            test -n "$RUNTIME_SMTP_HOST" || { echo "SMTP_HOST var is required when SMTP is partially configured"; exit 1; }
+            test -n "$RUNTIME_SMTP_FROM_EMAIL" || { echo "SMTP_FROM_EMAIL var is required when SMTP is partially configured"; exit 1; }
             if [ -n "$RUNTIME_SMTP_USERNAME" ]; then
               test -n "$RUNTIME_SMTP_PASSWORD" || { echo "SMTP_PASSWORD secret is required when SMTP_USERNAME is configured"; exit 1; }
             fi
+          else
+            echo "SMTP is not configured; password reset endpoints will fail closed until SMTP vars/secrets are added."
           fi
           case " $VPS_COMPOSE_SERVICES " in
             *" cloudflared "*)
@@ -272,7 +273,7 @@ jobs:
           append_env DEBUG "$RUNTIME_DEBUG"
           append_env ADMIN_API_TOKEN "$RUNTIME_ADMIN_API_TOKEN"
           append_env ACCESS_TOKEN_EXPIRE_MINUTES "$RUNTIME_ACCESS_TOKEN_EXPIRE_MINUTES"
-          set_env PASSWORD_RESET_ENABLED "$RUNTIME_PASSWORD_RESET_ENABLED"
+          set_env PASSWORD_RESET_ENABLED "true"
           append_env SMTP_HOST "$RUNTIME_SMTP_HOST"
           append_env SMTP_PORT "$RUNTIME_SMTP_PORT"
           append_env SMTP_USERNAME "$RUNTIME_SMTP_USERNAME"

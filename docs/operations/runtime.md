@@ -23,7 +23,7 @@ Docker context。CI 分别验证两个锁文件。
 | 基础 | `APP_ENV`、`DEBUG`、`DATABASE_URL`、`REDIS_URL` | API 与持久化 |
 | 队列 | `CELERY_BROKER_URL`、`CELERY_RESULT_BACKEND` | 默认使用 Redis DB 1/2 |
 | Web/Auth | `FRONTEND_BASE_URL`、`CORS_ORIGINS`、`JWT_SECRET_KEY`、`ADMIN_API_TOKEN`、`PASSWORD_LOGIN_*` | 生产必须使用强随机密钥；密码登录默认每个直连 IP + 邮箱 5 次/300 秒，状态存 Redis DB 0 |
-| Password reset | `PASSWORD_RESET_ENABLED`、`PASSWORD_RESET_*`、`SMTP_HOST/PORT/USERNAME/PASSWORD/FROM_*`、`SMTP_STARTTLS/USE_TLS` | 默认关闭；SMTP 密码只进 Secret；开启前需验证发件域和送达，详见密码重置 Runbook |
+| Password reset | `PASSWORD_RESET_ENABLED`、`PASSWORD_RESET_*`、`SMTP_HOST/PORT/USERNAME/PASSWORD/FROM_*`、`SMTP_STARTTLS/USE_TLS` | 默认开启且无需 GitHub var；SMTP 未配齐时 fail closed，密码只进 Secret，详见密码重置 Runbook |
 | OAuth | `GOOGLE_*`、`APPLE_*` | 至少配置一个 provider；Apple secret 可由 key material 生成 |
 | 工作模式 | `DEFAULT_TIMEZONE`、`DEFAULT_WORKDAYS`、`DEFAULT_WORK_START/END`、`PENDING_HUMAN_SLA_MINUTES` | 决定人工/AI 路由与超时 |
 | Telegram | `TELEGRAM_BOT_TOKEN`、`TELEGRAM_WEBHOOK_SECRET`、`TELEGRAM_BOT_USERNAME`、`TELEGRAM_WEBHOOK_URL`、`TELEGRAM_INTEGRATION_MODE` | 原生 Bot 连接/webhook；首次 release 自动生成并持久化 secret，生产 URL/live/600 秒 TTL 均有 compose 默认值，群额度包含旧 monitor 与新 source |

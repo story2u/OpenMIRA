@@ -33,7 +33,6 @@ Repository/Environment Variables：
 
 | 名称 | 示例 | 说明 |
 | --- | --- | --- |
-| `PASSWORD_RESET_ENABLED` | `true` | 完成 SMTP 验证后再开启 |
 | `SMTP_HOST` | `smtp.provider.example` | SMTP 服务地址 |
 | `SMTP_PORT` | `587` | STARTTLS 通常为 587，隐式 TLS 通常为 465 |
 | `SMTP_USERNAME` | provider 用户名 | 无认证的内部 relay 可留空 |
@@ -48,16 +47,37 @@ Repository/Environment Secret：
 | --- | --- |
 | `SMTP_PASSWORD` | SMTP 密码或 provider 生成的应用专用密码 |
 
-`PASSWORD_RESET_TTL_MINUTES`、失败次数和限流窗口在镜像中有保守默认值，通常无需加入 GitHub vars；
-确需调整时应先做安全评审。部署 workflow 会在功能启用时检查主机、发件地址和认证密码。
+`PASSWORD_RESET_ENABLED` 默认且固定为 `true`，不需要加入 GitHub vars。`PASSWORD_RESET_TTL_MINUTES`、
+失败次数和限流窗口在镜像中有保守默认值，通常也无需加入 GitHub vars；确需调整时应先做安全评审。
+部署 workflow 会检查已提供的 SMTP 参数是否完整；完全未配置时仍允许应用部署，但密码重置端点会
+fail closed 并返回 503。
+
+### Gmail 配置
+
+个人 Gmail 或 Google Workspace 使用以下 Repository/Environment Variables：
+
+```dotenv
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USERNAME=your-account@gmail.com
+SMTP_FROM_EMAIL=your-account@gmail.com
+SMTP_FROM_NAME=商机雷达
+SMTP_STARTTLS=true
+SMTP_USE_TLS=false
+```
+
+`SMTP_PASSWORD` 必须保存为 GitHub Secret，值为 Google 账户生成的 16 位应用专用密码，不是日常登录
+密码。生成应用专用密码前需开启 Google 两步验证；如果账户启用了高级保护、只允许安全密钥，或
+Google Workspace 管理员禁用了应用专用密码，该选项可能不可用。`SMTP_FROM_EMAIL` 默认应与认证账户
+一致；使用 Workspace 别名时，应先在 Gmail/Workspace 中确认该发件身份已获准。
 
 ## 邮件域配置与上线
 
 1. 在邮件服务验证 `SMTP_FROM_EMAIL` 所属域名。
 2. 按 provider 指引配置 SPF、DKIM 和 DMARC；代码无法替代这些 DNS 操作。
-3. 先在 staging 设置 SMTP vars/secret，但保持 `PASSWORD_RESET_ENABLED=false`。
+3. 先在 staging 设置 SMTP vars/secret 并部署。
 4. 使用测试邮箱验证连接、HTML/纯文本内容、10 位验证码和 H5 链接。
-5. 设置 `PASSWORD_RESET_ENABLED=true` 并部署。
+5. 确认邮件送达和日志脱敏后再部署到生产。
 6. 验证不存在邮箱与存在邮箱 HTTP 响应完全一致；不存在邮箱不得产生邮件。
 7. 验证错误 5 次、过期、重复使用、重新申请、密码修改后旧 JWT 401。
 8. 检查 Celery 日志只包含 challenge ID，不含收件邮箱、token、code 和正文。

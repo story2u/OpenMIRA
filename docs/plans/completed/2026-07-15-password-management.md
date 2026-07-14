@@ -90,4 +90,5 @@
 
 已交付后端安全闭环、数据库迁移、Celery SMTP 邮件、H5/iOS/Android 忘记与修改密码入口，以及部署和
 运维文档。外部 SMTP 尚未配置，因此真实邮件送达率、SPF/DKIM/DMARC 和邮箱端到端仍需按集成文档在
-目标环境验证；在此之前 `PASSWORD_RESET_ENABLED` 应保持 `false`，已有 OAuth 和密码登录不受影响。
+目标环境验证。`PASSWORD_RESET_ENABLED` 后续调整为默认开启，但 SMTP 未配齐时仍 fail closed；已有 OAuth
+和密码登录不受影响。

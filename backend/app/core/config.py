@@ -28,7 +28,7 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 60 * 24 * 7
     password_login_max_attempts: int = Field(default=5, ge=1, le=100)
     password_login_window_seconds: int = Field(default=300, ge=10, le=3600)
-    password_reset_enabled: bool = False
+    password_reset_enabled: bool = True
     password_reset_ttl_minutes: int = Field(default=15, ge=5, le=60)
     password_reset_max_attempts: int = Field(default=5, ge=1, le=20)
     password_reset_request_limit: int = Field(default=3, ge=1, le=20)
