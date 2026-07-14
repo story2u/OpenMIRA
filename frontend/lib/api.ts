@@ -25,6 +25,8 @@ import type {
   SettingsBundle,
   WeComConnection,
   WeComConnectionCreate,
+  WeComArchiveConnection,
+  WeComArchiveConnectionCreate,
 } from './types'
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? ''
@@ -400,6 +402,39 @@ export async function verifyWeComConnection(connectionId: string): Promise<WeCom
 
 export async function deleteWeComConnection(connectionId: string): Promise<void> {
   return fetchJson<void>(`/api/v1/integrations/wecom/connections/${connectionId}`, {
+    method: 'DELETE',
+  })
+}
+
+export async function fetchWeComArchiveConnections(): Promise<WeComArchiveConnection[]> {
+  return fetchJson<WeComArchiveConnection[]>('/api/v1/integrations/wecom/archive-connections')
+}
+
+export async function createWeComArchiveConnection(
+  body: WeComArchiveConnectionCreate,
+): Promise<WeComArchiveConnection> {
+  return fetchJson<WeComArchiveConnection>('/api/v1/integrations/wecom/archive-connections', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
+export async function verifyWeComArchiveConnection(connectionId: string): Promise<void> {
+  await fetchJson<{ accepted: boolean }>(
+    `/api/v1/integrations/wecom/archive-connections/${connectionId}/verify`,
+    { method: 'POST' },
+  )
+}
+
+export async function syncWeComArchiveConnection(connectionId: string): Promise<void> {
+  await fetchJson<{ accepted: boolean }>(
+    `/api/v1/integrations/wecom/archive-connections/${connectionId}/sync`,
+    { method: 'POST' },
+  )
+}
+
+export async function deleteWeComArchiveConnection(connectionId: string): Promise<void> {
+  return fetchJson<void>(`/api/v1/integrations/wecom/archive-connections/${connectionId}`, {
     method: 'DELETE',
   })
 }

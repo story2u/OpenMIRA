@@ -31,6 +31,11 @@ class ManualReplyUseCase:
         target_status = OpportunityStatus.FOLLOWING if mark_following else OpportunityStatus.REPLIED
         ensure_transition_allowed(opportunity.status, target_status)
 
+        if opportunity.channel == IMChannel.WECOM and opportunity.conversation_id.startswith(
+            "wecom-archive:"
+        ):
+            raise ValueError("WeCom archive conversations are read-only")
+
         adapter = self.adapters.get(opportunity.channel)
         if opportunity.channel == IMChannel.WECOM and opportunity.conversation_id.startswith(
             "wecom:"

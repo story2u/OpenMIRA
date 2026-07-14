@@ -73,6 +73,10 @@ from app.infrastructure.db.models import (
     UserNotificationPreference,
     UserWorkSchedule,
     WeComConnection,
+    WeComArchiveConnection,
+    WeComArchiveCursor,
+    WeComArchiveEvent,
+    WeComArchiveMemberBinding,
     WeComOutboundDelivery,
     WeComSource,
     WeComWebhookEvent,
@@ -80,6 +84,24 @@ from app.infrastructure.db.models import (
 )
 
 logger = structlog.get_logger(__name__)
+
+
+async def _count_active_wecom_group_sources(
+    session: AsyncSession, owner_user_id: UUID
+) -> int:
+    result = await session.exec(
+        select(func.count())
+        .select_from(WeComSource)
+        .where(
+            WeComSource.owner_user_id == owner_user_id,
+            WeComSource.enabled.is_(True),
+            WeComSource.quota_paused.is_(False),
+            WeComSource.source_type.in_(
+                [WeComSourceType.INTERNAL_GROUP, WeComSourceType.EXTERNAL_GROUP]
+            ),
+        )
+    )
+    return int(result.one())
 
 
 FRONTEND_STATUS_MAP: dict[FrontendOpportunityStatus, set[OpportunityStatus]] = {
@@ -852,17 +874,18 @@ class MessageRepository:
         conversation_id: str,
         text: str,
         source: MessageSource,
-        opportunity_id: UUID,
+        opportunity_id: UUID | None,
         external_message_id: str,
         raw_payload: dict,
         owner_user_id: UUID | None = None,
+        sender_display_name: str = "商机助手",
     ) -> Message:
         message = Message(
             owner_user_id=owner_user_id,
             channel=channel,
             external_message_id=external_message_id,
             conversation_id=conversation_id,
-            sender_display_name="商机助手",
+            sender_display_name=sender_display_name,
             direction=MessageDirection.OUTGOING,
             source=source,
             text=text,
@@ -1651,7 +1674,7 @@ class TelegramUserConfigRepository:
         enabled: bool,
         backfill_limit: int,
         entitlements: PlanEntitlements,
-        enabled_wecom_groups: int = 0,
+        enabled_wecom_groups: int | None = None,
     ) -> list[TelegramMonitor]:
         user = await self.session.get(User, user_id, with_for_update=True)
         if not user or not user.is_active:
@@ -1666,6 +1689,10 @@ class TelegramUserConfigRepository:
             if monitor.enabled and not monitor.quota_paused
         }
         active_selection_changed = set(desired_chat_ids) != current_active_chat_ids
+        if enabled_wecom_groups is None:
+            enabled_wecom_groups = await _count_active_wecom_group_sources(
+                self.session, user_id
+            )
         ensure_group_quota(
             entitlements=entitlements,
             telegram_groups=len(desired_chat_ids) if enabled else 0,
@@ -1945,12 +1972,15 @@ class TelegramConnectionRepository:
         )
         source = result.first()
         if not source:
+            wecom_groups = await _count_active_wecom_group_sources(
+                self.session, owner_user_id
+            )
             ensure_group_quota(
                 entitlements=entitlements,
                 telegram_groups=legacy_active_count
                 + await self.count_active_sources_by_user(owner_user_id)
                 + 1,
-                wecom_groups=0,
+                wecom_groups=wecom_groups,
             )
             source = TelegramSource(
                 owner_user_id=owner_user_id,
@@ -2212,10 +2242,13 @@ class TelegramConnectionRepository:
         source = source_result.first()
         if not source:
             current_sources = await self.count_active_sources_by_user(attempt.owner_user_id)
+            wecom_groups = await _count_active_wecom_group_sources(
+                self.session, attempt.owner_user_id
+            )
             ensure_group_quota(
                 entitlements=entitlements,
                 telegram_groups=legacy_active_count + current_sources + 1,
-                wecom_groups=0,
+                wecom_groups=wecom_groups,
             )
             source = TelegramSource(
                 owner_user_id=attempt.owner_user_id,
@@ -2803,6 +2836,470 @@ class WeComDeliveryRepository:
         delivery.error = error[:1000]
         delivery.updated_at = utc_now()
         self.session.add(delivery)
+        await self.session.commit()
+
+
+class WeComArchiveRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self.session = session
+
+    async def list_for_owner(self, owner_user_id: UUID) -> list[WeComArchiveConnection]:
+        result = await self.session.exec(
+            select(WeComArchiveConnection)
+            .where(
+                WeComArchiveConnection.owner_user_id == owner_user_id,
+                WeComArchiveConnection.enabled.is_(True),
+            )
+            .order_by(col(WeComArchiveConnection.created_at).desc())
+        )
+        return list(result.all())
+
+    async def count_enabled_for_owner(self, owner_user_id: UUID) -> int:
+        result = await self.session.exec(
+            select(func.count())
+            .select_from(WeComArchiveConnection)
+            .where(
+                WeComArchiveConnection.owner_user_id == owner_user_id,
+                WeComArchiveConnection.enabled.is_(True),
+            )
+        )
+        return int(result.one())
+
+    async def get(self, connection_id: UUID) -> WeComArchiveConnection | None:
+        return await self.session.get(WeComArchiveConnection, connection_id)
+
+    async def get_for_owner(
+        self, connection_id: UUID, owner_user_id: UUID
+    ) -> WeComArchiveConnection | None:
+        result = await self.session.exec(
+            select(WeComArchiveConnection).where(
+                WeComArchiveConnection.id == connection_id,
+                WeComArchiveConnection.owner_user_id == owner_user_id,
+            )
+        )
+        return result.first()
+
+    async def create_with_owner_binding(
+        self,
+        *,
+        connection: WeComArchiveConnection,
+        wecom_user_id: str,
+        member_display_name: str,
+    ) -> tuple[WeComArchiveConnection, WeComArchiveMemberBinding, WeComArchiveCursor]:
+        existing_result = await self.session.exec(
+            select(WeComArchiveConnection).where(
+                WeComArchiveConnection.owner_user_id == connection.owner_user_id,
+                WeComArchiveConnection.corp_id == connection.corp_id,
+            )
+        )
+        existing = existing_result.first()
+        if existing:
+            if existing.enabled:
+                raise ValueError("WeCom archive connection already exists")
+            existing.display_name = connection.display_name
+            existing.secret_encrypted = connection.secret_encrypted
+            existing.private_key_encrypted = connection.private_key_encrypted
+            existing.public_key_version = connection.public_key_version
+            existing.status = WeComConnectionStatus.PENDING
+            existing.enabled = True
+            existing.last_error = None
+            existing.updated_at = utc_now()
+            binding_result = await self.session.exec(
+                select(WeComArchiveMemberBinding).where(
+                    WeComArchiveMemberBinding.connection_id == existing.id,
+                    WeComArchiveMemberBinding.user_id == existing.owner_user_id,
+                )
+            )
+            binding = binding_result.first()
+            if not binding:
+                binding = WeComArchiveMemberBinding(
+                    connection_id=existing.id,
+                    user_id=existing.owner_user_id,
+                    wecom_user_id=wecom_user_id,
+                    display_name=member_display_name,
+                )
+            else:
+                binding.wecom_user_id = wecom_user_id
+                binding.display_name = member_display_name
+                binding.enabled = True
+                binding.updated_at = utc_now()
+            cursor = await self.cursor_for_connection(existing.id)
+            if not cursor:
+                cursor = WeComArchiveCursor(connection_id=existing.id)
+            cursor.lease_expires_at = None
+            self.session.add(existing)
+            self.session.add(binding)
+            self.session.add(cursor)
+            try:
+                await self.session.commit()
+            except IntegrityError as exc:
+                await self.session.rollback()
+                raise ValueError(
+                    "WeCom archive connection or member binding already exists"
+                ) from exc
+            for record in (existing, binding, cursor):
+                await self.session.refresh(record)
+            return existing, binding, cursor
+
+        binding = WeComArchiveMemberBinding(
+            connection_id=connection.id,
+            user_id=connection.owner_user_id,
+            wecom_user_id=wecom_user_id,
+            display_name=member_display_name,
+        )
+        cursor = WeComArchiveCursor(connection_id=connection.id)
+        self.session.add(connection)
+        self.session.add(binding)
+        self.session.add(cursor)
+        try:
+            await self.session.commit()
+        except IntegrityError as exc:
+            await self.session.rollback()
+            raise ValueError("WeCom archive connection or member binding already exists") from exc
+        for record in (connection, binding, cursor):
+            await self.session.refresh(record)
+        return connection, binding, cursor
+
+    async def binding_for_user(
+        self, connection_id: UUID, user_id: UUID
+    ) -> WeComArchiveMemberBinding | None:
+        result = await self.session.exec(
+            select(WeComArchiveMemberBinding).where(
+                WeComArchiveMemberBinding.connection_id == connection_id,
+                WeComArchiveMemberBinding.user_id == user_id,
+            )
+        )
+        return result.first()
+
+    async def active_bindings_for_participants(
+        self, connection_id: UUID, participant_ids: set[str]
+    ) -> list[WeComArchiveMemberBinding]:
+        if not participant_ids:
+            return []
+        result = await self.session.exec(
+            select(WeComArchiveMemberBinding).where(
+                WeComArchiveMemberBinding.connection_id == connection_id,
+                WeComArchiveMemberBinding.enabled.is_(True),
+                col(WeComArchiveMemberBinding.wecom_user_id).in_(participant_ids),
+            )
+        )
+        return list(result.all())
+
+    async def mark_binding_matched(self, binding: WeComArchiveMemberBinding) -> None:
+        binding.last_matched_at = utc_now()
+        binding.updated_at = utc_now()
+        self.session.add(binding)
+        await self.session.commit()
+
+    async def list_sources_for_owner(self, owner_user_id: UUID) -> list[WeComSource]:
+        result = await self.session.exec(
+            select(WeComSource)
+            .where(
+                WeComSource.owner_user_id == owner_user_id,
+                WeComSource.archive_connection_id.is_not(None),
+            )
+            .order_by(col(WeComSource.last_message_at).desc().nullslast())
+        )
+        return list(result.all())
+
+    async def cursor_for_connection(self, connection_id: UUID) -> WeComArchiveCursor | None:
+        result = await self.session.exec(
+            select(WeComArchiveCursor).where(
+                WeComArchiveCursor.connection_id == connection_id
+            )
+        )
+        return result.first()
+
+    async def acquire_poll_lease(
+        self, connection_id: UUID, *, lease_seconds: int
+    ) -> WeComArchiveCursor | None:
+        now = utc_now()
+        result = await self.session.exec(
+            select(WeComArchiveCursor)
+            .where(
+                WeComArchiveCursor.connection_id == connection_id,
+                (WeComArchiveCursor.lease_expires_at.is_(None))
+                | (WeComArchiveCursor.lease_expires_at <= now),
+            )
+            .with_for_update(skip_locked=True)
+        )
+        cursor = result.first()
+        if not cursor:
+            await self.session.rollback()
+            return None
+        cursor.lease_expires_at = now + timedelta(seconds=lease_seconds)
+        cursor.updated_at = now
+        self.session.add(cursor)
+        await self.session.commit()
+        await self.session.refresh(cursor)
+        return cursor
+
+    async def active_connection_ids(self, *, limit: int) -> list[UUID]:
+        result = await self.session.exec(
+            select(WeComArchiveConnection.id)
+            .where(
+                WeComArchiveConnection.enabled.is_(True),
+                WeComArchiveConnection.status == WeComConnectionStatus.ACTIVE,
+            )
+            .order_by(col(WeComArchiveConnection.last_polled_at).asc().nullsfirst())
+            .limit(limit)
+        )
+        return list(result.all())
+
+    async def reserve_event(
+        self,
+        *,
+        connection_id: UUID,
+        provider_message_id: str,
+        sequence: int,
+        message_type: str,
+        payload_hash: str,
+    ) -> tuple[WeComArchiveEvent, bool]:
+        event = WeComArchiveEvent(
+            connection_id=connection_id,
+            provider_message_id=provider_message_id,
+            sequence=sequence,
+            message_type=message_type,
+            payload_hash=payload_hash,
+            status=WeComEventStatus.PROCESSING,
+            attempt_count=1,
+        )
+        self.session.add(event)
+        try:
+            await self.session.commit()
+        except IntegrityError:
+            await self.session.rollback()
+            result = await self.session.exec(
+                select(WeComArchiveEvent).where(
+                    WeComArchiveEvent.connection_id == connection_id,
+                    WeComArchiveEvent.provider_message_id == provider_message_id,
+                )
+            )
+            existing = result.one()
+            if existing.status in {WeComEventStatus.COMPLETED, WeComEventStatus.IGNORED}:
+                return existing, False
+            existing.status = WeComEventStatus.PROCESSING
+            existing.attempt_count += 1
+            existing.processing_error = None
+            existing.updated_at = utc_now()
+            self.session.add(existing)
+            await self.session.commit()
+            await self.session.refresh(existing)
+            return existing, True
+        await self.session.refresh(event)
+        return event, True
+
+    async def complete_event(
+        self, event: WeComArchiveEvent, *, matched_user_count: int, ignored: bool = False
+    ) -> None:
+        event.status = WeComEventStatus.IGNORED if ignored else WeComEventStatus.COMPLETED
+        event.matched_user_count = matched_user_count
+        event.processing_error = None
+        event.processed_at = utc_now()
+        event.updated_at = utc_now()
+        self.session.add(event)
+        await self.session.commit()
+
+    async def fail_event(self, event: WeComArchiveEvent, error: str) -> None:
+        event.status = WeComEventStatus.FAILED
+        event.processing_error = error[:1000]
+        event.updated_at = utc_now()
+        self.session.add(event)
+        await self.session.commit()
+
+    async def ensure_archive_source(
+        self,
+        *,
+        connection_id: UUID,
+        owner_user_id: UUID,
+        external_conversation_id: str,
+        display_name: str,
+        source_type: WeComSourceType,
+        quota_paused: bool = False,
+        quota_reason: str | None = None,
+    ) -> WeComSource:
+        result = await self.session.exec(
+            select(WeComSource).where(
+                WeComSource.archive_connection_id == connection_id,
+                WeComSource.owner_user_id == owner_user_id,
+                WeComSource.external_conversation_id == external_conversation_id,
+            )
+        )
+        source = result.first()
+        now = utc_now()
+        if source:
+            source.display_name = display_name[:255]
+            source.last_message_at = now
+            source.updated_at = now
+        else:
+            source = WeComSource(
+                owner_user_id=owner_user_id,
+                archive_connection_id=connection_id,
+                external_conversation_id=external_conversation_id,
+                display_name=display_name[:255],
+                source_type=source_type,
+                receive_capability=WeComReceiveCapability.MESSAGE_ARCHIVE,
+                send_capability=WeComSendCapability.MANUAL_ONLY,
+                quota_paused=quota_paused,
+                quota_reason=quota_reason,
+                last_message_at=now,
+            )
+        self.session.add(source)
+        try:
+            await self.session.commit()
+        except IntegrityError:
+            await self.session.rollback()
+            result = await self.session.exec(
+                select(WeComSource).where(
+                    WeComSource.archive_connection_id == connection_id,
+                    WeComSource.owner_user_id == owner_user_id,
+                    WeComSource.external_conversation_id == external_conversation_id,
+                )
+            )
+            source = result.one()
+        await self.session.refresh(source)
+        return source
+
+    async def get_archive_source(
+        self,
+        *,
+        connection_id: UUID,
+        owner_user_id: UUID,
+        external_conversation_id: str,
+    ) -> WeComSource | None:
+        result = await self.session.exec(
+            select(WeComSource).where(
+                WeComSource.archive_connection_id == connection_id,
+                WeComSource.owner_user_id == owner_user_id,
+                WeComSource.external_conversation_id == external_conversation_id,
+            )
+        )
+        return result.first()
+
+    async def active_group_counts(self, owner_user_id: UUID) -> tuple[int, int]:
+        telegram_result = await self.session.exec(
+            select(func.count())
+            .select_from(TelegramSource)
+            .join(
+                TelegramConnection,
+                TelegramSource.connection_id == TelegramConnection.id,
+            )
+            .where(
+                TelegramSource.owner_user_id == owner_user_id,
+                TelegramSource.enabled.is_(True),
+                TelegramSource.quota_paused.is_(False),
+                TelegramConnection.enabled.is_(True),
+                TelegramConnection.status == TelegramConnectionStatus.CONNECTED,
+                TelegramSource.source_type.in_(
+                    [TelegramSourceType.GROUP, TelegramSourceType.CHANNEL]
+                ),
+            )
+        )
+        wecom_groups = await _count_active_wecom_group_sources(
+            self.session, owner_user_id
+        )
+        return int(telegram_result.one()), wecom_groups
+
+    async def reconcile_source_quota_for_user(
+        self, *, owner_user_id: UUID, capacity: int
+    ) -> list[WeComSource]:
+        result = await self.session.exec(
+            select(WeComSource)
+            .where(
+                WeComSource.owner_user_id == owner_user_id,
+                WeComSource.enabled.is_(True),
+                WeComSource.source_type.in_(
+                    [WeComSourceType.INTERNAL_GROUP, WeComSourceType.EXTERNAL_GROUP]
+                ),
+            )
+            .order_by(
+                col(WeComSource.quota_paused).asc(),
+                col(WeComSource.created_at).asc(),
+            )
+        )
+        sources = list(result.all())
+        for index, source in enumerate(sources):
+            paused = index >= max(capacity, 0)
+            source.quota_paused = paused
+            source.quota_reason = (
+                "current subscription does not have capacity for this WeCom group"
+                if paused
+                else None
+            )
+            source.updated_at = utc_now()
+            self.session.add(source)
+        await self.session.commit()
+        return sources
+
+    async def finish_poll(
+        self,
+        *,
+        connection: WeComArchiveConnection,
+        cursor: WeComArchiveCursor,
+        last_sequence: int,
+        batch_size: int,
+        verified: bool = False,
+    ) -> None:
+        now = utc_now()
+        cursor.last_seq = max(cursor.last_seq, last_sequence)
+        cursor.last_batch_size = batch_size
+        cursor.lease_expires_at = None
+        cursor.updated_at = now
+        connection.status = WeComConnectionStatus.ACTIVE
+        connection.last_polled_at = now
+        connection.last_error = None
+        if verified:
+            connection.last_verified_at = now
+        connection.updated_at = now
+        self.session.add(cursor)
+        self.session.add(connection)
+        await self.session.commit()
+
+    async def release_poll_failure(
+        self, connection: WeComArchiveConnection, cursor: WeComArchiveCursor, error: str
+    ) -> None:
+        cursor.lease_expires_at = None
+        cursor.updated_at = utc_now()
+        connection.last_error = error[:1000]
+        connection.updated_at = utc_now()
+        self.session.add(cursor)
+        self.session.add(connection)
+        await self.session.commit()
+
+    async def mark_connection_error(
+        self, connection: WeComArchiveConnection, error: str
+    ) -> None:
+        connection.last_error = error[:1000]
+        connection.updated_at = utc_now()
+        self.session.add(connection)
+        await self.session.commit()
+
+    async def disable_and_clear_secrets(
+        self, connection: WeComArchiveConnection, *, cleared_secret: str
+    ) -> None:
+        connection.enabled = False
+        connection.status = WeComConnectionStatus.DISABLED
+        connection.secret_encrypted = cleared_secret
+        connection.private_key_encrypted = cleared_secret
+        connection.last_error = None
+        connection.updated_at = utc_now()
+        self.session.add(connection)
+        bindings = await self.session.exec(
+            select(WeComArchiveMemberBinding).where(
+                WeComArchiveMemberBinding.connection_id == connection.id
+            )
+        )
+        for binding in bindings.all():
+            binding.enabled = False
+            binding.updated_at = utc_now()
+            self.session.add(binding)
+        sources = await self.session.exec(
+            select(WeComSource).where(WeComSource.archive_connection_id == connection.id)
+        )
+        for source in sources.all():
+            source.enabled = False
+            source.updated_at = utc_now()
+            self.session.add(source)
         await self.session.commit()
 
 

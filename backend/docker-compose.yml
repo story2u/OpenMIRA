@@ -43,6 +43,13 @@ x-app-env: &app-env
   WECOM_SECRET: change-me
   WECOM_TOKEN: change-me
   WECOM_AES_KEY: change-me
+  WECOM_ARCHIVE_ENABLED: ${WECOM_ARCHIVE_ENABLED:-false}
+  WECOM_ARCHIVE_SDK_PATH: ${WECOM_ARCHIVE_SDK_PATH:-/opt/wecom-finance-sdk/libWeWorkFinanceSdk_C.so}
+  LD_LIBRARY_PATH: /opt/wecom-finance-sdk
+  WECOM_ARCHIVE_POLL_INTERVAL_SECONDS: ${WECOM_ARCHIVE_POLL_INTERVAL_SECONDS:-10}
+  WECOM_ARCHIVE_BATCH_SIZE: ${WECOM_ARCHIVE_BATCH_SIZE:-100}
+  WECOM_ARCHIVE_SDK_TIMEOUT_SECONDS: ${WECOM_ARCHIVE_SDK_TIMEOUT_SECONDS:-5}
+  WECOM_ARCHIVE_LEASE_SECONDS: ${WECOM_ARCHIVE_LEASE_SECONDS:-120}
   AI_ENABLED: "false"
   LITELLM_MODEL: openai/gpt-4o-mini
   OPENAI_API_KEY: change-me
@@ -122,6 +129,7 @@ services:
       - "8000:8000"
     volumes:
       - .:/app
+      - ${WECOM_ARCHIVE_SDK_DIR:-./vendor/wecom-finance-sdk}:/opt/wecom-finance-sdk:ro
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -142,6 +150,17 @@ services:
     environment: *app-env
     volumes:
       - .:/app
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  wecom_archive_worker:
+    build: .
+    command: celery -A app.worker.celery_app:celery_app worker -l INFO -Q wecom_archive --concurrency=1
+    environment: *app-env
+    volumes:
+      - .:/app
+      - ${WECOM_ARCHIVE_SDK_DIR:-./vendor/wecom-finance-sdk}:/opt/wecom-finance-sdk:ro
     depends_on:
       migrate:
         condition: service_completed_successfully

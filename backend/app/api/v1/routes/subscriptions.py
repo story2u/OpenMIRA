@@ -10,6 +10,7 @@ from app.api.deps import (
     get_telegram_connection_repo,
     get_telegram_user_config_repo,
     get_user_repo,
+    get_wecom_archive_repo,
     require_user,
 )
 from app.application.dto import (
@@ -30,6 +31,7 @@ from app.infrastructure.db.repositories import (
     TelegramConnectionRepository,
     TelegramUserConfigRepository,
     UserRepository,
+    WeComArchiveRepository,
 )
 
 router = APIRouter()
@@ -95,6 +97,7 @@ async def subscription_usage_read(
     subscription_repo: SubscriptionRepository,
     telegram_repo: TelegramUserConfigRepository,
     telegram_connection_repo: TelegramConnectionRepository,
+    wecom_archive_repo: WeComArchiveRepository,
 ) -> SubscriptionUsageRead:
     snapshot = await subscription_repo.get_snapshot(current_user.id)
     consumed, reserved = await subscription_repo.usage_counts(
@@ -103,7 +106,7 @@ async def subscription_usage_read(
     )
     legacy_telegram_used = await telegram_repo.count_active_monitors_by_user(current_user.id)
     telegram_used = legacy_telegram_used + await telegram_connection_repo.count_active_sources_by_user(current_user.id)
-    wecom_used = 0
+    _, wecom_used = await wecom_archive_repo.active_group_counts(current_user.id)
     limit = snapshot.entitlements.pi_agent_analysis_monthly_limit
     return SubscriptionUsageRead(
         planCode=snapshot.plan_code,
@@ -140,6 +143,7 @@ async def get_my_subscription(
     subscription_repo: SubscriptionRepository = Depends(get_subscription_repo),
     telegram_repo: TelegramUserConfigRepository = Depends(get_telegram_user_config_repo),
     telegram_connection_repo: TelegramConnectionRepository = Depends(get_telegram_connection_repo),
+    wecom_archive_repo: WeComArchiveRepository = Depends(get_wecom_archive_repo),
 ) -> SubscriptionUsageRead:
     return await subscription_usage_read(
         current_user=current_user,
@@ -147,6 +151,7 @@ async def get_my_subscription(
         subscription_repo=subscription_repo,
         telegram_repo=telegram_repo,
         telegram_connection_repo=telegram_connection_repo,
+        wecom_archive_repo=wecom_archive_repo,
     )
 
 
@@ -159,6 +164,7 @@ async def sync_my_subscription(
     subscription_repo: SubscriptionRepository = Depends(get_subscription_repo),
     telegram_repo: TelegramUserConfigRepository = Depends(get_telegram_user_config_repo),
     telegram_connection_repo: TelegramConnectionRepository = Depends(get_telegram_connection_repo),
+    wecom_archive_repo: WeComArchiveRepository = Depends(get_wecom_archive_repo),
 ) -> SubscriptionUsageRead:
     if not settings.revenuecat_server_available:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Payments are not configured")
@@ -177,6 +183,7 @@ async def sync_my_subscription(
             subscription_repo=subscription_repo,
             telegram_repo=telegram_repo,
             telegram_connection_repo=telegram_connection_repo,
+            wecom_archive_repo=wecom_archive_repo,
         ).execute(current_user.id)
     except RevenueCatError as exc:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Subscription provider is temporarily unavailable") from exc
@@ -188,6 +195,7 @@ async def sync_my_subscription(
         subscription_repo=subscription_repo,
         telegram_repo=telegram_repo,
         telegram_connection_repo=telegram_connection_repo,
+        wecom_archive_repo=wecom_archive_repo,
     )
 
 

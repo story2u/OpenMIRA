@@ -25,6 +25,7 @@ from app.infrastructure.db.repositories import (
     UserRepository,
     UserSettingsRepository,
     WeComConnectionRepository,
+    WeComArchiveRepository,
     WeComDeliveryRepository,
     WeComEventRepository,
 )
@@ -135,6 +136,12 @@ def get_wecom_connection_repo(
     session: AsyncSession = Depends(get_session),
 ) -> WeComConnectionRepository:
     return WeComConnectionRepository(session)
+
+
+def get_wecom_archive_repo(
+    session: AsyncSession = Depends(get_session),
+) -> WeComArchiveRepository:
+    return WeComArchiveRepository(session)
 
 
 def get_wecom_event_repo(

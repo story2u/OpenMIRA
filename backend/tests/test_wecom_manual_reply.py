@@ -75,3 +75,31 @@ async def test_wecom_manual_reply_passes_owner_context_and_is_idempotent() -> No
     assert adapter.calls[0]["owner_user_id"] == owner_id
     assert adapter.calls[0]["opportunity_id"] == opportunity.id
     assert adapter.calls[0]["idempotency_key"] == "reply-request-001"
+
+
+@pytest.mark.asyncio
+async def test_wecom_archive_manual_reply_is_rejected_before_adapter_send() -> None:
+    owner_id = uuid4()
+    adapter = FakeWeComAdapter()
+    opportunity = Opportunity(
+        owner_user_id=owner_id,
+        channel=IMChannel.WECOM,
+        conversation_id=f"wecom-archive:{uuid4()}:{owner_id}:room-001",
+        title="采购咨询",
+        status=OpportunityStatus.PENDING_HUMAN,
+    )
+    use_case = ManualReplyUseCase(
+        opportunity_repo=FakeOpportunityRepository(),
+        message_repo=FakeMessageRepository(),
+        adapters=AdapterRegistry([adapter]),
+    )
+
+    with pytest.raises(ValueError, match="read-only"):
+        await use_case.execute(
+            opportunity=opportunity,
+            text="这条消息不得通过存档连接发送",
+            operator_id=str(owner_id),
+            mark_following=True,
+        )
+
+    assert adapter.calls == []

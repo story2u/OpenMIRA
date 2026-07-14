@@ -1,4 +1,5 @@
 from functools import lru_cache
+from pathlib import Path
 from typing import Literal
 
 from pydantic import AnyHttpUrl, Field, field_validator
@@ -72,6 +73,18 @@ class Settings(BaseSettings):
     wecom_connection_limit: int = Field(default=1, ge=1, le=20)
     wecom_webhook_tolerance_seconds: int = Field(default=300, ge=30, le=3600)
     wecom_webhook_max_body_bytes: int = Field(default=256_000, ge=1024, le=1_000_000)
+    wecom_archive_enabled: bool = False
+    wecom_archive_sdk_path: str = "/opt/wecom-finance-sdk/libWeWorkFinanceSdk_C.so"
+    wecom_archive_poll_interval_seconds: int = Field(default=10, ge=5, le=300)
+    wecom_archive_batch_size: int = Field(default=100, ge=1, le=1000)
+    wecom_archive_sdk_timeout_seconds: int = Field(default=5, ge=1, le=30)
+    wecom_archive_lease_seconds: int = Field(default=120, ge=30, le=900)
+    wecom_archive_connection_limit: int = Field(default=1, ge=1, le=20)
+    wecom_archive_sync_rate_limit_seconds: int = Field(default=30, ge=5, le=3600)
+
+    @property
+    def wecom_archive_sdk_configured(self) -> bool:
+        return self.wecom_archive_enabled and Path(self.wecom_archive_sdk_path).is_file()
 
     ai_enabled: bool = False
     litellm_model: str = "openai/gpt-4o-mini"

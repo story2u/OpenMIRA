@@ -23,6 +23,19 @@ class CeleryTaskQueue:
             return False
         return True
 
+    def enqueue_wecom_archive_sync(self, connection_id: UUID, *, verifying: bool = False) -> bool:
+        try:
+            celery_app.send_task(
+                "wecom.sync_archive_connection",
+                args=[str(connection_id), verifying],
+            )
+        except Exception:
+            logger.exception(
+                "wecom.archive_sync_enqueue_failed", connection_id=str(connection_id)
+            )
+            return False
+        return True
+
     def enqueue_agent_analysis(
         self,
         message_id: UUID,

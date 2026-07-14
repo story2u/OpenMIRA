@@ -20,6 +20,7 @@ from app.infrastructure.db.repositories import (
     TelegramConnectionRepository,
     TelegramUserConfigRepository,
     UserRepository,
+    WeComArchiveRepository,
 )
 
 logger = structlog.get_logger(__name__)
@@ -53,6 +54,7 @@ class SyncRevenueCatCustomer:
         subscription_repo: SubscriptionRepository,
         telegram_repo: TelegramUserConfigRepository,
         telegram_connection_repo: TelegramConnectionRepository,
+        wecom_archive_repo: WeComArchiveRepository | None = None,
     ) -> None:
         self.settings = settings
         self.provider = provider
@@ -60,6 +62,7 @@ class SyncRevenueCatCustomer:
         self.subscription_repo = subscription_repo
         self.telegram_repo = telegram_repo
         self.telegram_connection_repo = telegram_connection_repo
+        self.wecom_archive_repo = wecom_archive_repo
 
     def entitlement_plan(self, identifier: str) -> PlanCode | None:
         mapping = {
@@ -136,6 +139,21 @@ class SyncRevenueCatCustomer:
             capacity=capacity,
             legacy_active_count=min(legacy_active, capacity),
         )
+        if self.wecom_archive_repo:
+            active_telegram = min(
+                legacy_active, capacity
+            ) + await self.telegram_connection_repo.count_active_sources_by_user(user_id)
+            combined_remaining = max(
+                snapshot.entitlements.combined_group_limit - active_telegram, 0
+            )
+            wecom_capacity = combined_remaining
+            if snapshot.entitlements.wecom_group_limit is not None:
+                wecom_capacity = min(
+                    wecom_capacity, snapshot.entitlements.wecom_group_limit
+                )
+            await self.wecom_archive_repo.reconcile_source_quota_for_user(
+                owner_user_id=user_id, capacity=wecom_capacity
+            )
         return SyncResult(
             user_id=user_id,
             plan_code=account.plan_code,

@@ -10,7 +10,8 @@
 ```mermaid
 flowchart LR
     TG["Telegram Bot / 用户账号"] --> API["FastAPI API / 监听器"]
-    WC["企业微信"] --> API
+    WC["企业微信自建应用"] --> API
+    WCA["企业微信会话内容存档 / Finance SDK"] --> CELERY
     WEB["Next.js Web"] <--> API
     API --> PG[(PostgreSQL)]
     API --> REDIS[(Redis)]
@@ -33,6 +34,7 @@ flowchart LR
 | API | `backend/app/main.py` | FastAPI 路由、OAuth、查询/命令、webhook 接入 |
 | Celery worker | `backend/app/worker/celery_app.py` | AI 回复与超时任务的异步执行 |
 | Celery beat | 同上 | 周期调度待人工商机超时检查 |
+| WeCom archive worker | `backend/app/worker/tasks.py` + Finance SDK | 单并发拉取/解密企业级会话存档，按成员 binding 生成只读消息与商机 |
 | pi Agent runner | `backend/pi-agent-runtime/src/index.mjs` | 由 worker 按消息启动；只提交结构化分析，不持有业务动作权限 |
 | Telegram listener | `backend/app/worker/telegram_listener.py` | 保持旧 MTProto session 的兼容监听 |
 | Telegram QR worker / listener | `backend/app/worker/telegram_mtproto_qr_worker.py`、`telegram_mtproto_listener.py` | 平台凭据二维码登录、加密 session 与普通账号来源的只读监听 |
@@ -97,6 +99,9 @@ ADR 和迁移计划，不要在单个功能中半途改造。
 | `TelegramSource` | 连接下的群组/频道/私聊来源 | connection + external chat 唯一；按 owner、enabled 与 quota_paused 过滤 webhook |
 | `TelegramConnectionAttempt` / `TelegramWebhookEvent` | 连接握手与 webhook 审计 | 仅保存连接令牌哈希/TTL；以 Telegram update ID 去重，不保存 raw webhook |
 | `TelegramUserConfig` / `TelegramMonitor` | 旧 MTProto 兼容路径 | 既有加密 session 与 listener 保持可用，直到单独的迁移计划完成 |
+| `WeComConnection` / `WeComWebhookEvent` | 企业微信自建应用连接与 webhook 幂等审计 | owner 管理、用户级加密凭据；只接收成员发给应用的消息 |
+| `WeComArchiveConnection` / `WeComArchiveMemberBinding` | 企业级会话存档连接和本地用户可见性边界 | connection owner 只能管理连接；只有参与消息的 active binding 可获得投影 |
+| `WeComArchiveCursor` / `WeComArchiveEvent` | Finance SDK 增量游标与最小事件审计 | connection 唯一 cursor、provider message ID 幂等；不复制完整 provider payload |
 
 结构变更以 `backend/alembic/versions/` 的迁移历史为准；模型变更必须配套新迁移。
 

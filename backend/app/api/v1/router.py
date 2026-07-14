@@ -17,6 +17,7 @@ from app.api.v1.routes import (
     webhooks_telegram,
     webhooks_wecom,
     wecom_connections,
+    wecom_archive_connections,
 )
 
 api_router = APIRouter()
@@ -47,6 +48,11 @@ api_router.include_router(
 )
 api_router.include_router(
     wecom_connections.router,
+    prefix="/integrations/wecom",
+    tags=["integrations"],
+)
+api_router.include_router(
+    wecom_archive_connections.router,
     prefix="/integrations/wecom",
     tags=["integrations"],
 )

@@ -237,6 +237,13 @@ async def manual_reply(
     adapters: AdapterRegistry = Depends(get_adapter_registry),
 ) -> OpportunityDetailRead:
     ensure_opportunity_is_active(opportunity)
+    if opportunity.channel == IMChannel.WECOM and opportunity.conversation_id.startswith(
+        "wecom-archive:"
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="WeCom archive conversations are read-only; reply in WeCom",
+        )
     is_dynamic_wecom = (
         opportunity.channel == IMChannel.WECOM
         and opportunity.conversation_id.startswith("wecom:")

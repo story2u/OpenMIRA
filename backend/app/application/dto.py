@@ -459,7 +459,8 @@ class WeComConnectionCreate(BaseModel):
 
 class WeComSourceRead(BaseModel):
     id: UUID
-    connectionId: UUID
+    connectionId: UUID | None = None
+    archiveConnectionId: UUID | None = None
     sourceType: WeComSourceType
     externalConversationId: str
     displayName: str
@@ -486,6 +487,46 @@ class WeComConnectionRead(BaseModel):
     lastError: str | None = None
     updatedAt: datetime
     sources: list[WeComSourceRead] = Field(default_factory=list)
+
+
+class WeComArchiveConnectionCreate(BaseModel):
+    displayName: str = Field(default="企业微信会话存档", min_length=1, max_length=255)
+    corpId: str = Field(min_length=2, max_length=128)
+    archiveSecret: str = Field(min_length=8, max_length=512)
+    privateKeyPem: str = Field(min_length=100, max_length=16_384)
+    publicKeyVersion: int = Field(ge=1)
+    wecomUserId: str = Field(min_length=1, max_length=128, pattern=r"^[^\s]+$")
+    memberDisplayName: str = Field(default="企业微信成员", min_length=1, max_length=255)
+
+
+class WeComArchiveMemberBindingRead(BaseModel):
+    id: UUID
+    wecomUserId: str
+    displayName: str
+    enabled: bool
+    lastMatchedAt: datetime | None = None
+
+
+class WeComArchiveConnectionRead(BaseModel):
+    id: UUID
+    status: WeComConnectionStatus
+    enabled: bool
+    displayName: str
+    corpId: str
+    publicKeyVersion: int
+    credentialConfigured: bool = True
+    sdkConfigured: bool
+    lastSequence: int
+    lastVerifiedAt: datetime | None = None
+    lastPolledAt: datetime | None = None
+    lastError: str | None = None
+    updatedAt: datetime
+    member: WeComArchiveMemberBindingRead
+    sources: list[WeComSourceRead] = Field(default_factory=list)
+
+
+class WeComArchiveSyncAccepted(BaseModel):
+    accepted: bool = True
 
 
 # MARK: 用户级设置（detection / work-schedule / notifications）

@@ -852,12 +852,27 @@ class WeComSource(TimestampMixin, table=True):
             "external_conversation_id",
             name="uq_wecom_sources_connection_conversation",
         ),
+        UniqueConstraint(
+            "archive_connection_id",
+            "owner_user_id",
+            "external_conversation_id",
+            name="uq_wecom_sources_archive_owner_conversation",
+        ),
+        CheckConstraint(
+            "(connection_id IS NOT NULL) <> (archive_connection_id IS NOT NULL)",
+            name="ck_wecom_sources_exactly_one_connection",
+        ),
         Index("ix_wecom_sources_owner_enabled", "owner_user_id", "enabled", "quota_paused"),
     )
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     owner_user_id: UUID = Field(foreign_key="users.id", index=True)
-    connection_id: UUID = Field(foreign_key="wecom_connections.id", index=True)
+    connection_id: UUID | None = Field(
+        default=None, foreign_key="wecom_connections.id", index=True
+    )
+    archive_connection_id: UUID | None = Field(
+        default=None, foreign_key="wecom_archive_connections.id", index=True
+    )
     external_conversation_id: str = Field(max_length=255, index=True)
     display_name: str = Field(default="企业微信成员", max_length=255)
     source_type: WeComSourceType = Field(
@@ -945,6 +960,114 @@ class WeComOutboundDelivery(TimestampMixin, table=True):
         default=None, sa_column=Column(DateTime(timezone=True), nullable=True)
     )
     error: str | None = Field(default=None, max_length=1000)
+
+
+class WeComArchiveConnection(TimestampMixin, table=True):
+    """Enterprise Finance SDK credentials managed by one local installer."""
+
+    __tablename__ = "wecom_archive_connections"
+    __table_args__ = (
+        UniqueConstraint(
+            "owner_user_id", "corp_id", name="uq_wecom_archive_connections_owner_corp"
+        ),
+        Index("ix_wecom_archive_connections_status_enabled", "status", "enabled"),
+    )
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    owner_user_id: UUID = Field(foreign_key="users.id", index=True)
+    display_name: str = Field(default="企业微信会话存档", max_length=255)
+    corp_id: str = Field(max_length=128, index=True)
+    secret_encrypted: str
+    private_key_encrypted: str
+    public_key_version: int = Field(ge=1)
+    status: WeComConnectionStatus = Field(
+        default=WeComConnectionStatus.PENDING,
+        sa_column=Column(
+            SAEnum(WeComConnectionStatus, native_enum=False), nullable=False, index=True
+        ),
+    )
+    enabled: bool = Field(default=True, index=True)
+    last_verified_at: datetime | None = Field(
+        default=None, sa_column=Column(DateTime(timezone=True), nullable=True)
+    )
+    last_polled_at: datetime | None = Field(
+        default=None, sa_column=Column(DateTime(timezone=True), nullable=True, index=True)
+    )
+    last_error: str | None = Field(default=None, max_length=1000)
+
+
+class WeComArchiveMemberBinding(TimestampMixin, table=True):
+    """Maps one local user to the WeCom member whose conversations they may see."""
+
+    __tablename__ = "wecom_archive_member_bindings"
+    __table_args__ = (
+        UniqueConstraint(
+            "connection_id", "user_id", name="uq_wecom_archive_bindings_connection_user"
+        ),
+        UniqueConstraint(
+            "connection_id",
+            "wecom_user_id",
+            name="uq_wecom_archive_bindings_connection_wecom_user",
+        ),
+        Index("ix_wecom_archive_bindings_user_enabled", "user_id", "enabled"),
+    )
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    connection_id: UUID = Field(foreign_key="wecom_archive_connections.id", index=True)
+    user_id: UUID = Field(foreign_key="users.id", index=True)
+    wecom_user_id: str = Field(max_length=128, index=True)
+    display_name: str = Field(default="企业微信成员", max_length=255)
+    enabled: bool = Field(default=True, index=True)
+    last_matched_at: datetime | None = Field(
+        default=None, sa_column=Column(DateTime(timezone=True), nullable=True)
+    )
+
+
+class WeComArchiveCursor(TimestampMixin, table=True):
+    __tablename__ = "wecom_archive_cursors"
+    __table_args__ = (
+        UniqueConstraint("connection_id", name="uq_wecom_archive_cursors_connection"),
+        CheckConstraint("last_seq >= 0", name="ck_wecom_archive_cursors_last_seq_nonnegative"),
+    )
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    connection_id: UUID = Field(foreign_key="wecom_archive_connections.id", index=True)
+    last_seq: int = Field(default=0, sa_column=Column(BigInteger, nullable=False))
+    lease_expires_at: datetime | None = Field(
+        default=None, sa_column=Column(DateTime(timezone=True), nullable=True, index=True)
+    )
+    last_batch_size: int = Field(default=0, ge=0)
+
+
+class WeComArchiveEvent(TimestampMixin, table=True):
+    """Minimal provider audit. Decrypted message bodies are not stored here."""
+
+    __tablename__ = "wecom_archive_events"
+    __table_args__ = (
+        UniqueConstraint(
+            "connection_id",
+            "provider_message_id",
+            name="uq_wecom_archive_events_connection_message",
+        ),
+        Index("ix_wecom_archive_events_status_created", "status", "created_at"),
+    )
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    connection_id: UUID = Field(foreign_key="wecom_archive_connections.id", index=True)
+    provider_message_id: str = Field(max_length=255)
+    sequence: int = Field(sa_column=Column(BigInteger, nullable=False, index=True))
+    message_type: str = Field(default="unknown", max_length=64, index=True)
+    payload_hash: str = Field(max_length=64)
+    status: WeComEventStatus = Field(
+        default=WeComEventStatus.RECEIVED,
+        sa_column=Column(SAEnum(WeComEventStatus, native_enum=False), nullable=False, index=True),
+    )
+    matched_user_count: int = Field(default=0, ge=0)
+    attempt_count: int = Field(default=0, ge=0)
+    processed_at: datetime | None = Field(
+        default=None, sa_column=Column(DateTime(timezone=True), nullable=True)
+    )
+    processing_error: str | None = Field(default=None, max_length=1000)
 
 
 class ReplyTemplate(TimestampMixin, table=True):

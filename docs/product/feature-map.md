@@ -35,7 +35,7 @@
 | Telegram 普通账号 QR | `/settings/telegram` | `POST /integrations/telegram/connect/mtproto-qr`、dialogs/sources API | 部分实现 | 平台统一凭据、二维码、加密 session、独立 QR worker 和只读 listener；需生产 Telegram 隔离冒烟 |
 | Telegram 旧 MTProto 监听 | 无默认表单入口 | 独立 legacy listener | 已实现（兼容） | 已授权 session 继续监听；旧用户凭据采集 API 已删除，新页面不展示或迁移秘密 |
 | 企业微信自建应用 | `/settings/wecom` | `/integrations/wecom/*`、`GET/POST /webhooks/wecom/{connection_id}` | 部分实现 | 用户级加密凭据、专属回调、验签/解密、幂等 Celery 摄取和成员私聊人工回复已实现；待真实企业联调，不支持普通群聊监听 |
-| 企微会话内容存档 | 无 | 仅数据模型预留 | 未实现 | 内部/外部群聊读取需企业购买会话存档、合规授权和 Finance SDK；当前不用自建应用回调冒充 |
+| 企微会话内容存档 | `/settings/wecom` | `/integrations/wecom/archive-connections/*`、Celery `wecom_archive` queue | 部分实现 | 企业级连接、成员 binding、Finance SDK 拉取/解密、幂等 cursor、owner 投影、群配额和只读商机链路已实现；默认关闭，需企业购买存档、管理员合规授权、出口 IP 白名单、官方 SDK 挂载及真实企业 E2E，不是普通成员个人授权 |
 | 规则管理（全局） | `/settings` | CRUD `/rules` | 部分实现 | 后端 admin API 已有；面向普通用户的识别偏好改走用户级 `/settings/detection` |
 | 用户级识别规则（关键词 + AI 语义） | Web/iOS/Android 设置 | `GET /settings/me`、`PATCH /settings/detection` | 已实现 | `user_detection_preferences` 表按 owner 隔离；关键词去空格/去重/限长限量；已接入 `ingest_message` 摄取（用户关键词叠加全局规则、AI 语义开关生效），三端共享同一数据源，有 owner 隔离与规范化测试 |
 | 用户级工作时间 | `/settings/working-hours`、iOS/Android | `GET /settings/me`、`PATCH /settings/work-schedule` | 已实现 | `user_work_schedules` 表按 owner；IANA 时区 + 任意人工审核时段；`WorkScheduleService` 接入摄取决定人工/AI，无用户设置回退全局默认；三端共享，有时区/时段判定测试。旧全局 `/configs/work-mode` 保留但普通用户不再改全局 |
@@ -62,6 +62,7 @@
 | 商机状态机 | `backend/app/domain/services/opportunity_state.py` |
 | 回复编排 | `backend/app/application/use_cases/manual_reply.py`、`ai_reply.py` |
 | IM 适配 | `backend/app/infrastructure/im/` |
+| 企业微信会话存档 | `backend/app/infrastructure/im/wecom_archive.py`、`application/use_cases/sync_wecom_archive.py` |
 | AI 分类/回复 | `backend/app/infrastructure/ai/litellm_client.py` |
 | 异步任务 | `backend/app/worker/tasks.py`、`queue.py` |
 | pi Agent 后处理 | `backend/app/application/use_cases/analyze_message.py`、`infrastructure/agent/`、`pi-agent-runtime/` |

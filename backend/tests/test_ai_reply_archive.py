@@ -78,3 +78,36 @@ async def test_user_wecom_auto_reply_job_does_not_send() -> None:
     )
 
     assert await use_case.execute(opportunity) is opportunity
+
+
+@pytest.mark.asyncio
+async def test_wecom_archive_opportunity_never_transitions_to_auto_reply() -> None:
+    opportunity = SimpleNamespace(
+        id=uuid4(),
+        status=OpportunityStatus.PENDING_HUMAN,
+        archived_at=None,
+        channel=IMChannel.WECOM,
+        conversation_id=f"wecom-archive:{uuid4()}:{uuid4()}:room-001",
+    )
+    repo = ArchivedOpportunityRepository(opportunity)
+
+    assert await transition_pending_to_ai(repo, opportunity.id) is None
+
+
+@pytest.mark.asyncio
+async def test_wecom_archive_auto_reply_job_does_not_send() -> None:
+    opportunity = SimpleNamespace(
+        id=uuid4(),
+        status=OpportunityStatus.AI_AUTO_REPLY,
+        archived_at=None,
+        channel=IMChannel.WECOM,
+        conversation_id=f"wecom-archive:{uuid4()}:{uuid4()}:room-001",
+    )
+    use_case = AIAutoReplyUseCase(
+        opportunity_repo=SimpleNamespace(),
+        message_repo=SimpleNamespace(),
+        adapters=SimpleNamespace(),
+        reply_generator=SimpleNamespace(),
+    )
+
+    assert await use_case.execute(opportunity) is opportunity

@@ -97,5 +97,5 @@ async def transition_pending_to_ai(
 
 def _requires_manual_wecom_reply(opportunity: Opportunity) -> bool:
     return opportunity.channel == IMChannel.WECOM and opportunity.conversation_id.startswith(
-        "wecom:"
+        ("wecom:", "wecom-archive:")
     )

@@ -27,6 +27,8 @@ celery_app.conf.update(
         "billing.sync_revenuecat_customer": {"queue": "default"},
         "billing.reconcile_revenuecat_subscriptions": {"queue": "default"},
         "wecom.process_webhook_event": {"queue": "im"},
+        "wecom.enqueue_archive_syncs": {"queue": "default"},
+        "wecom.sync_archive_connection": {"queue": "wecom_archive"},
     },
     beat_schedule={
         "sweep-pending-human-every-5-minutes": {
@@ -36,6 +38,10 @@ celery_app.conf.update(
         "reconcile-revenuecat-subscriptions": {
             "task": "billing.reconcile_revenuecat_subscriptions",
             "schedule": float(settings.revenuecat_reconcile_interval_hours * 3600),
+        },
+        "poll-wecom-conversation-archives": {
+            "task": "wecom.enqueue_archive_syncs",
+            "schedule": float(settings.wecom_archive_poll_interval_seconds),
         },
     },
 )

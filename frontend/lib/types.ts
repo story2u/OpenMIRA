@@ -235,7 +235,8 @@ export type WeComSourceType =
 
 export interface WeComSource {
   id: string
-  connectionId: string
+  connectionId?: string | null
+  archiveConnectionId?: string | null
   sourceType: WeComSourceType
   externalConversationId: string
   displayName: string
@@ -271,6 +272,40 @@ export interface WeComConnectionCreate {
   secret: string
   token: string
   encodingAesKey: string
+}
+
+export interface WeComArchiveConnectionCreate {
+  displayName: string
+  corpId: string
+  archiveSecret: string
+  privateKeyPem: string
+  publicKeyVersion: number
+  wecomUserId: string
+  memberDisplayName: string
+}
+
+export interface WeComArchiveConnection {
+  id: string
+  status: WeComConnectionStatus
+  enabled: boolean
+  displayName: string
+  corpId: string
+  publicKeyVersion: number
+  credentialConfigured: boolean
+  sdkConfigured: boolean
+  lastSequence: number
+  lastVerifiedAt: string | null
+  lastPolledAt: string | null
+  lastError: string | null
+  updatedAt: string
+  member: {
+    id: string
+    wecomUserId: string
+    displayName: string
+    enabled: boolean
+    lastMatchedAt: string | null
+  }
+  sources: WeComSource[]
 }
 
 export interface PlanEntitlements {
