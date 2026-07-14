@@ -1,6 +1,6 @@
 # H5 / iOS / Android 密码管理
 
-> 状态：active · Owner：Codex · 创建：2026-07-15 · 更新：2026-07-15
+> 状态：completed · Owner：Codex · 创建：2026-07-15 · 完成：2026-07-15
 
 ## 目标与用户价值
 
@@ -46,7 +46,7 @@
 - [x] 完成 H5 邮箱登录、忘记/重置和账户安全页面。
 - [x] 完成 iOS 原生表单、API 模型、设置入口与测试。
 - [x] 完成 Android Compose 表单、API 模型、导航入口与测试。
-- [ ] 更新配置/部署/文档，运行完整检查并归档计划。
+- [x] 更新配置/部署/文档，运行完整检查并归档计划。
 
 ## 进度日志
 
@@ -54,6 +54,7 @@
   `features/password-management`；下一步实现后端安全闭环。
 - 2026-07-15：后端、三端 UI、SMTP/Celery、迁移、部署配置与文档已实现；本地 `make check`
   通过。等待 CI 执行 PostgreSQL 迁移往返、iOS 和 Android 平台构建。
+- 2026-07-15：CI run `29374072798` 六个 job 全部通过；计划归档。
 
 ## 发现日志
 
@@ -73,11 +74,11 @@
 | 命令/场景 | 结果 | 证据或备注 |
 | --- | --- | --- |
 | 后端认证目标测试 | 通过 | `150 passed, 30 skipped`；无本地 PostgreSQL 时仓储集成测试按约定跳过 |
-| Alembic upgrade/downgrade/upgrade | 待运行 | CI PostgreSQL |
+| Alembic upgrade/downgrade/upgrade | 通过 | CI PostgreSQL 16，run `29374072798` |
 | `make harness-check` | 通过 | 49 个 Markdown 链接、88 个后端 Python 文件、8 个 harness 单测 |
 | `make check` | 通过 | backend、Pi Agent、frontend lint/typecheck/14 tests/build |
-| `make ios-check` | 未运行 | 当前 Linux 环境没有 Xcode/xcodegen；交由 macOS CI |
-| `make android-check` | 未运行 | 当前环境没有 JDK 17/Android SDK；交由 CI |
+| `make ios-check` | 通过 | GitHub macOS 15 / Xcode 16.4 CI，生成工程并完成模拟器测试 |
+| `make android-check` | 通过 | GitHub CI，完成 lintDebug、testDebugUnitTest、assembleDebug |
 
 ## 回滚与恢复
 
@@ -87,4 +88,6 @@
 
 ## 结果与剩余风险
 
-待实现后填写。外部 SMTP 的送达率、SPF/DKIM/DMARC 和真实邮箱端到端只能在获授权配置后验证。
+已交付后端安全闭环、数据库迁移、Celery SMTP 邮件、H5/iOS/Android 忘记与修改密码入口，以及部署和
+运维文档。外部 SMTP 尚未配置，因此真实邮件送达率、SPF/DKIM/DMARC 和邮箱端到端仍需按集成文档在
+目标环境验证；在此之前 `PASSWORD_RESET_ENABLED` 应保持 `false`，已有 OAuth 和密码登录不受影响。

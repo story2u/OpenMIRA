@@ -2,7 +2,6 @@
 
 当前活动计划：
 
-- [H5 / iOS / Android 密码管理](2026-07-15-password-management.md)
 - [RevenueCat + Paddle 统一订阅计费](2026-07-12-revenuecat-paddle-billing.md)
 
 - [订阅体系与 pi Agent 用量额度](2026-07-11-subscriptions-and-agent-quotas.md)
