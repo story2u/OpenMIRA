@@ -392,6 +392,16 @@ export async function updateTelegramConnection(
   })
 }
 
+export async function updateTelegramConnectionSource(
+  sourceId: string,
+  autoReplyEnabled: boolean,
+): Promise<TelegramConnection> {
+  return fetchJson<TelegramConnection>(`/api/v1/integrations/telegram/sources/${sourceId}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ autoReplyEnabled }),
+  })
+}
+
 export async function deleteTelegramConnection(connectionId: string): Promise<void> {
   return fetchJson<void>(`/api/v1/integrations/telegram/connections/${connectionId}`, {
     method: 'DELETE',
@@ -402,6 +412,15 @@ export async function deleteTelegramConnectionSource(sourceId: string): Promise<
   return fetchJson<void>(`/api/v1/integrations/telegram/sources/${sourceId}`, {
     method: 'DELETE',
   })
+}
+
+export async function generateOpportunityAiDraft(
+  opportunityId: string,
+): Promise<{ opportunity_id: string; draft: string }> {
+  return fetchJson<{ opportunity_id: string; draft: string }>(
+    `/api/v1/opportunities/${opportunityId}/ai-draft`,
+    { method: 'POST' },
+  )
 }
 
 export async function fetchTelegramMtprotoDialogs(connectionId: string): Promise<TelegramMtprotoDialog[]> {

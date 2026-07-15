@@ -89,8 +89,14 @@ class IngestMessageUseCase:
             )
             return message
 
-        working_time = await self._is_working_time(inbound.owner_user_id)
-        if inbound.force_human_review or detection.requires_human_review or working_time:
+        working_time, user_auto_reply_enabled = await self._reply_routing(inbound.owner_user_id)
+        if (
+            inbound.force_human_review
+            or detection.requires_human_review
+            or working_time
+            or not user_auto_reply_enabled
+            or not inbound.auto_reply_allowed
+        ):
             status = OpportunityStatus.PENDING_HUMAN
         else:
             status = OpportunityStatus.AI_AUTO_REPLY
@@ -116,15 +122,19 @@ class IngestMessageUseCase:
         )
         await self.message_repo.attach_opportunity(message.id, opportunity.id)
 
-        if status == OpportunityStatus.AI_AUTO_REPLY:
-            self.task_queue.enqueue_ai_reply(opportunity.id)
-        else:
+        if status != OpportunityStatus.AI_AUTO_REPLY:
             self.task_queue.notify_reviewers(opportunity.id)
 
-        await self.agent_scheduler.execute(
+        schedule_result = await self.agent_scheduler.execute(
             message,
             idempotency_key=f"message:{message.id}:automatic",
         )
+        if status == OpportunityStatus.AI_AUTO_REPLY and not schedule_result.enqueued:
+            opportunity = await self.opportunity_repo.update_status(
+                opportunity,
+                OpportunityStatus.PENDING_HUMAN,
+            )
+            self.task_queue.notify_reviewers(opportunity.id)
 
         return opportunity
 
@@ -152,8 +162,8 @@ class IngestMessageUseCase:
             ai_semantics_enabled=pref.ai_semantics_enabled,
         )
 
-    async def _is_working_time(self, owner_user_id: UUID | None) -> bool:
-        """优先用用户级工作时间；无 owner 或无用户设置时回退到全局 WorkTimeService。"""
+    async def _reply_routing(self, owner_user_id: UUID | None) -> tuple[bool, bool]:
+        """Return (is_working_time, user explicitly enabled after-hours auto reply)."""
         if owner_user_id and self.user_settings_repo:
             schedule = await self.user_settings_repo.get_work_schedule(owner_user_id)
             if schedule:
@@ -164,8 +174,8 @@ class IngestMessageUseCase:
                         auto_reply_outside_hours=schedule.auto_reply_outside_hours,
                     )
                 )
-                return service.is_working_time()
-        return self.work_time.is_working_time()
+                return service.is_working_time(), schedule.auto_reply_outside_hours
+        return self.work_time.is_working_time(), False
 
     def _detection_context(
         self,

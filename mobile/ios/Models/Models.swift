@@ -429,6 +429,8 @@ struct TelegramSourceDTO: Codable, Sendable, Identifiable, Hashable {
     var displayName: String
     var username: String?
     var enabled: Bool
+    var autoReplyEnabled: Bool?
+    var autoReplyEligible: Bool?
     var quotaPaused: Bool
     var quotaReason: String?
     var lastError: String?

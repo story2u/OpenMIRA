@@ -78,7 +78,7 @@ class Settings(BaseSettings):
     default_work_end: str = "18:30"
     pending_human_sla_minutes: int = 30
 
-    im_send_enabled: bool = False
+    im_send_enabled: bool = True
     telegram_bot_token: str = ""
     telegram_webhook_secret: str = ""
     telegram_bot_username: str = ""
@@ -112,9 +112,15 @@ class Settings(BaseSettings):
     def wecom_archive_sdk_configured(self) -> bool:
         return self.wecom_archive_enabled and Path(self.wecom_archive_sdk_path).is_file()
 
-    ai_enabled: bool = False
+    ai_enabled: bool = True
     litellm_model: str = "openai/gpt-4o-mini"
     openai_api_key: str = ""
+    ai_auto_reply_enabled: bool = True
+    ai_auto_reply_min_confidence: float = Field(default=0.85, ge=0.0, le=1.0)
+    ai_auto_reply_cooldown_minutes: int = Field(default=720, ge=1, le=43_200)
+    ai_auto_reply_window_hours: int = Field(default=24, ge=1, le=720)
+    ai_auto_reply_max_per_window: int = Field(default=1, ge=1, le=10)
+    ai_auto_reply_max_chars: int = Field(default=240, ge=20, le=1000)
 
     pi_agent_enabled: bool = True
     pi_agent_provider: str = "openai"

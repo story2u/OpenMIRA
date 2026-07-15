@@ -50,9 +50,15 @@ async def connection_subject() -> AsyncIterator[tuple[async_sessionmaker[AsyncSe
         await session.exec(
             delete(TelegramWebhookEvent).where(TelegramWebhookEvent.update_id == webhook_update_id)
         )
-        await session.exec(delete(TelegramConnectionAttempt).where(TelegramConnectionAttempt.owner_user_id == user.id))
+        await session.exec(
+            delete(TelegramConnectionAttempt).where(
+                TelegramConnectionAttempt.owner_user_id == user.id
+            )
+        )
         await session.exec(delete(TelegramSource).where(TelegramSource.owner_user_id == user.id))
-        await session.exec(delete(TelegramConnection).where(TelegramConnection.owner_user_id == user.id))
+        await session.exec(
+            delete(TelegramConnection).where(TelegramConnection.owner_user_id == user.id)
+        )
         await session.exec(delete(User).where(User.id == user.id))
         await session.commit()
     await engine.dispose()
@@ -95,7 +101,9 @@ async def test_connection_attempt_is_owner_scoped(connection_subject) -> None:
         )
 
         assert await repo.get_attempt_for_owner(owner_user_id=user.id, attempt_id=attempt.id)
-        assert await repo.get_attempt_for_owner(owner_user_id=uuid4(), attempt_id=attempt.id) is None
+        assert (
+            await repo.get_attempt_for_owner(owner_user_id=uuid4(), attempt_id=attempt.id) is None
+        )
 
 
 async def test_mtproto_qr_pending_attempt_is_reused_and_owner_scoped(connection_subject) -> None:
@@ -132,7 +140,9 @@ async def test_mtproto_qr_pending_attempt_is_reused_and_owner_scoped(connection_
             )
 
 
-async def test_adding_mtproto_source_touches_connection_for_listener_reload(connection_subject) -> None:
+async def test_adding_mtproto_source_touches_connection_for_listener_reload(
+    connection_subject,
+) -> None:
     session_factory, user, _ = connection_subject
     async with session_factory() as session:
         stale_revision = datetime.now(UTC) - timedelta(days=1)
@@ -160,3 +170,60 @@ async def test_adding_mtproto_source_touches_connection_for_listener_reload(conn
         await session.refresh(connection)
 
         assert connection.updated_at > stale_revision
+
+
+async def test_only_business_private_source_can_enable_auto_reply(connection_subject) -> None:
+    session_factory, user, _ = connection_subject
+    async with session_factory() as session:
+        business = TelegramConnection(
+            owner_user_id=user.id,
+            connection_type=TelegramConnectionType.BUSINESS,
+            status=TelegramConnectionStatus.CONNECTED,
+            provider_connection_id=f"business-{uuid4()}",
+            capabilities={"receive_private_messages": True, "can_reply": True},
+        )
+        mtproto = TelegramConnection(
+            owner_user_id=user.id,
+            connection_type=TelegramConnectionType.MTPROTO_QR,
+            status=TelegramConnectionStatus.CONNECTED,
+        )
+        session.add(business)
+        session.add(mtproto)
+        await session.commit()
+        repo = TelegramConnectionRepository(session)
+        private_source = await repo.ensure_business_source(
+            connection=business,
+            external_chat_id="customer-1",
+            display_name="Customer",
+        )
+        group_source = TelegramSource(
+            owner_user_id=user.id,
+            connection_id=mtproto.id,
+            external_chat_id="group-1",
+            source_type=TelegramSourceType.GROUP,
+        )
+        session.add(group_source)
+        await session.commit()
+
+        assert private_source.auto_reply_enabled is False
+        updated = await repo.set_source_auto_reply_enabled(
+            owner_user_id=user.id,
+            source_id=private_source.id,
+            enabled=True,
+        )
+        assert updated is not None
+        assert updated[0].auto_reply_enabled is True
+        assert (
+            await repo.set_source_auto_reply_enabled(
+                owner_user_id=uuid4(),
+                source_id=private_source.id,
+                enabled=False,
+            )
+            is None
+        )
+        with pytest.raises(ValueError, match="Business private chat with reply permission"):
+            await repo.set_source_auto_reply_enabled(
+                owner_user_id=user.id,
+                source_id=group_source.id,
+                enabled=True,
+            )

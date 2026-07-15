@@ -48,6 +48,7 @@ class AnalyzeMessageUseCase:
         if not message:
             return None
 
+        opportunity: Opportunity | None = None
         try:
             links = message_links(
                 message.text or "",
@@ -109,7 +110,17 @@ class AnalyzeMessageUseCase:
                     projection,
                 )
             await self.message_repo.complete_agent_analysis(message, projection)
+            if opportunity and opportunity.status == OpportunityStatus.AI_AUTO_REPLY:
+                self.task_queue.enqueue_ai_reply(opportunity.id)
             return opportunity
         except Exception as exc:
             await self.message_repo.fail_agent_analysis(message.id, str(exc))
+            if message.opportunity_id:
+                opportunity = await self.opportunity_repo.get(message.opportunity_id)
+                if opportunity and opportunity.status == OpportunityStatus.AI_AUTO_REPLY:
+                    opportunity = await self.opportunity_repo.update_status(
+                        opportunity,
+                        OpportunityStatus.PENDING_HUMAN,
+                    )
+                    self.task_queue.notify_reviewers(opportunity.id)
             raise

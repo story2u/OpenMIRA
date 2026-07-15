@@ -8,13 +8,19 @@ from app.core.config import Settings
 from app.core.security import require_secret
 from app.domain.enums import IMChannel
 from app.domain.ports import InboundMessage, SendReceipt
+from app.infrastructure.db.repositories import TelegramConnectionRepository
 
 
 class TelegramAdapter:
     channel = IMChannel.TELEGRAM
 
-    def __init__(self, settings: Settings) -> None:
+    def __init__(
+        self,
+        settings: Settings,
+        connection_repo: TelegramConnectionRepository | None = None,
+    ) -> None:
         self.settings = settings
+        self.connection_repo = connection_repo
         self.api_base_url = f"https://api.telegram.org/bot{settings.telegram_bot_token}"
 
     def verify_webhook(self, headers: dict[str, str]) -> None:
@@ -52,16 +58,18 @@ class TelegramAdapter:
         conversation_id = str(chat.get("id"))
         message_identifier = f"{conversation_id}:{message.get('message_id')}"
         external_message_id = (
-            f"{external_id_prefix}:{message_identifier}" if external_id_prefix else message_identifier
+            f"{external_id_prefix}:{message_identifier}"
+            if external_id_prefix
+            else message_identifier
         )
         chat_type = str(chat.get("type") or "private")
         source_type = "private" if chat_type == "private" else "group"
 
-        sender_name = " ".join(
-            item
-            for item in [sender.get("first_name"), sender.get("last_name")]
-            if item
-        ) or sender.get("username") or chat.get("title")
+        sender_name = (
+            " ".join(item for item in [sender.get("first_name"), sender.get("last_name")] if item)
+            or sender.get("username")
+            or chat.get("title")
+        )
 
         return InboundMessage(
             owner_user_id=owner_user_id,
@@ -72,7 +80,9 @@ class TelegramAdapter:
             sender_display_name=sender_name,
             text=text,
             source_type=source_type,
-            group_name=str(chat.get("title")) if source_type == "group" and chat.get("title") else None,
+            group_name=str(chat.get("title"))
+            if source_type == "group" and chat.get("title")
+            else None,
             raw_message_links=self._extract_links(message, text),
             raw_payload=payload,
         )
@@ -86,17 +96,29 @@ class TelegramAdapter:
         opportunity_id: UUID | None = None,
         owner_user_id: UUID | None = None,
     ) -> SendReceipt:
-        del idempotency_key, opportunity_id, owner_user_id
+        del idempotency_key, opportunity_id
         if not self.settings.im_send_enabled:
             return SendReceipt(
                 provider_message_id=None,
                 raw_response={"dry_run": True, "channel": self.channel, "chat_id": conversation_id},
+                delivered=False,
             )
+
+        payload: dict[str, str] = {"chat_id": conversation_id, "text": text}
+        if owner_user_id and self.connection_repo:
+            source_row = await self.connection_repo.get_auto_reply_source(
+                owner_user_id=owner_user_id,
+                conversation_id=conversation_id,
+            )
+            if source_row:
+                _, connection = source_row
+                if connection.provider_connection_id:
+                    payload["business_connection_id"] = connection.provider_connection_id
 
         async with httpx.AsyncClient(timeout=10.0) as client:
             response = await client.post(
                 f"{self.api_base_url}/sendMessage",
-                json={"chat_id": conversation_id, "text": text},
+                json=payload,
             )
             response.raise_for_status()
             data = response.json()

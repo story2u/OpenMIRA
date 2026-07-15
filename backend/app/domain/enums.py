@@ -42,6 +42,41 @@ class OpportunityArchiveAction(StrEnum):
     RESTORED = "restored"
 
 
+class AutoReplyDeliveryStatus(StrEnum):
+    CANDIDATE = "candidate"
+    BLOCKED = "blocked"
+    GENERATING = "generating"
+    READY = "ready"
+    SENDING = "sending"
+    SENT = "sent"
+    FAILED = "failed"
+    DRY_RUN = "dry_run"
+    CANCELED = "canceled"
+
+
+class AutoReplyDecisionReason(StrEnum):
+    ELIGIBLE = "eligible"
+    FEATURE_DISABLED = "feature_disabled"
+    SEND_DISABLED = "send_disabled"
+    USER_DISABLED = "user_disabled"
+    WORKING_HOURS = "working_hours"
+    SOURCE_NOT_ELIGIBLE = "source_not_eligible"
+    SOURCE_DISABLED = "source_disabled"
+    HUMAN_REVIEW_REQUIRED = "human_review_required"
+    AGENT_NOT_COMPLETED = "agent_not_completed"
+    LOW_CONFIDENCE = "low_confidence"
+    ATTENTION_REQUIRED = "attention_required"
+    UNSAFE_LINK = "unsafe_link"
+    SENSITIVE_INTENT = "sensitive_intent"
+    COOLDOWN_ACTIVE = "cooldown_active"
+    WINDOW_LIMIT_REACHED = "window_limit_reached"
+    OPPORTUNITY_INACTIVE = "opportunity_inactive"
+    DRAFT_UNSAFE = "draft_unsafe"
+    DUPLICATE = "duplicate"
+    DELIVERY_DRY_RUN = "delivery_dry_run"
+    PROVIDER_ERROR = "provider_error"
+
+
 class Priority(StrEnum):
     LOW = "low"
     NORMAL = "normal"

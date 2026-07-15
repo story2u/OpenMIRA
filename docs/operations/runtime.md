@@ -1,6 +1,6 @@
 # 运行与运维
 
-> 状态：当前事实 · 最后核验：2026-07-14
+> 状态：当前事实 · 最后核验：2026-07-15
 
 ## 服务拓扑
 
@@ -28,7 +28,8 @@ Docker context。CI 分别验证两个锁文件。
 | 工作模式 | `DEFAULT_TIMEZONE`、`DEFAULT_WORKDAYS`、`DEFAULT_WORK_START/END`、`PENDING_HUMAN_SLA_MINUTES` | 决定人工/AI 路由与超时 |
 | Telegram | `TELEGRAM_BOT_TOKEN`、`TELEGRAM_WEBHOOK_SECRET`、`TELEGRAM_BOT_USERNAME`、`TELEGRAM_WEBHOOK_URL`、`TELEGRAM_INTEGRATION_MODE` | 原生 Bot 连接/webhook；首次 release 自动生成并持久化 secret，生产 URL/live/600 秒 TTL 均有 compose 默认值，群额度包含旧 monitor 与新 source |
 | 企业微信 | `WECOM_CONNECTION_LIMIT`、`WECOM_WEBHOOK_TOLERANCE_SECONDS`、`WECOM_WEBHOOK_MAX_BODY_BYTES`、`WECOM_ARCHIVE_*` | 自建应用凭据和企业级会话存档凭据均由 `/settings/wecom` 录入并加密存库；存档默认关闭，另需官方 Finance SDK 目录只读挂载和专用 worker；旧 `WECOM_*` 仅保留全局回调兼容 |
-| AI/发送 | `AI_ENABLED`、`LITELLM_MODEL`、`OPENAI_API_KEY`、`DEEPSEEK_API_KEY`、`IM_SEND_ENABLED` | 两个功能开关默认关闭；部署工作流按 provider 注入服务端密钥。启用 AI 后，规则未高置信命中的非空消息都会进行语义复核，调用量会高于旧关键词灰区模式 |
+| AI/发送 | `AI_ENABLED`、`LITELLM_MODEL`、`OPENAI_API_KEY`、`DEEPSEEK_API_KEY`、`IM_SEND_ENABLED` | AI 与真实发送能力默认开启；部署工作流按 provider 注入服务端密钥。显式设为 `false` 可停用。规则未高置信命中的非空消息会进行语义复核，调用量高于纯关键词模式 |
+| AI 自动回复 | `AI_AUTO_REPLY_ENABLED`、`AI_AUTO_REPLY_MIN_CONFIDENCE`、`AI_AUTO_REPLY_COOLDOWN_MINUTES`、`AI_AUTO_REPLY_WINDOW_HOURS`、`AI_AUTO_REPLY_MAX_PER_WINDOW`、`AI_AUTO_REPLY_MAX_CHARS` | 全局能力默认开启；仍需 `IM_SEND_ENABLED`、用户日程和 Business 私聊来源同时授权，后两者默认关闭。策略、投递状态和回滚见自动回复设计 |
 | pi Agent | `PI_AGENT_ENABLED`、`PI_AGENT_PROVIDER`、`PI_AGENT_MODEL`、`PI_AGENT_API_KEY`、`PI_AGENT_*TIMEOUT*`、`PI_AGENT_MAX_*` | 默认开启；DeepSeek 可由 GitHub `DEEPSEEK_API_KEY` Secret 映射，OpenAI 可回退使用 `OPENAI_API_KEY` |
 | RevenueCat | `REVENUECAT_ENABLED`、`REVENUECAT_SECRET_API_KEY`、`REVENUECAT_PROJECT_ID`、`REVENUECAT_WEBHOOK_*`、`REVENUECAT_RECONCILE_*`、`NEXT_PUBLIC_REVENUECAT_*` | 默认启用；API/HMAC 来自 GitHub Secrets，Webhook Auth 只保存在 VPS `.env`；Web Public Key 与 Offering ID 来自 GitHub Variables，进入前端构建并同步到 VPS `.env`；三端 Public Key 进入对应客户端构建 |
 
@@ -42,10 +43,17 @@ DeepSeek 使用 `LITELLM_MODEL=deepseek/deepseek-chat` 和 GitHub Secret `DEEPSE
 模型补判不会获得自动发送权限，只创建待人工审核商机。需要控制成本时关闭 `AI_ENABLED` 即可恢复纯
 规则路径；后续应在有金标数据后增加本地语义候选层，以降低全量复核调用。
 
+自动回复要求 `AI_AUTO_REPLY_ENABLED` 和 `IM_SEND_ENABLED` 均未被显式关闭，并在用户工作时间页及
+Telegram Business 私聊来源逐项授权。全局能力默认开启，但用户和来源默认关闭。先关闭
+`AI_AUTO_REPLY_ENABLED` 即可停止创建新投递而保留分析、人工草稿、来源配置和审计账本。详见
+[AI Agent 安全自动回复](../integrations/ai-auto-reply.md)。
+
 ## 队列
 
 worker 监听 `default,im,ai,agent`。关键任务定义在 `backend/app/worker/tasks.py`：AI 回复、pi 消息
-后处理和人工 SLA 超时扫描。`agent.analyze_message` 入队前在 PostgreSQL 原子预留用户额度，成功后
+后处理和人工 SLA 超时扫描。自动回复任务本身不做 Celery 自动重试；数据库唯一键吸收重复投递，
+`sending` 后结果未知时转人工核对，避免 provider 缺少端到端幂等导致重复联系客户。
+`agent.analyze_message` 入队前在 PostgreSQL 原子预留用户额度，成功后
 转为 consumed，最终重试失败或入队失败转为 released；最多自动重试 3 次，子进程另有硬超时。
 Message 状态、usage ledger 幂等键和 source message 唯一索引共同提供重复任务保护。新增任务时需要
 明确 queue、超时、重试、幂等键和可观测字段，并同步 compose/部署配置。

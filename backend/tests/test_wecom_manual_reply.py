@@ -3,7 +3,7 @@ from uuid import uuid4
 
 import pytest
 
-from app.application.use_cases.manual_reply import ManualReplyUseCase
+from app.application.use_cases.manual_reply import ManualReplyUseCase, MessageDeliveryError
 from app.domain.enums import IMChannel, OpportunityStatus
 from app.domain.ports import SendReceipt
 from app.infrastructure.db.models import Opportunity
@@ -21,6 +21,12 @@ class FakeWeComAdapter:
         return SendReceipt(raw_response={"dry_run": True})
 
 
+class DisabledWeComAdapter(FakeWeComAdapter):
+    async def send_message(self, conversation_id, text, **kwargs):
+        self.calls.append({"conversation_id": conversation_id, "text": text, **kwargs})
+        return SendReceipt(delivered=False, raw_response={"dry_run": True})
+
+
 class FakeMessageRepository:
     def __init__(self) -> None:
         self.messages: dict[tuple[IMChannel, str], SimpleNamespace] = {}
@@ -35,6 +41,14 @@ class FakeMessageRepository:
 
 
 class FakeOpportunityRepository:
+    def __init__(self, opportunity) -> None:
+        self.opportunity = opportunity
+
+    async def claim_for_manual_reply(self, *, opportunity_id, operator_id):
+        assert opportunity_id == self.opportunity.id
+        self.opportunity.assigned_to = operator_id
+        return self.opportunity
+
     async def update_status(self, opportunity, status, **kwargs):
         opportunity.status = status
         opportunity.final_reply = kwargs.get("final_reply")
@@ -56,7 +70,7 @@ async def test_wecom_manual_reply_passes_owner_context_and_is_idempotent() -> No
     adapter = FakeWeComAdapter()
     messages = FakeMessageRepository()
     use_case = ManualReplyUseCase(
-        opportunity_repo=FakeOpportunityRepository(),
+        opportunity_repo=FakeOpportunityRepository(opportunity),
         message_repo=messages,
         adapters=AdapterRegistry([adapter]),
     )
@@ -89,7 +103,7 @@ async def test_wecom_archive_manual_reply_is_rejected_before_adapter_send() -> N
         status=OpportunityStatus.PENDING_HUMAN,
     )
     use_case = ManualReplyUseCase(
-        opportunity_repo=FakeOpportunityRepository(),
+        opportunity_repo=FakeOpportunityRepository(opportunity),
         message_repo=FakeMessageRepository(),
         adapters=AdapterRegistry([adapter]),
     )
@@ -103,3 +117,34 @@ async def test_wecom_archive_manual_reply_is_rejected_before_adapter_send() -> N
         )
 
     assert adapter.calls == []
+
+
+@pytest.mark.asyncio
+async def test_manual_reply_dry_run_does_not_create_outgoing_or_mark_replied() -> None:
+    owner_id = uuid4()
+    adapter = DisabledWeComAdapter()
+    opportunity = Opportunity(
+        owner_user_id=owner_id,
+        channel=IMChannel.WECOM,
+        conversation_id=f"wecom:{uuid4()}:zhangsan",
+        title="采购咨询",
+        status=OpportunityStatus.PENDING_HUMAN,
+    )
+    messages = FakeMessageRepository()
+    use_case = ManualReplyUseCase(
+        opportunity_repo=FakeOpportunityRepository(opportunity),
+        message_repo=messages,
+        adapters=AdapterRegistry([adapter]),
+    )
+
+    with pytest.raises(MessageDeliveryError, match="no message was delivered"):
+        await use_case.execute(
+            opportunity=opportunity,
+            text="您好，可以安排产品演示。",
+            operator_id=str(owner_id),
+            mark_following=False,
+            idempotency_key="reply-request-002",
+        )
+
+    assert messages.messages == {}
+    assert opportunity.status == OpportunityStatus.PENDING_HUMAN

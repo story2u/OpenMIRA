@@ -103,6 +103,7 @@ def test_get_me_returns_defaults_when_unset() -> None:
     assert body["detection"] == {"keywords": [], "aiSemanticsEnabled": True}
     assert body["workSchedule"]["isDefault"] is True
     assert body["workSchedule"]["timezone"] == "Asia/Shanghai"
+    assert body["workSchedule"]["autoReplyOutsideHours"] is False
     assert body["capabilities"] == {
         "pushAvailable": False,
         "wecomUserBindingAvailable": True,

@@ -7,6 +7,10 @@ from app.infrastructure.db.repositories import MessageRepository, OpportunityRep
 from app.infrastructure.im.base import AdapterRegistry
 
 
+class MessageDeliveryError(RuntimeError):
+    """The adapter did not confirm that an external message was delivered."""
+
+
 class ManualReplyUseCase:
     def __init__(
         self,
@@ -36,6 +40,12 @@ class ManualReplyUseCase:
         ):
             raise ValueError("WeCom archive conversations are read-only")
 
+        opportunity = await self.opportunity_repo.claim_for_manual_reply(
+            opportunity_id=opportunity.id,
+            operator_id=operator_id,
+        )
+        ensure_transition_allowed(opportunity.status, target_status)
+
         adapter = self.adapters.get(opportunity.channel)
         if opportunity.channel == IMChannel.WECOM and opportunity.conversation_id.startswith(
             "wecom:"
@@ -51,10 +61,19 @@ class ManualReplyUseCase:
                 receipt.provider_message_id or f"manual-{opportunity.id}-{idempotency_key}"
             )
         else:
-            receipt = await adapter.send_message(opportunity.conversation_id, text)
+            receipt = await adapter.send_message(
+                opportunity.conversation_id,
+                text,
+                idempotency_key=idempotency_key,
+                opportunity_id=opportunity.id,
+                owner_user_id=opportunity.owner_user_id,
+            )
             external_message_id = receipt.provider_message_id or (
                 f"manual-{opportunity.id}-{operator_id}-{idempotency_key or uuid4()}"
             )
+
+        if not receipt.delivered:
+            raise MessageDeliveryError("IM sending is disabled; no message was delivered")
 
         existing = await self.message_repo.get_by_external_id(
             opportunity.channel,

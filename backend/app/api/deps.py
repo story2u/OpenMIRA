@@ -69,7 +69,9 @@ async def _user_from_token(token: str, settings: Settings, session: AsyncSession
     try:
         token_version = int(payload.get("ver", 0))
     except (TypeError, ValueError) as exc:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid token") from exc
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid token"
+        ) from exc
     if token_version != user.auth_version:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid token")
     return user
@@ -191,12 +193,13 @@ def get_detector(settings: Settings = Depends(get_settings)) -> OpportunityDetec
 def get_adapter_registry(
     settings: Settings = Depends(get_settings),
     redis: Redis = Depends(get_redis_client),
+    telegram_connection_repo: TelegramConnectionRepository = Depends(get_telegram_connection_repo),
     wecom_connection_repo: WeComConnectionRepository = Depends(get_wecom_connection_repo),
     wecom_delivery_repo: WeComDeliveryRepository = Depends(get_wecom_delivery_repo),
 ) -> AdapterRegistry:
     return AdapterRegistry(
         [
-            TelegramAdapter(settings),
+            TelegramAdapter(settings, connection_repo=telegram_connection_repo),
             WeComAdapter(
                 settings,
                 redis=redis,

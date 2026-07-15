@@ -13,6 +13,8 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.domain.enums import (
     AgentAnalysisStatus,
+    AutoReplyDecisionReason,
+    AutoReplyDeliveryStatus,
     BillingEventStatus,
     BillingInterval,
     BillingProvider,
@@ -50,9 +52,11 @@ from app.domain.services.subscription_policy import (
     get_plan_entitlements,
     utc_calendar_month,
 )
+from app.domain.services.opportunity_state import InvalidOpportunityTransition
 from app.infrastructure.db.models import (
     AppConfig,
     AuthAccount,
+    AutoReplyDelivery,
     BillingEvent,
     BillingSubscription,
     Message,
@@ -87,9 +91,7 @@ from app.infrastructure.db.models import (
 logger = structlog.get_logger(__name__)
 
 
-async def _count_active_wecom_group_sources(
-    session: AsyncSession, owner_user_id: UUID
-) -> int:
+async def _count_active_wecom_group_sources(session: AsyncSession, owner_user_id: UUID) -> int:
     result = await session.exec(
         select(func.count())
         .select_from(WeComSource)
@@ -1054,6 +1056,240 @@ class MessageRepository:
         return list(reversed(result.all()))
 
 
+class AutoReplyDeliveryRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self.session = session
+
+    async def reserve(
+        self,
+        *,
+        owner_user_id: UUID,
+        opportunity_id: UUID,
+        source_message_id: UUID,
+        channel: IMChannel,
+        conversation_id: str,
+        idempotency_key: str,
+    ) -> tuple[AutoReplyDelivery, bool]:
+        existing = await self._get_by_key(owner_user_id, idempotency_key)
+        if existing:
+            return existing, False
+        delivery = AutoReplyDelivery(
+            owner_user_id=owner_user_id,
+            opportunity_id=opportunity_id,
+            source_message_id=source_message_id,
+            channel=channel,
+            conversation_id=conversation_id,
+            idempotency_key=idempotency_key,
+        )
+        self.session.add(delivery)
+        try:
+            await self.session.commit()
+        except IntegrityError:
+            await self.session.rollback()
+            existing = await self._get_by_key(owner_user_id, idempotency_key)
+            if existing:
+                return existing, False
+            raise
+        await self.session.refresh(delivery)
+        return delivery, True
+
+    async def claim_candidate(self, delivery_id: UUID) -> AutoReplyDelivery | None:
+        delivery = await self.session.get(AutoReplyDelivery, delivery_id, with_for_update=True)
+        if not delivery or delivery.status != AutoReplyDeliveryStatus.CANDIDATE:
+            return None
+        now = utc_now()
+        delivery.status = AutoReplyDeliveryStatus.GENERATING
+        delivery.attempt_count += 1
+        delivery.updated_at = now
+        self.session.add(delivery)
+        await self.session.commit()
+        await self.session.refresh(delivery)
+        return delivery
+
+    async def mark_blocked(
+        self,
+        delivery: AutoReplyDelivery,
+        reason: AutoReplyDecisionReason,
+    ) -> AutoReplyDelivery:
+        return await self._mark(
+            delivery,
+            status=AutoReplyDeliveryStatus.BLOCKED,
+            reason=reason,
+        )
+
+    async def mark_ready(
+        self,
+        delivery: AutoReplyDelivery,
+        *,
+        content_hash: str,
+    ) -> AutoReplyDelivery:
+        return await self._mark(
+            delivery,
+            status=AutoReplyDeliveryStatus.READY,
+            reason=AutoReplyDecisionReason.ELIGIBLE,
+            content_hash=content_hash,
+            ready_at=utc_now(),
+        )
+
+    async def mark_sending(self, delivery: AutoReplyDelivery) -> AutoReplyDelivery:
+        current = await self.session.get(AutoReplyDelivery, delivery.id, with_for_update=True)
+        if not current or current.status != AutoReplyDeliveryStatus.READY:
+            raise ValueError("auto reply delivery is not ready")
+        return await self._mark(
+            current,
+            status=AutoReplyDeliveryStatus.SENDING,
+            reason=AutoReplyDecisionReason.ELIGIBLE,
+            sending_at=utc_now(),
+        )
+
+    async def claim_ready_for_send(
+        self, delivery: AutoReplyDelivery
+    ) -> tuple[AutoReplyDelivery, Opportunity] | None:
+        current = await self.session.get(AutoReplyDelivery, delivery.id, with_for_update=True)
+        if not current or current.status != AutoReplyDeliveryStatus.READY:
+            return None
+        opportunity = await self.session.get(
+            Opportunity,
+            current.opportunity_id,
+            with_for_update=True,
+        )
+        if (
+            not opportunity
+            or opportunity.status != OpportunityStatus.AI_AUTO_REPLY
+            or opportunity.archived_at is not None
+            or opportunity.assigned_to
+        ):
+            return None
+        now = utc_now()
+        opportunity.assigned_to = "ai:auto_reply"
+        opportunity.updated_at = now
+        current.status = AutoReplyDeliveryStatus.SENDING
+        current.decision_reason = AutoReplyDecisionReason.ELIGIBLE
+        current.sending_at = now
+        current.updated_at = now
+        self.session.add(opportunity)
+        self.session.add(current)
+        await self.session.commit()
+        await self.session.refresh(current)
+        await self.session.refresh(opportunity)
+        return current, opportunity
+
+    async def mark_sent(
+        self,
+        delivery: AutoReplyDelivery,
+        *,
+        provider_message_id: str,
+    ) -> AutoReplyDelivery:
+        return await self._mark(
+            delivery,
+            status=AutoReplyDeliveryStatus.SENT,
+            reason=AutoReplyDecisionReason.ELIGIBLE,
+            provider_message_id=provider_message_id,
+            sent_at=utc_now(),
+        )
+
+    async def mark_dry_run(self, delivery: AutoReplyDelivery) -> AutoReplyDelivery:
+        return await self._mark(
+            delivery,
+            status=AutoReplyDeliveryStatus.DRY_RUN,
+            reason=AutoReplyDecisionReason.DELIVERY_DRY_RUN,
+        )
+
+    async def mark_failed(self, delivery: AutoReplyDelivery, error: str) -> AutoReplyDelivery:
+        await self.session.rollback()
+        current = await self.session.get(AutoReplyDelivery, delivery.id)
+        if not current:
+            return delivery
+        return await self._mark(
+            current,
+            status=AutoReplyDeliveryStatus.FAILED,
+            reason=AutoReplyDecisionReason.PROVIDER_ERROR,
+            error=error[:500],
+        )
+
+    async def mark_sending_uncertain(
+        self, delivery: AutoReplyDelivery, error: str
+    ) -> AutoReplyDelivery:
+        await self.session.rollback()
+        current = await self.session.get(AutoReplyDelivery, delivery.id)
+        if not current:
+            return delivery
+        return await self._mark(
+            current,
+            status=AutoReplyDeliveryStatus.SENDING,
+            reason=AutoReplyDecisionReason.PROVIDER_ERROR,
+            error=error[:500],
+        )
+
+    async def reload_after_rollback(self, delivery_id: UUID) -> AutoReplyDelivery | None:
+        await self.session.rollback()
+        return await self.session.get(AutoReplyDelivery, delivery_id)
+
+    async def count_sent_since(
+        self,
+        *,
+        owner_user_id: UUID,
+        channel: IMChannel,
+        conversation_id: str,
+        since: datetime,
+    ) -> int:
+        result = await self.session.exec(
+            select(func.count())
+            .select_from(AutoReplyDelivery)
+            .where(
+                AutoReplyDelivery.owner_user_id == owner_user_id,
+                AutoReplyDelivery.channel == channel,
+                AutoReplyDelivery.conversation_id == conversation_id,
+                AutoReplyDelivery.status == AutoReplyDeliveryStatus.SENT,
+                AutoReplyDelivery.sent_at >= since,
+            )
+        )
+        return int(result.one())
+
+    async def _get_by_key(
+        self, owner_user_id: UUID, idempotency_key: str
+    ) -> AutoReplyDelivery | None:
+        result = await self.session.exec(
+            select(AutoReplyDelivery).where(
+                AutoReplyDelivery.owner_user_id == owner_user_id,
+                AutoReplyDelivery.idempotency_key == idempotency_key,
+            )
+        )
+        return result.first()
+
+    async def _mark(
+        self,
+        delivery: AutoReplyDelivery,
+        *,
+        status: AutoReplyDeliveryStatus,
+        reason: AutoReplyDecisionReason,
+        content_hash: str | None = None,
+        provider_message_id: str | None = None,
+        ready_at: datetime | None = None,
+        sending_at: datetime | None = None,
+        sent_at: datetime | None = None,
+        error: str | None = None,
+    ) -> AutoReplyDelivery:
+        delivery.status = status
+        delivery.decision_reason = reason
+        if content_hash is not None:
+            delivery.content_hash = content_hash
+        if provider_message_id is not None:
+            delivery.provider_message_id = provider_message_id
+        if ready_at is not None:
+            delivery.ready_at = ready_at
+        if sending_at is not None:
+            delivery.sending_at = sending_at
+        if sent_at is not None:
+            delivery.sent_at = sent_at
+        delivery.error = error
+        delivery.updated_at = utc_now()
+        self.session.add(delivery)
+        await self.session.commit()
+        await self.session.refresh(delivery)
+        return delivery
+
+
 class OpportunityRepository:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
@@ -1422,6 +1658,7 @@ class OpportunityRepository:
         *,
         final_reply: str | None = None,
         assigned_to: str | None = None,
+        clear_assignment: bool = False,
     ) -> Opportunity:
         opportunity.status = status
         if final_reply is not None:
@@ -1430,6 +1667,29 @@ class OpportunityRepository:
             opportunity.last_message_at = utc_now()
         if assigned_to is not None:
             opportunity.assigned_to = assigned_to
+        elif clear_assignment:
+            opportunity.assigned_to = None
+        opportunity.updated_at = utc_now()
+        self.session.add(opportunity)
+        await self.session.commit()
+        await self.session.refresh(opportunity)
+        return opportunity
+
+    async def claim_for_manual_reply(
+        self,
+        *,
+        opportunity_id: UUID,
+        operator_id: str,
+    ) -> Opportunity:
+        opportunity = await self.session.get(Opportunity, opportunity_id, with_for_update=True)
+        if not opportunity:
+            raise LookupError("opportunity not found")
+        if (
+            opportunity.assigned_to == "ai:auto_reply"
+            and opportunity.status == OpportunityStatus.AI_AUTO_REPLY
+        ):
+            raise InvalidOpportunityTransition("automatic reply delivery is already in progress")
+        opportunity.assigned_to = operator_id
         opportunity.updated_at = utc_now()
         self.session.add(opportunity)
         await self.session.commit()
@@ -1798,9 +2058,7 @@ class TelegramUserConfigRepository:
         }
         active_selection_changed = set(desired_chat_ids) != current_active_chat_ids
         if enabled_wecom_groups is None:
-            enabled_wecom_groups = await _count_active_wecom_group_sources(
-                self.session, user_id
-            )
+            enabled_wecom_groups = await _count_active_wecom_group_sources(self.session, user_id)
         ensure_group_quota(
             entitlements=entitlements,
             telegram_groups=len(desired_chat_ids) if enabled else 0,
@@ -2080,9 +2338,7 @@ class TelegramConnectionRepository:
         )
         source = result.first()
         if not source:
-            wecom_groups = await _count_active_wecom_group_sources(
-                self.session, owner_user_id
-            )
+            wecom_groups = await _count_active_wecom_group_sources(self.session, owner_user_id)
             ensure_group_quota(
                 entitlements=entitlements,
                 telegram_groups=legacy_active_count
@@ -2174,6 +2430,94 @@ class TelegramConnectionRepository:
         )
         result = await self.session.exec(statement)
         return list(result.all())
+
+    async def ensure_business_source(
+        self,
+        *,
+        connection: TelegramConnection,
+        external_chat_id: str,
+        display_name: str,
+    ) -> TelegramSource:
+        if connection.connection_type != TelegramConnectionType.BUSINESS:
+            raise ValueError("Telegram Business connection is required")
+        result = await self.session.exec(
+            select(TelegramSource).where(
+                TelegramSource.connection_id == connection.id,
+                TelegramSource.external_chat_id == external_chat_id,
+            )
+        )
+        source = result.first()
+        if not source:
+            source = TelegramSource(
+                owner_user_id=connection.owner_user_id,
+                connection_id=connection.id,
+                source_type=TelegramSourceType.PRIVATE,
+                external_chat_id=external_chat_id,
+                display_name=display_name[:255] or "Telegram Business 私聊",
+                auto_reply_enabled=False,
+            )
+        else:
+            source.display_name = display_name[:255] or source.display_name
+            source.source_type = TelegramSourceType.PRIVATE
+            source.updated_at = utc_now()
+        self.session.add(source)
+        await self.session.commit()
+        await self.session.refresh(source)
+        return source
+
+    async def get_auto_reply_source(
+        self,
+        *,
+        owner_user_id: UUID,
+        conversation_id: str,
+    ) -> tuple[TelegramSource, TelegramConnection] | None:
+        result = await self.session.exec(
+            select(TelegramSource, TelegramConnection)
+            .join(TelegramConnection, TelegramConnection.id == TelegramSource.connection_id)
+            .where(
+                TelegramSource.owner_user_id == owner_user_id,
+                TelegramSource.external_chat_id == conversation_id,
+                TelegramConnection.owner_user_id == owner_user_id,
+                TelegramConnection.connection_type == TelegramConnectionType.BUSINESS,
+                TelegramSource.source_type == TelegramSourceType.PRIVATE,
+            )
+        )
+        return result.first()
+
+    async def set_source_auto_reply_enabled(
+        self,
+        *,
+        owner_user_id: UUID,
+        source_id: UUID,
+        enabled: bool,
+    ) -> tuple[TelegramSource, TelegramConnection] | None:
+        result = await self.session.exec(
+            select(TelegramSource, TelegramConnection)
+            .join(TelegramConnection, TelegramConnection.id == TelegramSource.connection_id)
+            .where(
+                TelegramSource.id == source_id,
+                TelegramSource.owner_user_id == owner_user_id,
+                TelegramConnection.owner_user_id == owner_user_id,
+            )
+        )
+        row = result.first()
+        if not row:
+            return None
+        source, connection = row
+        if enabled and (
+            connection.connection_type != TelegramConnectionType.BUSINESS
+            or source.source_type != TelegramSourceType.PRIVATE
+            or connection.capabilities.get("can_reply") is not True
+        ):
+            raise ValueError(
+                "automatic replies require a Telegram Business private chat with reply permission"
+            )
+        source.auto_reply_enabled = enabled
+        source.updated_at = utc_now()
+        self.session.add(source)
+        await self.session.commit()
+        await self.session.refresh(source)
+        return source, connection
 
     async def list_listenable_mtproto_connections(
         self,
@@ -3112,9 +3456,7 @@ class WeComArchiveRepository:
 
     async def cursor_for_connection(self, connection_id: UUID) -> WeComArchiveCursor | None:
         result = await self.session.exec(
-            select(WeComArchiveCursor).where(
-                WeComArchiveCursor.connection_id == connection_id
-            )
+            select(WeComArchiveCursor).where(WeComArchiveCursor.connection_id == connection_id)
         )
         return result.first()
 
@@ -3303,9 +3645,7 @@ class WeComArchiveRepository:
                 ),
             )
         )
-        wecom_groups = await _count_active_wecom_group_sources(
-            self.session, owner_user_id
-        )
+        wecom_groups = await _count_active_wecom_group_sources(self.session, owner_user_id)
         return int(telegram_result.one()), wecom_groups
 
     async def reconcile_source_quota_for_user(
@@ -3374,9 +3714,7 @@ class WeComArchiveRepository:
         self.session.add(connection)
         await self.session.commit()
 
-    async def mark_connection_error(
-        self, connection: WeComArchiveConnection, error: str
-    ) -> None:
+    async def mark_connection_error(self, connection: WeComArchiveConnection, error: str) -> None:
         connection.last_error = error[:1000]
         connection.updated_at = utc_now()
         self.session.add(connection)

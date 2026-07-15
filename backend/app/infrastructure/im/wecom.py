@@ -305,6 +305,7 @@ class WeComAdapter:
             return SendReceipt(
                 provider_message_id=None,
                 raw_response={"dry_run": True, "channel": self.channel, "target": target_user_id},
+                delivered=False,
             )
         token = await self._access_token(credentials, cache_scope=cache_scope)
         try:

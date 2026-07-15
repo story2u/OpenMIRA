@@ -23,6 +23,8 @@ from app.domain.enums import (
     FrontendOpportunityStatus,
     MessageDirection,
     OpportunityStatus,
+    TelegramConnectionType,
+    TelegramSourceType,
 )
 from app.infrastructure.db.models import (
     Message,
@@ -226,7 +228,17 @@ def to_telegram_user_config_read(
     )
 
 
-def to_telegram_source_read(source: TelegramSource) -> TelegramSourceRead:
+def to_telegram_source_read(
+    source: TelegramSource,
+    *,
+    connection_type: TelegramConnectionType,
+    connection_capabilities: dict,
+) -> TelegramSourceRead:
+    auto_reply_eligible = (
+        connection_type == TelegramConnectionType.BUSINESS
+        and source.source_type == TelegramSourceType.PRIVATE
+        and connection_capabilities.get("can_reply") is True
+    )
     return TelegramSourceRead(
         id=source.id,
         connectionId=source.connection_id,
@@ -235,6 +247,8 @@ def to_telegram_source_read(source: TelegramSource) -> TelegramSourceRead:
         displayName=source.display_name,
         username=source.username,
         enabled=source.enabled,
+        autoReplyEnabled=source.auto_reply_enabled,
+        autoReplyEligible=auto_reply_eligible,
         quotaPaused=source.quota_paused,
         quotaReason=source.quota_reason,
         lastError=source.last_error,
@@ -256,7 +270,14 @@ def to_telegram_connection_read(
         lastError=connection.last_error,
         lastCheckedAt=connection.last_checked_at,
         updatedAt=connection.updated_at,
-        sources=[to_telegram_source_read(source) for source in sources],
+        sources=[
+            to_telegram_source_read(
+                source,
+                connection_type=connection.connection_type,
+                connection_capabilities=connection.capabilities,
+            )
+            for source in sources
+        ],
     )
 
 

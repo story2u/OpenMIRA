@@ -4,6 +4,7 @@ import { Send, Sparkles } from 'lucide-react'
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
+import { generateOpportunityAiDraft } from '@/lib/api'
 import { useAppStore } from '@/lib/app-store'
 import type { Opportunity } from '@/lib/types'
 
@@ -15,10 +16,6 @@ function fillTemplate(content: string, opportunity: Opportunity) {
     .replaceAll('{{工作时间}}', '周一至周五 9:00-18:00')
 }
 
-function buildAiDraft(opportunity: Opportunity) {
-  return `${opportunity.contactName} 您好！关于您提到的「${opportunity.matchedKeywords.join('、')}」需求，我们已经为类似规模的客户提供过成熟方案。我可以为您整理一份针对性的介绍资料，并安排一次 15 分钟的快速沟通，请问您明天上午方便吗？`
-}
-
 export function ReplyComposer({ opportunity }: { opportunity: Opportunity }) {
   const { templates, sendMessage } = useAppStore()
   const [draft, setDraft] = useState('')
@@ -28,19 +25,17 @@ export function ReplyComposer({ opportunity }: { opportunity: Opportunity }) {
 
   const quickTemplates = templates.slice(0, 6)
 
-  const handleGenerate = () => {
+  const handleGenerate = async () => {
     setGenerating(true)
-    setDraft('')
-    const full = buildAiDraft(opportunity)
-    let i = 0
-    const interval = setInterval(() => {
-      i += 3
-      setDraft(full.slice(0, i))
-      if (i >= full.length) {
-        clearInterval(interval)
-        setGenerating(false)
-      }
-    }, 25)
+    setError('')
+    try {
+      const result = await generateOpportunityAiDraft(opportunity.id)
+      setDraft(result.draft)
+    } catch (exc) {
+      setError(exc instanceof Error ? exc.message : 'AI 草稿生成失败')
+    } finally {
+      setGenerating(false)
+    }
   }
 
   const handleSend = async () => {
@@ -93,7 +88,7 @@ export function ReplyComposer({ opportunity }: { opportunity: Opportunity }) {
       />
       {error && <p className="text-xs text-destructive">{error}</p>}
       <div className="flex items-center justify-between gap-2">
-        <Button variant="outline" size="sm" onClick={handleGenerate} disabled={generating} className="gap-1.5 bg-transparent">
+        <Button variant="outline" size="sm" onClick={() => void handleGenerate()} disabled={generating} className="gap-1.5 bg-transparent">
           <Sparkles className="size-3.5" />
           {generating ? '生成中…' : 'AI 生成草稿'}
         </Button>

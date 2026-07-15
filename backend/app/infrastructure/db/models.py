@@ -18,6 +18,8 @@ from sqlmodel import Field, SQLModel
 
 from app.domain.enums import (
     AgentAnalysisStatus,
+    AutoReplyDecisionReason,
+    AutoReplyDeliveryStatus,
     BillingEventStatus,
     BillingInterval,
     BillingProvider,
@@ -427,6 +429,56 @@ class OpportunityArchiveEvent(TimestampMixin, table=True):
     reason: str | None = Field(default=None, max_length=500)
 
 
+class AutoReplyDelivery(TimestampMixin, table=True):
+    __tablename__ = "auto_reply_deliveries"
+    __table_args__ = (
+        UniqueConstraint(
+            "owner_user_id", "idempotency_key", name="uq_auto_reply_deliveries_owner_key"
+        ),
+        Index(
+            "ix_auto_reply_deliveries_conversation_status_created",
+            "owner_user_id",
+            "channel",
+            "conversation_id",
+            "status",
+            "created_at",
+        ),
+    )
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    owner_user_id: UUID = Field(foreign_key="users.id", index=True)
+    opportunity_id: UUID = Field(foreign_key="opportunities.id", index=True)
+    source_message_id: UUID = Field(foreign_key="messages.id", index=True)
+    channel: IMChannel = Field(
+        sa_column=Column(SAEnum(IMChannel, native_enum=False), nullable=False, index=True)
+    )
+    conversation_id: str = Field(max_length=255, index=True)
+    idempotency_key: str = Field(max_length=255)
+    status: AutoReplyDeliveryStatus = Field(
+        default=AutoReplyDeliveryStatus.CANDIDATE,
+        sa_column=Column(
+            SAEnum(AutoReplyDeliveryStatus, native_enum=False), nullable=False, index=True
+        ),
+    )
+    decision_reason: AutoReplyDecisionReason | None = Field(
+        default=None,
+        sa_column=Column(SAEnum(AutoReplyDecisionReason, native_enum=False), nullable=True),
+    )
+    content_hash: str | None = Field(default=None, max_length=64)
+    provider_message_id: str | None = Field(default=None, max_length=255)
+    attempt_count: int = Field(default=0, ge=0)
+    ready_at: datetime | None = Field(
+        default=None, sa_column=Column(DateTime(timezone=True), nullable=True)
+    )
+    sending_at: datetime | None = Field(
+        default=None, sa_column=Column(DateTime(timezone=True), nullable=True)
+    )
+    sent_at: datetime | None = Field(
+        default=None, sa_column=Column(DateTime(timezone=True), nullable=True)
+    )
+    error: str | None = Field(default=None, max_length=500)
+
+
 class Message(TimestampMixin, table=True):
     __tablename__ = "messages"
     __table_args__ = (
@@ -587,7 +639,7 @@ class UserWorkSchedule(TimestampMixin, table=True):
     slots: list[dict[str, Any]] = Field(
         default_factory=list, sa_column=Column(JSONB, nullable=False)
     )
-    auto_reply_outside_hours: bool = Field(default=True)
+    auto_reply_outside_hours: bool = Field(default=False)
 
 
 class UserNotificationPreference(TimestampMixin, table=True):
@@ -727,6 +779,7 @@ class TelegramSource(TimestampMixin, table=True):
     display_name: str = Field(default="Telegram 来源", max_length=255)
     username: str | None = Field(default=None, max_length=255)
     enabled: bool = Field(default=True, index=True)
+    auto_reply_enabled: bool = Field(default=False, index=True)
     quota_paused: bool = Field(default=False, index=True)
     quota_reason: str | None = Field(default=None, max_length=500)
     retention_priority: int = Field(default=0, ge=0)
@@ -888,9 +941,7 @@ class WeComSource(TimestampMixin, table=True):
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     owner_user_id: UUID = Field(foreign_key="users.id", index=True)
-    connection_id: UUID | None = Field(
-        default=None, foreign_key="wecom_connections.id", index=True
-    )
+    connection_id: UUID | None = Field(default=None, foreign_key="wecom_connections.id", index=True)
     archive_connection_id: UUID | None = Field(
         default=None, foreign_key="wecom_archive_connections.id", index=True
     )

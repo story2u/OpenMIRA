@@ -48,6 +48,10 @@ class TelegramConnectionUpdate(BaseModel):
     enabled: bool
 
 
+class TelegramSourceUpdate(BaseModel):
+    autoReplyEnabled: bool
+
+
 def is_local_mock(settings: Settings) -> bool:
     return settings.app_env != "prod" and settings.telegram_integration_mode == "mock"
 
@@ -295,7 +299,10 @@ async def start_mtproto_qr_connection(
                 raise exc
     return to_telegram_connection_attempt_read(
         attempt,
-        instructions=["正在生成二维码。请使用已登录的 Telegram 客户端扫码确认。", "二维码过期后请重新开始。"],
+        instructions=[
+            "正在生成二维码。请使用已登录的 Telegram 客户端扫码确认。",
+            "二维码过期后请重新开始。",
+        ],
     )
 
 
@@ -318,7 +325,9 @@ async def get_connection_attempt(
         try:
             qr_code_url = decrypt_secret(attempt.qr_url_encrypted, get_settings())
         except ValueError:
-            await connection_repo.fail_attempt(attempt=attempt, error="QR login state could not be recovered")
+            await connection_repo.fail_attempt(
+                attempt=attempt, error="QR login state could not be recovered"
+            )
     return to_telegram_connection_attempt_read(attempt, qr_code_url=qr_code_url)
 
 
@@ -338,11 +347,15 @@ async def mtproto_client_for_connection(
         or not connection.credential_encrypted
         or not settings.telegram_mtproto_qr_available
     ):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="MTProto connection not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="MTProto connection not found"
+        )
     try:
         session_string = decrypt_secret(connection.credential_encrypted, settings)
     except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="MTProto session is unavailable") from exc
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail="MTProto session is unavailable"
+        ) from exc
     return TelegramClient(
         StringSession(session_string),
         settings.telegram_mtproto_api_id,
@@ -374,7 +387,9 @@ async def list_mtproto_dialogs(
                 TelegramMtprotoDialogRead(
                     id=str(dialog.id),
                     sourceType=(
-                        TelegramSourceType.CHANNEL if getattr(entity, "broadcast", False) else TelegramSourceType.GROUP
+                        TelegramSourceType.CHANNEL
+                        if getattr(entity, "broadcast", False)
+                        else TelegramSourceType.GROUP
                     ),
                     displayName=dialog.name or "Telegram 群组",
                     username=getattr(entity, "username", None),
@@ -413,7 +428,11 @@ async def add_mtproto_source(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail="only groups and channels can be monitored",
             )
-        source_type = TelegramSourceType.CHANNEL if getattr(entity, "broadcast", False) else TelegramSourceType.GROUP
+        source_type = (
+            TelegramSourceType.CHANNEL
+            if getattr(entity, "broadcast", False)
+            else TelegramSourceType.GROUP
+        )
         snapshot = await subscription_repo.get_snapshot(current_user.id)
         await connection_repo.add_mtproto_source(
             owner_user_id=current_user.id,
@@ -428,7 +447,9 @@ async def add_mtproto_source(
     except GroupQuotaExceeded as exc:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
     except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="invalid Telegram group") from exc
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="invalid Telegram group"
+        ) from exc
     finally:
         await client.disconnect()
     connection = await connection_repo.get_connection_for_owner(
@@ -509,3 +530,32 @@ async def delete_source(
     if not deleted:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="source not found")
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.patch("/sources/{source_id}", response_model=TelegramConnectionRead)
+async def update_source(
+    source_id: UUID,
+    payload: TelegramSourceUpdate,
+    current_user: User = Depends(require_user),
+    connection_repo: TelegramConnectionRepository = Depends(get_telegram_connection_repo),
+) -> TelegramConnectionRead:
+    try:
+        updated = await connection_repo.set_source_auto_reply_enabled(
+            owner_user_id=current_user.id,
+            source_id=source_id,
+            enabled=payload.autoReplyEnabled,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc),
+        ) from exc
+    if not updated:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="source not found")
+    source, connection = updated
+    sources = [
+        item
+        for item in await connection_repo.list_sources_for_owner(current_user.id)
+        if item.connection_id == connection.id
+    ]
+    return to_telegram_connection_read(connection, sources)

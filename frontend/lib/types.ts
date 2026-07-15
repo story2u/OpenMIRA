@@ -192,6 +192,8 @@ export interface TelegramConnectionSource {
   displayName: string
   username: string | null
   enabled: boolean
+  autoReplyEnabled: boolean
+  autoReplyEligible: boolean
   quotaPaused: boolean
   quotaReason: string | null
   lastError: string | null
