@@ -93,6 +93,7 @@ ADR 和迁移计划，不要在单个功能中半途改造。
 | `UsageLedger` | AI 功能额度的可审计账本 | user + feature + idempotency key 唯一；reserved/consumed/released |
 | `Message` | 收发消息审计记录 | channel + external_message_id 幂等；保存 pi 分析状态/结果；可关联 opportunity |
 | `Opportunity` / `OpportunityArchiveEvent` | 商机聚合根与归档审计 | 状态表达业务生命周期；nullable 归档字段独立控制看板可见性，恢复不改变状态；source_message 唯一 |
+| `AutoReplyDelivery` | AI 自动回复最小投递账本 | owner + idempotency key 唯一；记录门禁原因与发送状态，不复制正文或 provider raw response |
 | `Rule` | 关键词/正则/AI hint 规则 | 启用、优先级、分数驱动检测策略 |
 | `AppConfig` | 运行期业务配置 | JSONB value；当前包含工作时间等配置 |
 | `ReplyTemplate` | 人工回复模板 | 可启用、分类 |
@@ -134,9 +135,9 @@ sequenceDiagram
     else 工作时间或 AI 新发现商机
         U->>DB: 创建 PENDING_HUMAN Opportunity
         U->>Q: 通知审核者（当前为队列接口）
-    else 非工作时间商机
+    else 非工作时间、用户与 Business 私聊来源均显式授权
         U->>DB: 创建 AI_AUTO_REPLY Opportunity
-        U->>Q: enqueue_ai_reply
+        U->>Q: 仅 enqueue agent.analyze_message
     end
     U->>DB: 按 owner 锁定并预留 pi Agent 月额度
     alt owner 缺失或额度耗尽
@@ -148,6 +149,11 @@ sequenceDiagram
     Q->>P: 规范化消息 + 链接证据
     P-->>Q: submit_analysis 结构化建议
     Q->>DB: 保存审计结果并投影到商机
+    opt 既有规则商机为自动回复候选
+        Q->>Q: enqueue_ai_reply
+        Q->>DB: 确定性门禁 + 幂等投递账本
+        Q->>IM: 仅明确成功时发送并标记 REPLIED
+    end
     opt 规则漏判且 Agent 高置信
         Q->>DB: 创建 PENDING_HUMAN 商机
     end
@@ -227,9 +233,14 @@ sequenceDiagram
 - 人工回复：API → `ManualReplyUseCase` → IM adapter 发送 → 创建 outgoing `Message` → 状态
   进入 `FOLLOWING` 或 `REPLIED`。
 - AI 草稿：API → `AIDraftUseCase` → `LiteLLMReplyGenerator` → 保存 `ai_reply_draft`，不发送。
-- AI 自动回复：Celery → `AIAutoReplyUseCase` → 生成/复用草稿 → IM adapter 发送 → 记录消息 →
-  状态进入 `REPLIED`。
-- `IM_SEND_ENABLED=false` 是本地安全阀；适配器不得绕过它执行真实发送。
+- AI 自动回复：摄取只创建候选并先运行 pi Agent；分析成功后 Celery 才进入 `AIAutoReplyUseCase`。
+  纯 Python 策略重新检查服务端安全阀、用户日程、Telegram Business 私聊来源授权、风险、置信度、
+  冷却期和草稿内容，再通过 `AutoReplyDelivery` 执行 at-most-once 投递。
+- 群组、频道、MTProto 普通账号、企业微信和 Agent 补判商机不能进入自动发送。任何未知/失败条件
+  转为 `PENDING_HUMAN`；旧 SLA sweep 只触发审核提醒，不再升级为自动发送。
+- `IM_SEND_ENABLED` 与 `AI_AUTO_REPLY_ENABLED` 默认开启，但仍分别是总发送阀和自动回复功能阀；任一
+  显式关闭均不得自动发送。真实资格还需用户日程与来源双重授权。adapter 的 dry-run 回执不创建
+  outgoing Message，也不把商机标记为 `REPLIED`。
 
 ### 密码修改与邮箱重置
 

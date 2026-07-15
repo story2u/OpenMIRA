@@ -4,7 +4,7 @@ from uuid import UUID
 
 import structlog
 
-from app.application.use_cases.ai_reply import AIAutoReplyUseCase, transition_pending_to_ai
+from app.application.use_cases.ai_reply import AIAutoReplyUseCase
 from app.application.use_cases.analyze_message import AnalyzeMessageUseCase
 from app.application.use_cases.ingest_message import IngestMessageUseCase
 from app.application.use_cases.sync_revenuecat_customer import SyncRevenueCatCustomer
@@ -25,6 +25,7 @@ from app.infrastructure.ai.litellm_client import LiteLLMOpportunityClassifier, L
 from app.infrastructure.billing.revenuecat_client import RevenueCatClient
 from app.infrastructure.db.repositories import (
     BillingEventRepository,
+    AutoReplyDeliveryRepository,
     ConfigRepository,
     MessageRepository,
     OpportunityRepository,
@@ -99,9 +100,6 @@ async def _prepare_password_reset(email: str) -> None:
 @celery_app.task(
     name="ai.generate_and_send_reply",
     queue="ai",
-    autoretry_for=(Exception,),
-    retry_backoff=True,
-    retry_kwargs={"max_retries": 3},
 )
 def generate_and_send_reply(opportunity_id: str) -> None:
     asyncio.run(_generate_and_send_reply(UUID(opportunity_id)))
@@ -219,17 +217,23 @@ async def _generate_and_send_reply(opportunity_id: UUID) -> None:
             opportunity_repo=opportunity_repo,
             message_repo=message_repo,
         )
+        telegram_repo = TelegramConnectionRepository(session)
         adapters = AdapterRegistry(
             [
-                TelegramAdapter(settings),
+                TelegramAdapter(settings, connection_repo=telegram_repo),
                 WeComAdapter(settings),
             ]
         )
         use_case = AIAutoReplyUseCase(
+            settings=settings,
             opportunity_repo=opportunity_repo,
             message_repo=message_repo,
+            delivery_repo=AutoReplyDeliveryRepository(session),
+            telegram_repo=telegram_repo,
+            user_settings_repo=UserSettingsRepository(session),
             adapters=adapters,
             reply_generator=reply_generator,
+            task_queue=CeleryTaskQueue(),
         )
         await use_case.execute(opportunity)
 
@@ -301,9 +305,7 @@ async def _enqueue_wecom_archive_syncs() -> None:
         queue.enqueue_wecom_archive_sync(connection_id)
 
 
-async def _sync_wecom_archive_connection(
-    connection_id: UUID, *, verifying: bool
-) -> None:
+async def _sync_wecom_archive_connection(connection_id: UUID, *, verifying: bool) -> None:
     settings = get_settings()
     if not settings.wecom_archive_enabled:
         raise RuntimeError("WeCom archive integration is disabled")
@@ -514,6 +516,4 @@ async def _sweep_pending_for_ai() -> None:
         opportunity_repo = OpportunityRepository(session)
         stale = await opportunity_repo.pending_human_older_than(settings.pending_human_sla_minutes)
         for opportunity in stale:
-            updated = await transition_pending_to_ai(opportunity_repo, opportunity.id)
-            if updated:
-                celery_app.send_task("ai.generate_and_send_reply", args=[str(updated.id)])
+            CeleryTaskQueue().notify_reviewers(opportunity.id)

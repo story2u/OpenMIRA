@@ -295,7 +295,7 @@ data class WorkScheduleSlotDTO(
 data class WorkSchedule(
     val timezone: String = "Asia/Shanghai",
     val slots: List<WorkScheduleSlotDTO> = emptyList(),
-    val autoReplyOutsideHours: Boolean = true,
+    val autoReplyOutsideHours: Boolean = false,
     val isDefault: Boolean = false,
 )
 
@@ -366,6 +366,8 @@ data class TelegramSourceDTO(
     val displayName: String,
     val username: String? = null,
     val enabled: Boolean = true,
+    val autoReplyEnabled: Boolean = false,
+    val autoReplyEligible: Boolean = false,
     val quotaPaused: Boolean = false,
     val quotaReason: String? = null,
     val lastError: String? = null,

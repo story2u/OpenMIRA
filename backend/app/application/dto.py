@@ -446,6 +446,8 @@ class TelegramSourceRead(BaseModel):
     displayName: str
     username: str | None = None
     enabled: bool
+    autoReplyEnabled: bool = False
+    autoReplyEligible: bool = False
     quotaPaused: bool
     quotaReason: str | None = None
     lastError: str | None = None
@@ -642,14 +644,14 @@ class WorkScheduleSlot(BaseModel):
 class WorkScheduleRead(BaseModel):
     timezone: str = "Asia/Shanghai"
     slots: list[WorkScheduleSlot] = Field(default_factory=list)
-    autoReplyOutsideHours: bool = True
+    autoReplyOutsideHours: bool = False
     isDefault: bool = False
 
 
 class WorkScheduleUpdate(BaseModel):
     timezone: str = Field(min_length=1, max_length=64)
     slots: list[WorkScheduleSlot] = Field(default_factory=list, max_length=168)
-    autoReplyOutsideHours: bool = True
+    autoReplyOutsideHours: bool = False
 
     @field_validator("timezone")
     @classmethod

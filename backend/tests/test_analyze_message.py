@@ -49,10 +49,16 @@ class FakeOpportunityRepository:
         self.create_status: OpportunityStatus | None = None
 
     async def get(self, opportunity_id):
-        return self.opportunity if self.opportunity and self.opportunity.id == opportunity_id else None
+        return (
+            self.opportunity if self.opportunity and self.opportunity.id == opportunity_id else None
+        )
 
     async def get_by_source_message(self, message_id):
-        return self.opportunity if self.opportunity and self.opportunity.source_message_id == message_id else None
+        return (
+            self.opportunity
+            if self.opportunity and self.opportunity.source_message_id == message_id
+            else None
+        )
 
     async def create(self, **values):
         self.create_status = values["status"]
@@ -104,12 +110,13 @@ class FakeLinkInspector:
 class FakeTaskQueue:
     def __init__(self) -> None:
         self.notifications = []
+        self.ai_replies = []
 
     def notify_reviewers(self, opportunity_id) -> None:
         self.notifications.append(opportunity_id)
 
     def enqueue_ai_reply(self, opportunity_id) -> None:
-        raise AssertionError(f"must not auto reply to agent-created opportunity {opportunity_id}")
+        self.ai_replies.append(opportunity_id)
 
     def enqueue_agent_analysis(
         self,
@@ -118,9 +125,7 @@ class FakeTaskQueue:
         force=False,
         usage_ledger_id=None,
     ) -> bool:
-        raise AssertionError(
-            f"must not recursively enqueue {message_id}/{force}/{usage_ledger_id}"
-        )
+        raise AssertionError(f"must not recursively enqueue {message_id}/{force}/{usage_ledger_id}")
 
 
 async def test_pi_agent_can_promote_rule_miss_but_only_to_human_review() -> None:
@@ -155,9 +160,57 @@ async def test_pi_agent_can_promote_rule_miss_but_only_to_human_review() -> None
     assert opportunity is not None
     assert opportunity_repo.create_status == OpportunityStatus.PENDING_HUMAN
     assert queue.notifications == [opportunity.id]
+    assert queue.ai_replies == []
     assert message_repo.completed is True
     assert message_repo.failed is None
     assert message_repo.projection.actions[0]["requires_approval"] is True
+
+
+async def test_existing_auto_reply_candidate_is_queued_only_after_agent_completion() -> None:
+    owner_id = uuid4()
+    message = Message(
+        id=uuid4(),
+        owner_user_id=owner_id,
+        channel=IMChannel.TELEGRAM,
+        external_message_id="external-business-1",
+        conversation_id="business-chat-1",
+        sender_external_id="customer-1",
+        sender_display_name="采购负责人",
+        direction=MessageDirection.INCOMING,
+        text="需要采购 500 套，详情 https://public.example/rfp",
+        source_type="private",
+        raw_message_links=[],
+    )
+    opportunity = Opportunity(
+        id=uuid4(),
+        owner_user_id=owner_id,
+        source_message_id=message.id,
+        channel=IMChannel.TELEGRAM,
+        conversation_id=message.conversation_id,
+        source_type="private",
+        title="批量采购",
+        status=OpportunityStatus.AI_AUTO_REPLY,
+    )
+    message.opportunity_id = opportunity.id
+    message_repo = FakeMessageRepository(message)
+    opportunity_repo = FakeOpportunityRepository()
+    opportunity_repo.opportunity = opportunity
+    queue = FakeTaskQueue()
+    use_case = AnalyzeMessageUseCase(
+        message_repo=message_repo,  # type: ignore[arg-type]
+        opportunity_repo=opportunity_repo,  # type: ignore[arg-type]
+        agent=FakeAgent(),
+        link_inspector=FakeLinkInspector(),
+        task_queue=queue,
+        min_opportunity_confidence=0.75,
+        max_links=5,
+    )
+
+    result = await use_case.execute(message.id)
+
+    assert result is opportunity
+    assert message_repo.completed is True
+    assert queue.ai_replies == [opportunity.id]
 
 
 def test_message_links_deduplicates_and_limits_urls() -> None:

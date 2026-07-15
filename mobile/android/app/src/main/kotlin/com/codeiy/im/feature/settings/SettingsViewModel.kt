@@ -54,13 +54,26 @@ class SettingsViewModel(private val service: RadarApi) : ViewModel() {
         }
     }
 
-    fun saveWorkSchedule(timezone: String, slots: List<WorkScheduleSlotDTO>, onError: (String) -> Unit) {
+    fun saveWorkSchedule(
+        timezone: String,
+        slots: List<WorkScheduleSlotDTO>,
+        autoReplyOutsideHours: Boolean,
+        onError: (String) -> Unit,
+    ) {
         val bundle = _state.value.bundle ?: return
         val previous = bundle.workSchedule
-        _state.value = _state.value.copy(bundle = bundle.copy(workSchedule = WorkSchedule(timezone, slots, true, false)))
+        _state.value = _state.value.copy(
+            bundle = bundle.copy(
+                workSchedule = WorkSchedule(timezone, slots, autoReplyOutsideHours, false)
+            )
+        )
         viewModelScope.launch {
             try {
-                val saved = api { service.updateWorkSchedule(WorkScheduleUpdate(timezone, slots, true)) }
+                val saved = api {
+                    service.updateWorkSchedule(
+                        WorkScheduleUpdate(timezone, slots, autoReplyOutsideHours)
+                    )
+                }
                 _state.value = _state.value.copy(bundle = _state.value.bundle?.copy(workSchedule = saved))
             } catch (e: Exception) {
                 _state.value = _state.value.copy(bundle = _state.value.bundle?.copy(workSchedule = previous))

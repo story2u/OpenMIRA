@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// 工作时间：一周 7 行，每天可开关并设置人工审核时段。选中时段=人工审核，其余=AI 自动回复。
+/// 工作时间：一周 7 行，每天可开关并设置人工审核时段；自动接待需另行授权。
 /// 手机端不照搬桌面 560px 横向表格；用每天一行 + 时间选择，符合触控规范。
 struct WorkScheduleView: View {
     let model: SettingsViewModel
@@ -15,6 +15,8 @@ struct WorkScheduleView: View {
     @State private var days: [Int: DayEntry]  // weekday 1-7
     @State private var original: [Int: DayEntry]
     @State private var originalTimezone: String
+    @State private var autoReplyOutsideHours: Bool
+    @State private var originalAutoReplyOutsideHours: Bool
     @State private var isSaving = false
     @State private var errorMessage: String?
 
@@ -31,9 +33,15 @@ struct WorkScheduleView: View {
         _originalTimezone = State(initialValue: schedule.timezone)
         _days = State(initialValue: mapped)
         _original = State(initialValue: mapped)
+        _autoReplyOutsideHours = State(initialValue: schedule.autoReplyOutsideHours)
+        _originalAutoReplyOutsideHours = State(initialValue: schedule.autoReplyOutsideHours)
     }
 
-    private var hasChanges: Bool { days != original || timezone != originalTimezone }
+    private var hasChanges: Bool {
+        days != original
+            || timezone != originalTimezone
+            || autoReplyOutsideHours != originalAutoReplyOutsideHours
+    }
 
     private var weeklyHours: Int {
         days.values.filter(\.enabled).reduce(0) { total, entry in
@@ -64,7 +72,16 @@ struct WorkScheduleView: View {
                         .foregroundStyle(.secondary)
                 }
             } footer: {
-                Text(String(localized: "work.footer", defaultValue: "选中时段内为人工审核；其余时段商机可 AI 自动回复。"))
+                Text(String(localized: "work.footer", defaultValue: "选中时段内为人工审核；其余时段默认仍进入人工队列。"))
+            }
+
+            Section {
+                Toggle(
+                    String(localized: "work.auto_reply", defaultValue: "非工作时间 AI 安全接待"),
+                    isOn: $autoReplyOutsideHours
+                )
+            } footer: {
+                Text(String(localized: "work.auto_reply_hint", defaultValue: "仅对已单独授权的 Telegram Business 私聊生效，发送前仍需通过 Agent 风险检查。"))
             }
 
             Section {
@@ -131,12 +148,18 @@ struct WorkScheduleView: View {
         isSaving = true
         errorMessage = nil
         let slots = Self.encode(days)
-        let schedule = WorkSchedule(timezone: timezone, slots: slots, autoReplyOutsideHours: true, isDefault: false)
+        let schedule = WorkSchedule(
+            timezone: timezone,
+            slots: slots,
+            autoReplyOutsideHours: autoReplyOutsideHours,
+            isDefault: false
+        )
         Task {
             do {
                 try await model.saveWorkSchedule(schedule)
                 original = days
                 originalTimezone = timezone
+                originalAutoReplyOutsideHours = autoReplyOutsideHours
             } catch {
                 errorMessage = error.localizedDescription
             }

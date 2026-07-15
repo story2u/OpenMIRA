@@ -40,12 +40,13 @@ private val WEEKDAYS = listOf(1 to "周一", 2 to "周二", 3 to "周三", 4 to 
 private val TIMEZONES = listOf("Asia/Shanghai", "Asia/Hong_Kong", "Asia/Tokyo", "Asia/Singapore", "America/Los_Angeles", "America/New_York", "Europe/London", "UTC")
 private val HOURS = (8..22).map { "%02d:00".format(it) }
 
-/** 工作时间：一周 7 行，每天开关 + 时段（08:00-22:00 整点）。选中=人工审核，其余=AI 自动回复。 */
+/** 工作时间：一周 7 行，每天开关 + 时段；自动接待需另行授权。 */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WorkScheduleScreen(model: SettingsViewModel, schedule: WorkSchedule, onBack: () -> Unit) {
     val days = remember { mutableStateMapOf<Int, DayEntry>().apply { putAll(decode(schedule.slots)) } }
     var timezone by remember { mutableStateOf(schedule.timezone) }
+    var autoReplyOutsideHours by remember { mutableStateOf(schedule.autoReplyOutsideHours) }
     var tzMenu by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
 
@@ -59,7 +60,9 @@ fun WorkScheduleScreen(model: SettingsViewModel, schedule: WorkSchedule, onBack:
                 actions = {
                     TextButton(onClick = {
                         error = null
-                        model.saveWorkSchedule(timezone, encode(days)) { error = it }
+                        model.saveWorkSchedule(timezone, encode(days), autoReplyOutsideHours) {
+                            error = it
+                        }
                     }) { Text("保存") }
                 },
             )
@@ -102,6 +105,22 @@ fun WorkScheduleScreen(model: SettingsViewModel, schedule: WorkSchedule, onBack:
                         }
                     }
                     HorizontalDivider(Modifier.padding(top = 4.dp))
+                }
+            }
+            item {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("非工作时间 AI 安全接待")
+                        Text(
+                            "仅对已单独授权的 Telegram Business 私聊生效，发送前仍需通过 Agent 风险检查。",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = AppColors.muted,
+                        )
+                    }
+                    Switch(
+                        checked = autoReplyOutsideHours,
+                        onCheckedChange = { autoReplyOutsideHours = it },
+                    )
                 }
             }
             item {

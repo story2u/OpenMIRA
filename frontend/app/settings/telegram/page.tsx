@@ -34,6 +34,7 @@ import {
   startTelegramBusinessConnection,
   startTelegramMtprotoQrConnection,
   updateTelegramConnection,
+  updateTelegramConnectionSource,
 } from '@/lib/api'
 import type {
   TelegramConnection,
@@ -265,6 +266,19 @@ export default function TelegramSettingsPage() {
     }
   }, [])
 
+  const toggleSourceAutoReply = useCallback(async (sourceId: string, enabled: boolean) => {
+    setError('')
+    setAction(`auto-reply-${sourceId}`)
+    try {
+      const updated = await updateTelegramConnectionSource(sourceId, enabled)
+      setConnections((current) => current.map((item) => item.id === updated.id ? updated : item))
+    } catch (exc) {
+      setError(exc instanceof Error ? exc.message : '更新自动回复授权失败')
+    } finally {
+      setAction(null)
+    }
+  }, [])
+
   return (
     <div className="mx-auto w-full max-w-4xl px-4 py-6 md:px-8">
       <header className="mb-6 flex items-start gap-2">
@@ -445,6 +459,17 @@ export default function TelegramSettingsPage() {
                         <Radio className="size-3.5 shrink-0 text-muted-foreground" />
                         <div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{source.displayName}</p><p className="truncate text-xs text-muted-foreground">{source.sourceType === 'channel' ? '频道' : source.sourceType === 'group' ? '群组' : '私聊'}{source.username ? ` · @${source.username}` : ''}</p></div>
                         {source.quotaPaused ? <Badge variant="outline">套餐暂停</Badge> : <Badge variant="secondary">监听中</Badge>}
+                        {source.autoReplyEligible ? (
+                          <div className="flex items-center gap-2" title="仅在非工作时间、风险分析通过且服务端安全阀开启时发送">
+                            <span className="hidden text-xs text-muted-foreground sm:inline">AI 接待</span>
+                            <Switch
+                              checked={source.autoReplyEnabled}
+                              disabled={action === `auto-reply-${source.id}` || source.quotaPaused}
+                              onCheckedChange={(enabled) => void toggleSourceAutoReply(source.id, enabled)}
+                              aria-label={`${source.autoReplyEnabled ? '关闭' : '开启'} ${source.displayName} 的 AI 安全接待`}
+                            />
+                          </div>
+                        ) : null}
                         <Button variant="ghost" size="icon-xs" onClick={() => void removeSource(source.id)} disabled={action === `source-${source.id}`} aria-label={`移除 ${source.displayName}`}><Trash2 className="size-3.5 text-destructive" /></Button>
                       </div>
                     ))}

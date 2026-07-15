@@ -1,12 +1,13 @@
 'use client'
 
-import { ArrowLeft, Globe } from 'lucide-react'
+import { ArrowLeft, Bot, Globe } from 'lucide-react'
 import Link from 'next/link'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Switch } from '@/components/ui/switch'
 import { fetchSettings, updateWorkSchedule } from '@/lib/api'
 import type { WorkScheduleSlot } from '@/lib/types'
 import { cn } from '@/lib/utils'
@@ -64,6 +65,7 @@ export default function WorkingHoursPage() {
   const [timezone, setTimezone] = useState('Asia/Shanghai')
   const [loaded, setLoaded] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [autoReplyOutsideHours, setAutoReplyOutsideHours] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const dragRef = useRef<{ active: boolean; value: boolean }>({ active: false, value: true })
 
@@ -75,6 +77,7 @@ export default function WorkingHoursPage() {
         if (!active) return
         setSchedule(slotsToGrid(bundle.workSchedule.slots))
         setTimezone(bundle.workSchedule.timezone)
+        setAutoReplyOutsideHours(bundle.workSchedule.autoReplyOutsideHours)
         setLoaded(true)
       })
       .catch((e) => active && setError(e instanceof Error ? e.message : '加载工作时间失败'))
@@ -111,10 +114,11 @@ export default function WorkingHoursPage() {
       const saved = await updateWorkSchedule({
         timezone,
         slots: gridToSlots(schedule),
-        autoReplyOutsideHours: true,
+        autoReplyOutsideHours,
       })
       setSchedule(slotsToGrid(saved.slots))
       setTimezone(saved.timezone)
+      setAutoReplyOutsideHours(saved.autoReplyOutsideHours)
     } catch (e) {
       setError(e instanceof Error ? e.message : '保存失败')
     } finally {
@@ -147,7 +151,7 @@ export default function WorkingHoursPage() {
         <div>
           <h1 className="text-lg font-semibold tracking-tight md:text-xl">工作时间设置</h1>
           <p className="text-xs text-muted-foreground">
-            选中的时段为人工审核模式，其余时段由 AI 自动回复
+            选中的时段为人工审核模式；非工作时间可单独启用安全接待
           </p>
         </div>
       </div>
@@ -207,10 +211,32 @@ export default function WorkingHoursPage() {
                 </span>
                 <span className="inline-flex items-center gap-1.5">
                   <span className="size-2.5 rounded-sm bg-muted ring-1 ring-border" aria-hidden="true" />
-                  非工作时间 · AI 自动回复
+                  非工作时间 · 待人工或按授权安全接待
                 </span>
               </div>
             </div>
+          </div>
+        </Card>
+
+        <Card className="gap-3 rounded-xl p-4 shadow-sm md:p-5">
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex min-w-0 gap-3">
+              <Bot className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+              <div>
+                <Label htmlFor="after-hours-auto-reply" className="text-sm font-medium">
+                  非工作时间 AI 安全接待
+                </Label>
+                <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                  仅对已单独授权的 Telegram Business 私聊生效。Agent 完成风险分析后，才可能发送一条确认需求的简短回复。
+                </p>
+              </div>
+            </div>
+            <Switch
+              id="after-hours-auto-reply"
+              checked={autoReplyOutsideHours}
+              onCheckedChange={setAutoReplyOutsideHours}
+              aria-label="启用非工作时间 AI 安全接待"
+            />
           </div>
         </Card>
 

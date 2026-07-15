@@ -27,11 +27,13 @@ class InboundMessage(BaseModel):
     raw_message_links: list[str] = Field(default_factory=list)
     raw_payload: dict[str, Any] = Field(default_factory=dict)
     force_human_review: bool = False
+    auto_reply_allowed: bool = False
 
 
 class SendReceipt(BaseModel):
     provider_message_id: str | None = None
     raw_response: dict[str, Any] = Field(default_factory=dict)
+    delivered: bool = True
 
 
 class DetectionRule(BaseModel):
@@ -168,6 +170,8 @@ class OpportunityAIClassifier(Protocol):
 
 class ReplyGenerator(Protocol):
     async def generate_reply(self, opportunity_id: UUID) -> str: ...
+
+    async def generate_auto_reply(self, opportunity_id: UUID) -> str: ...
 
 
 class MessageAgent(Protocol):

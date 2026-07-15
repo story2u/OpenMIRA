@@ -154,6 +154,17 @@ async def telegram_webhook(
         if not inbound:
             await connection_repo.finish_webhook_event(event=event, connection_id=connection.id)
             return {"ok": True, "ignored": True}
+        source = await connection_repo.ensure_business_source(
+            connection=connection,
+            external_chat_id=inbound.conversation_id,
+            display_name=inbound.sender_display_name or "Telegram Business 私聊",
+        )
+        inbound.auto_reply_allowed = bool(
+            source.enabled
+            and not source.quota_paused
+            and source.auto_reply_enabled
+            and connection.capabilities.get("can_reply") is True
+        )
         result = await use_case.execute(inbound)
         await connection_repo.finish_webhook_event(event=event, connection_id=connection.id)
         response = {"ok": True, "id": str(result.id), "type": result.__class__.__name__}
