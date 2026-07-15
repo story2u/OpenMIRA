@@ -6,7 +6,7 @@ from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from app.domain.enums import IMChannel, OpportunityStatus
+from app.domain.enums import IMChannel, MessageDirection, OpportunityStatus
 from app.domain.services.opportunity_state import InvalidOpportunityTransition
 from app.infrastructure.db.models import AutoReplyDelivery, Message, Opportunity, User
 from app.infrastructure.db.repositories import AutoReplyDeliveryRepository, OpportunityRepository
@@ -35,6 +35,7 @@ async def auto_reply_subject() -> AsyncIterator[
             channel=IMChannel.TELEGRAM,
             external_message_id=f"business-{os.urandom(8).hex()}",
             conversation_id="customer-1",
+            direction=MessageDirection.INCOMING,
             text="需要采购设备",
         )
         session.add(message)
