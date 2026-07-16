@@ -1,6 +1,7 @@
 package com.codeiy.im
 
 import com.codeiy.im.feature.inbox.InboxViewModel
+import com.codeiy.im.feature.jobs.JobDiscoveryViewModel
 import com.codeiy.im.feature.opportunity.OpportunityDetailModel
 import com.codeiy.im.core.network.RadarApi
 import com.codeiy.im.model.AIDraft
@@ -10,6 +11,15 @@ import com.codeiy.im.model.ChatMessage
 import com.codeiy.im.model.DashboardResponse
 import com.codeiy.im.model.FrontendOpportunityStatus
 import com.codeiy.im.model.ManualReplyRequest
+import com.codeiy.im.model.JobFeedbackRequest
+import com.codeiy.im.model.JobFeedbackResponse
+import com.codeiy.im.model.JobOpportunityDetail
+import com.codeiy.im.model.JobOpportunity
+import com.codeiy.im.model.JobProfileParseRequest
+import com.codeiy.im.model.JobSearchProfile
+import com.codeiy.im.model.JobSearchProfilePreview
+import com.codeiy.im.model.JobSearchProfileWrite
+import com.codeiy.im.model.JobsPage
 import com.codeiy.im.model.NativeLoginRequest
 import com.codeiy.im.model.Opportunity
 import com.codeiy.im.model.OpportunityStatusUpdate
@@ -46,7 +56,10 @@ private class FakeRadarApi : RadarApi {
     var delayMillis = 0L
     var opportunityCalls = 0
     var templateCalls = 0
+    var jobCalls = 0
     var pages: (status: String?) -> List<Opportunity> = { emptyList() }
+    var jobsPage = JobsPage()
+    var profiles: List<JobSearchProfile> = emptyList()
 
     override suspend fun opportunities(
         status: String?,
@@ -101,6 +114,71 @@ private class FakeRadarApi : RadarApi {
     override suspend fun telegramHealth(): TelegramConnectionHealth = error("unused")
     override suspend fun telegramConnections(): List<TelegramConnectionDTO> = error("unused")
     override suspend fun setTelegramConnectionEnabled(id: String, body: TelegramConnectionEnabledUpdate): TelegramConnectionDTO = error("unused")
+    override suspend fun jobs(
+        profileId: String?,
+        query: String?,
+        source: String?,
+        workMode: String?,
+        employmentType: String?,
+        seniority: String?,
+        minimumMatchScore: Int?,
+        ageRequirementPresent: Boolean?,
+        excludeExpired: Boolean,
+        sort: String,
+        limit: Int,
+        offset: Int,
+    ): JobsPage {
+        jobCalls++
+        delay(delayMillis)
+        return jobsPage
+    }
+    override suspend fun job(id: String, profileId: String?): JobOpportunityDetail = error("unused")
+    override suspend fun saveJobFeedback(id: String, body: JobFeedbackRequest): JobFeedbackResponse = error("unused")
+    override suspend fun jobSearchProfiles(): List<JobSearchProfile> = profiles
+    override suspend fun createJobSearchProfile(body: JobSearchProfileWrite): JobSearchProfile = error("unused")
+    override suspend fun updateJobSearchProfile(id: String, body: JobSearchProfileWrite): JobSearchProfile = error("unused")
+    override suspend fun deleteJobSearchProfile(id: String) = Unit
+    override suspend fun parseJobSearchProfile(body: JobProfileParseRequest): JobSearchProfilePreview = error("unused")
+}
+
+@OptIn(ExperimentalCoroutinesApi::class)
+class JobDiscoveryViewModelTest {
+    private val dispatcher = StandardTestDispatcher()
+
+    @Before
+    fun setUp() {
+        Dispatchers.setMain(dispatcher)
+    }
+
+    @After
+    fun tearDown() {
+        Dispatchers.resetMain()
+    }
+
+    @Test
+    fun loadsServerCalculatedMatchWithoutRecomputingIt() = runTest(dispatcher) {
+        val api = FakeRadarApi().apply {
+            profiles = listOf(JobSearchProfile(id = "profile-1", name = "远程后端", isDefault = true))
+            jobsPage = JobsPage(
+                items = listOf(
+                    JobOpportunity(
+                        opportunityId = "job-1",
+                        jobTitle = "Python Backend Engineer",
+                        match = com.codeiy.im.model.JobMatch(matchScore = 87),
+                    ),
+                ),
+                total = 1,
+            )
+        }
+        val model = JobDiscoveryViewModel(api)
+
+        model.load()
+        advanceUntilIdle()
+
+        assertEquals("profile-1", model.state.value.filters.profileId)
+        assertEquals(87, model.state.value.items.single().match?.matchScore)
+        assertEquals(1, api.jobCalls)
+    }
 }
 
 /** 收件箱竞态回归：筛选切换取消在途请求，旧响应不得覆盖新筛选结果。 */

@@ -22,6 +22,7 @@ import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Label
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Work
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -50,6 +51,7 @@ sealed interface SettingsRoute {
     data object Detection : SettingsRoute
     data object WorkSchedule : SettingsRoute
     data object Notifications : SettingsRoute
+    data object JobSearch : SettingsRoute
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -95,6 +97,7 @@ fun SettingsScreen(session: SessionStore, onNavigate: (SettingsRoute) -> Unit) {
 
             item { sectionHeader("识别与自动化") }
             if (state.bundle != null) {
+                item { settingsRow(Icons.Filled.Work, AppColors.success, "求职档案") { onNavigate(SettingsRoute.JobSearch) } }
                 item { settingsRow(Icons.Filled.Label, MaterialTheme.colorScheme.primary, "商机识别规则") { onNavigate(SettingsRoute.Detection) } }
                 item { settingsRow(Icons.Filled.Schedule, AppColors.warning, "工作时间") { onNavigate(SettingsRoute.WorkSchedule) } }
                 item { settingsRow(Icons.Filled.Notifications, AppColors.destructive, "通知设置") { onNavigate(SettingsRoute.Notifications) } }
