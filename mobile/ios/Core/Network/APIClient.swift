@@ -54,6 +54,10 @@ final class APIClient: Sendable {
         try Self.decode(await data(method: "PATCH", path: path, query: [], body: Self.encode(body)))
     }
 
+    func delete(_ path: String) async throws {
+        _ = try await data(method: "DELETE", path: path, query: [], body: nil)
+    }
+
     // MARK: - 传输
 
     private func data(
