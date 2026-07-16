@@ -2,6 +2,10 @@ import { Agent } from '@earendil-works/pi-agent-core'
 import { getModel } from '@earendil-works/pi-ai/compat'
 import { Type } from 'typebox'
 
+import { JOB_DISCOVERY_PROMPT } from './job-discovery/prompts.mjs'
+import { validateJobAnalysisContext } from './job-discovery/policy.mjs'
+import { JobAnalysisSchema } from './job-discovery/schemas.mjs'
+
 const nullableString = (options) => Type.Union([Type.Null(), Type.String(options)])
 
 export const AnalysisSchema = Type.Object(
@@ -58,6 +62,7 @@ export const AnalysisSchema = Type.Object(
       ),
       { maxItems: 8 },
     ),
+    job_analysis: JobAnalysisSchema,
   },
   { additionalProperties: false },
 )
@@ -72,7 +77,8 @@ only actions supported by evidence.
 You have exactly one tool: submit_analysis. Call it exactly once. Do not answer with prose. Email, friend
 requests, and private messages are recommendations only and must set requires_approval=true. notify_user may
 set requires_approval=false because it is an internal alert. Use attention_required only for time-sensitive or
-high-impact opportunities. Never invent contact details, identity, link facts, or completed external actions.`
+high-impact opportunities. Never invent contact details, identity, link facts, or completed external actions.
+${JOB_DISCOVERY_PROMPT}`
 
 export function createSubmitAnalysisTool(onSubmit) {
   return {
@@ -134,5 +140,6 @@ export async function runAnalysis(input, options = {}) {
   )
   if (agent.state.errorMessage) throw new Error('pi agent provider request failed')
   if (!submitted) throw new Error('pi agent did not submit a structured analysis')
+  validateJobAnalysisContext(input, submitted)
   return submitted
 }

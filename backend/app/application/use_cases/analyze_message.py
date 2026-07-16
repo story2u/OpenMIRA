@@ -8,6 +8,10 @@ from app.domain.ports import AgentAnalysisRequest, LinkInspector, MessageAgent, 
 from app.domain.services.agent_policy import project_agent_result
 from app.infrastructure.db.models import Opportunity, utc_now
 from app.infrastructure.db.repositories import MessageRepository, OpportunityRepository
+from app.infrastructure.db.repositories import (
+    JobMessageAuditRepository,
+    SourceFunctionalProfileRepository,
+)
 
 URL_PATTERN = re.compile(r"https?://[^\s<>()\[\]{}\"']+", re.IGNORECASE)
 
@@ -34,6 +38,8 @@ class AnalyzeMessageUseCase:
         task_queue: TaskQueue,
         min_opportunity_confidence: float,
         max_links: int,
+        job_audit_repo: JobMessageAuditRepository | None = None,
+        source_profile_repo: SourceFunctionalProfileRepository | None = None,
     ) -> None:
         self.message_repo = message_repo
         self.opportunity_repo = opportunity_repo
@@ -42,6 +48,8 @@ class AnalyzeMessageUseCase:
         self.task_queue = task_queue
         self.min_opportunity_confidence = min_opportunity_confidence
         self.max_links = max_links
+        self.job_audit_repo = job_audit_repo
+        self.source_profile_repo = source_profile_repo
 
     async def execute(self, message_id: UUID, *, force: bool = False) -> Opportunity | None:
         message = await self.message_repo.claim_agent_analysis(message_id, force=force)
@@ -56,6 +64,31 @@ class AnalyzeMessageUseCase:
                 limit=self.max_links,
             )
             inspections = await self.link_inspector.inspect_many(links)
+            job_audit = (
+                await self.job_audit_repo.get_by_message(message.id)
+                if self.job_audit_repo
+                else None
+            )
+            job_context = None
+            if (
+                job_audit
+                and job_audit.agent_required
+                and self.source_profile_repo
+                and message.owner_user_id
+                and job_audit.source_profile_id
+            ):
+                profile = await self.source_profile_repo.get_by_id_for_owner(
+                    job_audit.source_profile_id, message.owner_user_id
+                )
+                if profile:
+                    job_context = {
+                        "source_function": (
+                            profile.manual_override or profile.primary_function
+                        ).value,
+                        "job_signal_prior": profile.job_signal_prior,
+                        "source_reliability": profile.reliability_score,
+                        "prefilter_score": job_audit.prefilter_score,
+                    }
             result = await self.agent.analyze(
                 AgentAnalysisRequest(
                     message_id=message.id,
@@ -65,8 +98,17 @@ class AnalyzeMessageUseCase:
                     group_name=message.group_name,
                     text=message.text or "",
                     links=inspections,
+                    job_discovery=job_context,
                 )
             )
+            if job_audit and result.job_analysis and self.job_audit_repo:
+                await self.job_audit_repo.apply_agent_classification(
+                    job_audit,
+                    classification=result.job_analysis.classification,
+                    confidence=result.job_analysis.classification_confidence,
+                    reason="; ".join(result.job_analysis.noise_reasons)
+                    or "pi agent structured classification",
+                )
             projection = project_agent_result(result, inspections, analyzed_at=utc_now())
 
             opportunity = (

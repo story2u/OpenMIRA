@@ -27,6 +27,7 @@ def valid_result() -> dict:
             "extraction_source": None,
         },
         "actions": [],
+        "job_analysis": None,
     }
 
 
@@ -41,9 +42,7 @@ def request() -> AgentAnalysisRequest:
 async def test_pi_agent_client_validates_subprocess_json_contract(tmp_path) -> None:
     runner = tmp_path / "runner.py"
     runner.write_text(
-        "import json, sys\n"
-        "json.load(sys.stdin)\n"
-        f"json.dump({valid_result()!r}, sys.stdout)\n",
+        f"import json, sys\njson.load(sys.stdin)\njson.dump({valid_result()!r}, sys.stdout)\n",
         encoding="utf-8",
     )
     client = PiAgentClient(
@@ -63,7 +62,7 @@ async def test_pi_agent_client_validates_subprocess_json_contract(tmp_path) -> N
 
 async def test_pi_agent_client_rejects_invalid_contract_without_echoing_output(tmp_path) -> None:
     runner = tmp_path / "runner.py"
-    runner.write_text("print('{\"api_key\": \"leaked\"}')\n", encoding="utf-8")
+    runner.write_text('print(\'{"api_key": "leaked"}\')\n', encoding="utf-8")
     client = PiAgentClient(
         node_binary=sys.executable,
         runner_path=str(runner),

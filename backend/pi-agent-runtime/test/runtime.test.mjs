@@ -32,6 +32,34 @@ const analysis = {
       requires_approval: true,
     },
   ],
+  job_analysis: null,
+}
+
+const jobAnalysis = {
+  ...analysis,
+  title: 'Senior Python Backend Engineer',
+  job_analysis: {
+    classification: 'job_post',
+    classification_confidence: 0.96,
+    noise_reasons: [],
+    job: {
+      job_title: 'Senior Python Backend Engineer',
+      normalized_job_title: 'python backend engineer',
+      company_name: 'Example Labs', department: null, company_industry: null, company_stage: null,
+      location_text: 'Singapore / Remote', country_code: 'SG', city: 'Singapore', timezone: null,
+      work_mode: 'remote', employment_type: 'full_time', seniority: 'senior',
+      salary: { raw: 'SGD 8k-12k/month', minimum: 8000, maximum: 12000, currency: 'SGD', period: 'monthly', negotiable: null },
+      equity_mentioned: null, requirements_summary: '5 years Python and FastAPI',
+      required_skills: ['Python', 'FastAPI'], preferred_skills: [], minimum_years_experience: 5,
+      maximum_years_experience: null, degree_required: null, degree_level: null, degree_field: null,
+      english_level: null, other_language_requirements: [], visa_sponsorship: null,
+      work_authorization_text: null, relocation_support: null, age_requirement_text: null,
+      application_url: 'https://jobs.example.com/123', application_deadline: null,
+      contact_methods: [],
+    },
+    field_evidence: { job_title: 'Senior Python Backend Engineer', salary: 'SGD 8k-12k/month' },
+    missing_fields: ['visa_sponsorship'], compliance_flags: [], extraction_confidence: 0.91,
+  },
 }
 
 test('runner exposes only the structured submit tool', async () => {
@@ -66,6 +94,21 @@ test('runner returns the tool submission from an isolated pi agent', async () =>
   )
   assert.deepEqual(result, analysis)
   assert.equal(faux.state.callCount, 1)
+})
+
+test('runner accepts evidence-backed job extraction only with prefilter context', async () => {
+  const faux = fauxProvider()
+  faux.setResponses([
+    fauxAssistantMessage(fauxToolCall('submit_analysis', jobAnalysis), { stopReason: 'toolUse' }),
+  ])
+  const result = await runAnalysis(
+    { text: 'Hiring Senior Python Backend Engineer', job_discovery: { prefilter_score: 0.9 } },
+    {
+      apiKey: 'test-key', getModelImpl: () => faux.getModel(),
+      streamFn: (model, context, options) => faux.provider.streamSimple(model, context, options),
+    },
+  )
+  assert.equal(result.job_analysis.job.job_title, 'Senior Python Backend Engineer')
 })
 
 test('runner fails closed when the model does not submit analysis', async () => {

@@ -3796,6 +3796,17 @@ class SourceFunctionalProfileRepository:
         )
         return result.first()
 
+    async def get_by_id_for_owner(
+        self, profile_id: UUID, owner_user_id: UUID
+    ) -> SourceFunctionalProfile | None:
+        result = await self.session.exec(
+            select(SourceFunctionalProfile).where(
+                SourceFunctionalProfile.id == profile_id,
+                SourceFunctionalProfile.owner_user_id == owner_user_id,
+            )
+        )
+        return result.first()
+
     async def save_generated(
         self,
         *,

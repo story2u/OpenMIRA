@@ -12,6 +12,7 @@ from app.domain.enums import (
     Priority,
     RuleType,
 )
+from app.domain.job_models import JobAgentAnalysis
 
 
 class InboundMessage(BaseModel):
@@ -131,6 +132,7 @@ class AgentAnalysisResult(BaseModel):
     risk_flags: list[str] = Field(default_factory=list, max_length=20)
     contacts: AgentContactExtraction = Field(default_factory=AgentContactExtraction)
     actions: list[AgentActionRecommendation] = Field(default_factory=list, max_length=8)
+    job_analysis: JobAgentAnalysis | None = None
 
 
 class AgentAnalysisProjection(BaseModel):

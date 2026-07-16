@@ -16,10 +16,12 @@ from app.infrastructure.db.repositories import (
     BillingEventRepository,
     ConfigRepository,
     MessageRepository,
+    JobMessageAuditRepository,
     OpportunityRepository,
     PasswordResetRepository,
     ReplyTemplateRepository,
     RuleRepository,
+    SourceFunctionalProfileRepository,
     SubscriptionRepository,
     TelegramConnectionRepository,
     TelegramUserConfigRepository,
@@ -99,6 +101,18 @@ async def get_redis_client(
 
 def get_message_repo(session: AsyncSession = Depends(get_session)) -> MessageRepository:
     return MessageRepository(session)
+
+
+def get_job_message_audit_repo(
+    session: AsyncSession = Depends(get_session),
+) -> JobMessageAuditRepository:
+    return JobMessageAuditRepository(session)
+
+
+def get_source_functional_profile_repo(
+    session: AsyncSession = Depends(get_session),
+) -> SourceFunctionalProfileRepository:
+    return SourceFunctionalProfileRepository(session)
 
 
 def get_opportunity_repo(session: AsyncSession = Depends(get_session)) -> OpportunityRepository:
