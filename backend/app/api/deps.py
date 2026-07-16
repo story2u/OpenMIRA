@@ -143,7 +143,7 @@ def get_pi_agent_client(settings: Settings = Depends(get_settings)) -> PiAgentCl
         runner_path=settings.pi_agent_runner_path,
         provider=settings.pi_agent_provider,
         model=settings.pi_agent_model,
-        api_key=settings.pi_agent_api_key,
+        api_key=settings.effective_pi_agent_api_key,
         timeout_seconds=settings.pi_agent_timeout_seconds,
     )
 

@@ -85,6 +85,9 @@ jobs:
       - name: Run backend tests
         run: uv run --locked pytest -q
 
+      - name: Run job discovery deterministic evaluation
+        run: uv run --locked python ../evals/job-discovery/evaluate.py
+
   pi-agent:
     name: Pi Agent Runtime
     runs-on: ubuntu-latest

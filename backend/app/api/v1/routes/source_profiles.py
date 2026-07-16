@@ -6,14 +6,25 @@ from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.api.deps import (
     get_message_repo,
+    get_pi_agent_client,
     get_source_functional_profile_repo,
+    get_subscription_repo,
     require_user,
 )
 from app.application.dto import SourceFunctionalProfileRead, SourceFunctionOverrideRequest
 from app.application.job_mappers import to_source_profile_read
-from app.domain.services.job_discovery import profile_source, source_fingerprint
-from app.infrastructure.db.models import User, utc_now
-from app.infrastructure.db.repositories import MessageRepository, SourceFunctionalProfileRepository
+from app.application.use_cases.reprofile_source_function import (
+    ReprofileSourceFunctionUseCase,
+    SourceProfileQuotaExceeded,
+)
+from app.core.config import Settings, get_settings
+from app.infrastructure.agent.pi_client import PiAgentClient, PiAgentError
+from app.infrastructure.db.models import User
+from app.infrastructure.db.repositories import (
+    MessageRepository,
+    SourceFunctionalProfileRepository,
+    SubscriptionRepository,
+)
 
 router = APIRouter()
 
@@ -25,7 +36,9 @@ async def _profile_or_404(
 ):
     profile = await repo.get_by_id_for_owner(profile_id, owner_user_id)
     if not profile:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="source profile not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="source profile not found"
+        )
     return profile
 
 
@@ -47,46 +60,30 @@ async def recompute_functional_profile(
     current_user: User = Depends(require_user),
     repo: SourceFunctionalProfileRepository = Depends(get_source_functional_profile_repo),
     message_repo: MessageRepository = Depends(get_message_repo),
+    subscription_repo: SubscriptionRepository = Depends(get_subscription_repo),
+    agent: PiAgentClient = Depends(get_pi_agent_client),
+    settings: Settings = Depends(get_settings),
 ) -> SourceFunctionalProfileRead:
     profile = await _profile_or_404(profile_id, current_user.id, repo)
-    samples = await message_repo.list_recent_source_samples(
-        owner_user_id=current_user.id,
-        channel=profile.channel,
-        conversation_id=profile.external_source_id,
-        limit=20,
-    )
-    decision = profile_source(
-        name=profile.source_display_name,
-        description=profile.source_description,
-        username=profile.source_username,
-        samples=samples,
-        now=utc_now(),
-    )
-    saved = await repo.save_generated(
-        owner_user_id=current_user.id,
-        channel=profile.channel,
-        external_source_id=profile.external_source_id,
-        source_display_name=profile.source_display_name,
-        source_description=profile.source_description,
-        source_username=profile.source_username,
-        source_fingerprint=source_fingerprint(
-            profile.source_display_name,
-            profile.source_description,
-            profile.source_username,
-        ),
-        primary_function=decision.primary_function,
-        secondary_functions=decision.secondary_functions,
-        industry_tags=decision.industry_tags,
-        region_tags=decision.region_tags,
-        language_tags=decision.language_tags,
-        job_signal_prior=decision.job_signal_prior,
-        estimated_noise_level=decision.estimated_noise_level,
-        reliability_score=decision.reliability_score,
-        confidence=decision.confidence,
-        evidence=decision.evidence,
-        sampled_message_count=decision.sampled_message_count,
-        expires_at=decision.expires_at,
-    )
+    if not settings.pi_agent_enabled or not settings.effective_pi_agent_api_key:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Pi Agent is not configured",
+        )
+    try:
+        saved = await ReprofileSourceFunctionUseCase(
+            agent=agent,
+            message_repo=message_repo,
+            profile_repo=repo,
+            subscription_repo=subscription_repo,
+        ).execute(profile=profile, owner_user_id=current_user.id)
+    except SourceProfileQuotaExceeded as exc:
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=str(exc)) from exc
+    except PiAgentError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Pi Agent could not profile the source",
+        ) from exc
     return to_source_profile_read(saved)
 
 

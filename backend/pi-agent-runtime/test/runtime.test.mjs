@@ -7,6 +7,7 @@ import {
   createSubmitAnalysisTool,
   runAnalysis,
   runPreferenceParse,
+  runSourceProfile,
   serializeUntrustedInput,
 } from '../src/runtime.mjs'
 
@@ -38,6 +39,7 @@ const analysis = {
     },
   ],
   job_analysis: null,
+  source_profile_analysis: null,
 }
 
 const jobAnalysis = {
@@ -116,6 +118,46 @@ test('runner accepts evidence-backed job extraction only with prefilter context'
   assert.equal(result.job_analysis.job.job_title, 'Senior Python Backend Engineer')
 })
 
+test('runner accepts a bounded source profile assessment with redacted samples', async () => {
+  const faux = fauxProvider()
+  const resultWithProfile = {
+    ...jobAnalysis,
+    source_profile_analysis: {
+      primary_function: 'recruitment',
+      secondary_functions: ['career_networking'],
+      industry_tags: ['software'],
+      region_tags: ['europe'],
+      language_tags: ['zh', 'en'],
+      job_signal_prior: 0.9,
+      estimated_noise_level: 0.2,
+      reliability_score: 0.8,
+      confidence: 0.88,
+      evidence: ['source metadata and most supplied samples contain hiring signals'],
+    },
+  }
+  faux.setResponses([
+    fauxAssistantMessage(fauxToolCall('submit_analysis', resultWithProfile), { stopReason: 'toolUse' }),
+  ])
+
+  const result = await runAnalysis(
+    {
+      text: 'Hiring Senior Python Backend Engineer',
+      job_discovery: {
+        prefilter_score: 0.9,
+        source_profile_input: {
+          name: 'Example Remote Jobs', description: null, username: null,
+          recent_samples: ['Hiring [email] for a remote role'],
+        },
+      },
+    },
+    {
+      apiKey: 'test-key', getModelImpl: () => faux.getModel(),
+      streamFn: (model, context, options) => faux.provider.streamSimple(model, context, options),
+    },
+  )
+  assert.equal(result.source_profile_analysis.primary_function, 'recruitment')
+})
+
 test('runner fails closed when the model does not submit analysis', async () => {
   class SilentAgent {
     constructor() {
@@ -165,4 +207,34 @@ test('preference parser returns a confirmation-only profile without protected at
 
   assert.equal(result.requires_confirmation, true)
   assert.equal(Object.hasOwn(result, 'age'), false)
+})
+
+test('source profiler exposes one application-owned persistence tool', async () => {
+  const faux = fauxProvider()
+  const profile = {
+    primary_function: 'technical_discussion', secondary_functions: ['career_networking'],
+    industry_tags: ['software'], region_tags: [], language_tags: ['zh'],
+    job_signal_prior: 0.35, estimated_noise_level: 0.55, reliability_score: 0.72,
+    confidence: 0.81, evidence: ['most supplied samples discuss software engineering'],
+  }
+  faux.setResponses([
+    fauxAssistantMessage(fauxToolCall('profileSourceFunction', profile), { stopReason: 'toolUse' }),
+  ])
+
+  const result = await runSourceProfile(
+    {
+      task: 'profile_source_function',
+      source: {
+        name: 'Example Engineering Community', description: null, username: null,
+        recent_samples: ['Discussing Python API design', 'Hiring [email] for one backend role'],
+      },
+    },
+    {
+      apiKey: 'test-key', getModelImpl: () => faux.getModel(),
+      streamFn: (model, context, options) => faux.provider.streamSimple(model, context, options),
+    },
+  )
+
+  assert.equal(result.primary_function, 'technical_discussion')
+  assert.equal(faux.state.callCount, 1)
 })

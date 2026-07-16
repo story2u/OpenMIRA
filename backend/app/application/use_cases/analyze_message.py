@@ -3,16 +3,17 @@ from __future__ import annotations
 import re
 from uuid import UUID
 
-from app.application.use_cases.persist_job_opportunity import PersistJobOpportunityUseCase
 from app.application.use_cases.match_job_opportunity import MatchJobOpportunityUseCase
+from app.application.use_cases.persist_job_opportunity import PersistJobOpportunityUseCase
 from app.domain.enums import OpportunityStatus
 from app.domain.ports import AgentAnalysisRequest, LinkInspector, MessageAgent, TaskQueue
 from app.domain.services.agent_policy import project_agent_result
+from app.domain.services.job_discovery import PROFILE_TTL, redact_source_sample
 from app.infrastructure.db.models import Opportunity, utc_now
 from app.infrastructure.db.repositories import (
     JobMessageAuditRepository,
-    JobOpportunityRepository,
     JobOpportunityMatchRepository,
+    JobOpportunityRepository,
     JobSearchProfileRepository,
     MessageRepository,
     OpportunityRepository,
@@ -102,6 +103,23 @@ class AnalyzeMessageUseCase:
                         "source_reliability": source_profile.reliability_score,
                         "prefilter_score": job_audit.prefilter_score,
                     }
+                    if source_profile.manual_override is None and source_profile.confidence < 0.75:
+                        recent_samples = await self.message_repo.list_recent_source_samples(
+                            owner_user_id=message.owner_user_id,
+                            channel=message.channel,
+                            conversation_id=message.conversation_id,
+                            limit=20,
+                        )
+                        job_context["source_profile_input"] = {
+                            "name": source_profile.source_display_name,
+                            "description": source_profile.source_description,
+                            "username": source_profile.source_username,
+                            "recent_samples": [
+                                sample
+                                for raw_sample in recent_samples
+                                if (sample := redact_source_sample(raw_sample))
+                            ][:20],
+                        }
             result = await self.agent.analyze(
                 AgentAnalysisRequest(
                     message_id=message.id,
@@ -121,6 +139,34 @@ class AnalyzeMessageUseCase:
                     confidence=result.job_analysis.classification_confidence,
                     reason="; ".join(result.job_analysis.noise_reasons)
                     or "pi agent structured classification",
+                )
+            if result.source_profile_analysis and source_profile and message.owner_user_id:
+                source_assessment = result.source_profile_analysis
+                assert job_context is not None
+                source_profile = await self.source_profile_repo.save_generated(
+                    owner_user_id=message.owner_user_id,
+                    channel=source_profile.channel,
+                    external_source_id=source_profile.external_source_id,
+                    source_display_name=source_profile.source_display_name,
+                    source_description=source_profile.source_description,
+                    source_username=source_profile.source_username,
+                    source_fingerprint=source_profile.source_fingerprint,
+                    primary_function=source_assessment.primary_function,
+                    secondary_functions=[
+                        item.value for item in source_assessment.secondary_functions
+                    ],
+                    industry_tags=source_assessment.industry_tags,
+                    region_tags=source_assessment.region_tags,
+                    language_tags=source_assessment.language_tags,
+                    job_signal_prior=source_assessment.job_signal_prior,
+                    estimated_noise_level=source_assessment.estimated_noise_level,
+                    reliability_score=source_assessment.reliability_score,
+                    confidence=source_assessment.confidence,
+                    evidence=source_assessment.evidence,
+                    sampled_message_count=len(
+                        job_context["source_profile_input"]["recent_samples"]
+                    ),
+                    expires_at=utc_now() + PROFILE_TTL,
                 )
             projection = project_agent_result(result, inspections, analyzed_at=utc_now())
 

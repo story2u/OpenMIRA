@@ -22,14 +22,14 @@ from app.domain.enums import (
     BillingSubscriptionStatus,
     FrontendOpportunityStatus,
     IMChannel,
-    JobMessageClassification,
     JobFeedbackType,
-    OpportunityType,
+    JobMessageClassification,
     MessageDirection,
     MessageSource,
     OpportunityArchiveAction,
     OpportunityArchiveScope,
     OpportunityStatus,
+    OpportunityType,
     PlanCode,
     Priority,
     SourcePrimaryFunction,
@@ -3999,6 +3999,33 @@ class JobOpportunityRepository:
         result = await self.session.exec(statement.limit(1))
         return result.first()
 
+    async def list_semantic_duplicate_candidates(
+        self,
+        *,
+        owner_user_id: UUID,
+        posted_after: datetime,
+        exclude_opportunity_id: UUID | None = None,
+        limit: int = 100,
+    ) -> list[tuple[Opportunity, JobOpportunityDetail]]:
+        statement = (
+            select(Opportunity, JobOpportunityDetail)
+            .join(
+                JobOpportunityDetail,
+                JobOpportunityDetail.opportunity_id == Opportunity.id,
+            )
+            .where(
+                Opportunity.owner_user_id == owner_user_id,
+                Opportunity.opportunity_type == OpportunityType.JOB,
+                JobOpportunityDetail.duplicate_group_id.is_(None),
+                JobOpportunityDetail.posted_at >= posted_after,
+            )
+            .order_by(col(JobOpportunityDetail.posted_at).desc())
+        )
+        if exclude_opportunity_id:
+            statement = statement.where(Opportunity.id != exclude_opportunity_id)
+        result = await self.session.exec(statement.limit(min(limit, 200)))
+        return list(result.all())
+
     async def save_projection(
         self,
         *,
@@ -4193,9 +4220,7 @@ class JobOpportunityRepository:
         if english_level:
             statement = statement.where(JobOpportunityDetail.english_level == english_level)
         if visa_sponsorship is not None:
-            statement = statement.where(
-                JobOpportunityDetail.visa_sponsorship == visa_sponsorship
-            )
+            statement = statement.where(JobOpportunityDetail.visa_sponsorship == visa_sponsorship)
         if minimum_match_score is not None:
             statement = statement.where(JobOpportunityMatch.match_score >= minimum_match_score)
         if age_requirement_present is not None:

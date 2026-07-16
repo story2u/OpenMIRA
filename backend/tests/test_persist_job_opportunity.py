@@ -25,6 +25,9 @@ class FakeJobRepository:
     async def find_duplicate(self, **kwargs):
         return None
 
+    async def list_semantic_duplicate_candidates(self, **kwargs):
+        return []
+
     async def save_projection(self, **kwargs):
         self.saved = kwargs
         return kwargs["opportunity"]

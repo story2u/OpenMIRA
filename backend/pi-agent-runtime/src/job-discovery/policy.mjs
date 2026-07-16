@@ -2,6 +2,12 @@ export function validateJobAnalysisContext(input, result) {
   if (!input.job_discovery && result.job_analysis !== null) {
     throw new Error('job_analysis requires job_discovery context')
   }
+  if (!input.job_discovery?.source_profile_input && result.source_profile_analysis !== null) {
+    throw new Error('source_profile_analysis requires bounded source profile input')
+  }
+  if (input.job_discovery?.source_profile_input && !result.source_profile_analysis) {
+    throw new Error('source_profile_analysis is required with source profile input')
+  }
   const analysis = result.job_analysis
   if (!analysis) return
   const formal = analysis.classification === 'job_post' || analysis.classification === 'job_repost'

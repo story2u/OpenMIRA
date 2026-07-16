@@ -11,6 +11,7 @@ from app.domain.enums import (
     JobSeniority,
     JobWorkMode,
     SalaryPeriod,
+    SourcePrimaryFunction,
 )
 
 
@@ -86,6 +87,19 @@ class JobAgentAnalysis(BaseModel):
             }
             and self.job is not None
         )
+
+
+class SourceProfileAgentAssessment(BaseModel):
+    primary_function: SourcePrimaryFunction
+    secondary_functions: list[SourcePrimaryFunction] = Field(default_factory=list, max_length=5)
+    industry_tags: list[str] = Field(default_factory=list, max_length=10)
+    region_tags: list[str] = Field(default_factory=list, max_length=10)
+    language_tags: list[str] = Field(default_factory=list, max_length=10)
+    job_signal_prior: float = Field(ge=0, le=1)
+    estimated_noise_level: float = Field(ge=0, le=1)
+    reliability_score: float = Field(ge=0, le=1)
+    confidence: float = Field(ge=0, le=1)
+    evidence: list[str] = Field(default_factory=list, min_length=1, max_length=8)
 
 
 class JobSearchProfilePreview(BaseModel):

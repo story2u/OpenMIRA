@@ -1,6 +1,6 @@
 # 功能地图
 
-> 状态：当前事实 · 最后核验：2026-07-15
+> 状态：当前事实 · 最后核验：2026-07-16
 
 本地图用成熟度区分“仓库里有 UI/数据结构”和“用户端到端可用”。AI 开发前必须先确认目标
 能力所在行，避免沿着 mock 或占位 DTO 继续实现。
@@ -21,6 +21,9 @@
 | 商机归档与恢复 | `/`、`/opportunity/[id]` | `POST .../archive`、`POST .../restore`、`POST /bulk-archive` | 已实现 | 单条/最多 100 条批量归档、归档视图与恢复；保留原状态、消息和分析；归档项禁止业务写操作并跳过 AI 自动回复 |
 | 商机看板（服务端筛选/排序/分页） | iOS/Android 商机 Tab | `GET /opportunities/dashboard` | 部分实现 | 后端聚合端点已实现：status/platform/source/时间范围/trust/sop/keyword 多维筛选 + 4 种排序 + total/pendingCount/attentionItems/keywordOptions，全部 SQL 完成并按 owner 隔离，有 Postgres 门控筛选矩阵测试；移动端 iOS(SwiftUI)/Android(Compose) 双 Tab 已接入但未在 CI 外做真机 E2E。iOS 在生产后端滚动升级期间会把默认/status/platform 查询降级到旧 `/opportunities`，并明确停用无法等价支持的高级筛选。Web `/` 仍走客户端 `applyFilters` 内存筛选，未切到该端点 |
 | 商机语义识别 | 无独立页 | 摄取用例 + `OpportunityDetector` + LiteLLM | 已实现 | 高置信规则直通；启用 AI 后对其余非空消息结合 owner 隔离的有限会话历史、来源和 AI hint 复核；模型新发现只进人工审核，provider 失败回退规则 |
+| 工作机会来源画像与招聘提取 | Web/iOS/Android 工作机会入口 | `agent.analyze_message`、`/sources/{id}/functional-profile/*` | 部分实现 | 授权来源按名称、可选描述和有限脱敏样本画像；规则预筛后复用现有 pi Runtime/UsageLedger 分类并做证据约束提取。人工 override 优先，只有 job_post/job_repost 生成职位。虚构夹具通过，真实群金标与模型 E2E 待验证 |
+| 工作机会列表、详情与反馈 | `/jobs`、`/jobs/[id]`，iOS/Android 工作机会 Tab | `GET /jobs`、`GET /jobs/{id}`、`POST /jobs/{id}/feedback` | 已实现 | owner 隔离分页/筛选/排序；展示职位、薪资、来源、证据、缺失项和合规提示；私有来源不伪造消息链接；精确指纹与本地结构化特征相似度聚合重复来源 |
+| 求职档案与确定性匹配 | `/settings/job-search`，iOS/Android 档案页 | `/job-search-profiles` CRUD、`POST .../parse` | 部分实现 | 多档案、自然语言解析预览和用户确认保存已实现；匹配只使用职业偏好，受保护属性不入档案/评分。Agent 仅解析/解释，最终资格与 0–100 分由领域服务计算；真实模型解析质量待金标验证 |
 | 商机详情 | `/opportunity/[id]` | `GET /opportunities/{id}` | 部分实现 | 页面从列表 store 查找，未独立请求详情，刷新/深链能力有限 |
 | 消息历史 | 详情页 SOP | `GET /messages` | 部分实现 | API 已有；前端未调用，后端数据加载后消息 store 为空 |
 | 人工回复 | 详情页回复框 | `POST /opportunities/{id}/manual-reply` | 已实现 | Web 已调用真实 API；Telegram/企微按适配器发送，企微用户连接强制幂等键和人工审批，provider 成功后才落库并更新状态 |
@@ -66,6 +69,7 @@
 | AI 分类/回复 | `backend/app/infrastructure/ai/litellm_client.py` |
 | 异步任务 | `backend/app/worker/tasks.py`、`queue.py` |
 | pi Agent 后处理 | `backend/app/application/use_cases/analyze_message.py`、`infrastructure/agent/`、`pi-agent-runtime/` |
+| 工作机会发现 | `backend/app/domain/services/job_discovery.py`、`job_matching.py`、`application/use_cases/persist_job_opportunity.py`、`api/v1/routes/jobs.py` |
 | 订阅与额度 | `backend/app/domain/services/subscription_policy.py`、`application/use_cases/sync_revenuecat_customer.py`、`infrastructure/billing/` |
 | 持久化 | `backend/app/infrastructure/db/models.py`、`repositories.py` |
 

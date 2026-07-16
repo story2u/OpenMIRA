@@ -282,7 +282,7 @@ def upgrade() -> None:
         sa.Column("opportunity_id", sa.Uuid(), nullable=False),
         sa.Column("message_id", sa.Uuid(), nullable=False),
         sa.Column("owner_user_id", sa.Uuid(), nullable=False),
-        sa.Column("source_channel", sa.String(32), nullable=False),
+        sa.Column("source_channel", IM_CHANNEL, nullable=False),
         sa.Column("source_message_url", sa.String(2000), nullable=True),
         sa.Column("source_chat_name", sa.String(500), nullable=True),
         sa.Column("source_author_name", sa.String(500), nullable=True),

@@ -12,7 +12,7 @@ from app.domain.enums import (
     Priority,
     RuleType,
 )
-from app.domain.job_models import JobAgentAnalysis
+from app.domain.job_models import JobAgentAnalysis, SourceProfileAgentAssessment
 
 
 class InboundMessage(BaseModel):
@@ -133,6 +133,7 @@ class AgentAnalysisResult(BaseModel):
     contacts: AgentContactExtraction = Field(default_factory=AgentContactExtraction)
     actions: list[AgentActionRecommendation] = Field(default_factory=list, max_length=8)
     job_analysis: JobAgentAnalysis | None = None
+    source_profile_analysis: SourceProfileAgentAssessment | None = None
 
 
 class AgentAnalysisProjection(BaseModel):

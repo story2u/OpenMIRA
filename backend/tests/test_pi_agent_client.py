@@ -60,6 +60,33 @@ async def test_pi_agent_client_validates_subprocess_json_contract(tmp_path) -> N
     assert result.confidence == 0.91
 
 
+async def test_pi_agent_client_accepts_runtime_metrics_envelope(tmp_path) -> None:
+    runner = tmp_path / "runner.py"
+    envelope = {
+        "result": valid_result(),
+        "runtime_meta": {
+            "prompt_version": "opportunity-job-discovery-v1",
+            "token_usage": {"input": 12, "output": 7, "cacheRead": 0, "cacheWrite": 0},
+        },
+    }
+    runner.write_text(
+        f"import json, sys\njson.load(sys.stdin)\njson.dump({envelope!r}, sys.stdout)\n",
+        encoding="utf-8",
+    )
+    client = PiAgentClient(
+        node_binary=sys.executable,
+        runner_path=str(runner),
+        provider="fake",
+        model="fake",
+        api_key="secret",
+        timeout_seconds=2,
+    )
+
+    result = await client.analyze(request())
+
+    assert result.title == "采购需求"
+
+
 async def test_pi_agent_client_rejects_invalid_contract_without_echoing_output(tmp_path) -> None:
     runner = tmp_path / "runner.py"
     runner.write_text('print(\'{"api_key": "leaked"}\')\n', encoding="utf-8")
@@ -142,3 +169,38 @@ async def test_pi_agent_client_validates_job_profile_preview(tmp_path) -> None:
 
     assert result.requires_confirmation is True
     assert result.work_modes == ["remote"]
+
+
+async def test_pi_agent_client_validates_source_profile_assessment(tmp_path) -> None:
+    runner = tmp_path / "runner.py"
+    assessment = {
+        "primary_function": "recruitment",
+        "secondary_functions": ["career_networking"],
+        "industry_tags": ["software"],
+        "region_tags": ["europe"],
+        "language_tags": ["zh"],
+        "job_signal_prior": 0.9,
+        "estimated_noise_level": 0.2,
+        "reliability_score": 0.8,
+        "confidence": 0.88,
+        "evidence": ["supplied samples contain hiring signals"],
+    }
+    runner.write_text(
+        f"import json, sys\njson.load(sys.stdin)\njson.dump({assessment!r}, sys.stdout)\n",
+        encoding="utf-8",
+    )
+    client = PiAgentClient(
+        node_binary=sys.executable,
+        runner_path=str(runner),
+        provider="fake",
+        model="fake",
+        api_key="secret",
+        timeout_seconds=2,
+    )
+
+    result = await client.profile_source_function(
+        {"name": "Example Jobs", "recent_samples": ["Hiring Python Engineer"]}
+    )
+
+    assert result.primary_function.value == "recruitment"
+    assert result.confidence == 0.88

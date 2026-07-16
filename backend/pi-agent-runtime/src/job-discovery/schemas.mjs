@@ -14,6 +14,39 @@ export const JobClassificationSchema = Type.Union(
   ].map((value) => Type.Literal(value)),
 )
 
+const sourceFunctions = [
+  'recruitment', 'job_referral', 'career_networking', 'technical_discussion',
+  'industry_community', 'company_official', 'alumni_community', 'general_chat',
+  'education_training', 'marketplace', 'investment_crypto', 'advertising', 'unknown',
+]
+
+export const SourceProfileAssessmentObjectSchema = Type.Object(
+  {
+    primary_function: Type.Union(sourceFunctions.map((value) => Type.Literal(value))),
+    secondary_functions: Type.Array(
+      Type.Union(sourceFunctions.map((value) => Type.Literal(value))),
+      { maxItems: 5 },
+    ),
+    industry_tags: shortStrings(10),
+    region_tags: shortStrings(10),
+    language_tags: shortStrings(10),
+    job_signal_prior: Type.Number({ minimum: 0, maximum: 1 }),
+    estimated_noise_level: Type.Number({ minimum: 0, maximum: 1 }),
+    reliability_score: Type.Number({ minimum: 0, maximum: 1 }),
+    confidence: Type.Number({ minimum: 0, maximum: 1 }),
+    evidence: Type.Array(Type.String({ minLength: 1, maxLength: 500 }), {
+      minItems: 1,
+      maxItems: 8,
+    }),
+  },
+  { additionalProperties: false },
+)
+
+export const SourceProfileAssessmentSchema = Type.Union([
+  Type.Null(),
+  SourceProfileAssessmentObjectSchema,
+])
+
 const SalarySchema = Type.Object(
   {
     raw: nullableString(500),

@@ -3,16 +3,20 @@ from __future__ import annotations
 import hashlib
 import re
 from dataclasses import dataclass
-from datetime import datetime
-from uuid import uuid4
+from datetime import datetime, timedelta
+from uuid import UUID, uuid4
 
 from app.domain.enums import (
     JobWorkMode,
     OpportunityStatus,
     OpportunityType,
 )
-from app.domain.job_models import JobAgentAnalysis
-from app.domain.services.job_discovery import normalize_text
+from app.domain.job_models import ExtractedJob, JobAgentAnalysis
+from app.domain.services.job_discovery import (
+    build_job_feature_embedding,
+    cosine_similarity,
+    normalize_text,
+)
 from app.infrastructure.db.models import (
     JobOpportunityDetail,
     JobOpportunitySource,
@@ -76,6 +80,13 @@ class PersistJobOpportunityUseCase:
             content_fingerprint=fingerprint,
             exclude_opportunity_id=existing_opportunity.id if existing_opportunity else None,
         )
+        if duplicate is None:
+            duplicate = await self._find_semantic_duplicate(
+                message=message,
+                job=job,
+                normalized_title=normalized_title,
+                exclude_opportunity_id=existing_opportunity.id if existing_opportunity else None,
+            )
         opportunity = existing_opportunity or Opportunity(
             id=uuid4(),
             owner_user_id=message.owner_user_id,
@@ -176,6 +187,60 @@ class PersistJobOpportunityUseCase:
             canonical=duplicate,
         )
         return PersistedJobResult(persisted)
+
+    async def _find_semantic_duplicate(
+        self,
+        *,
+        message: Message,
+        job: ExtractedJob,
+        normalized_title: str,
+        exclude_opportunity_id: UUID | None,
+    ) -> tuple[Opportunity, JobOpportunityDetail] | None:
+        assert message.owner_user_id
+        embedding = build_job_feature_embedding(
+            title=normalized_title,
+            company=job.company_name,
+            location=job.location_text,
+            skills=job.required_skills,
+            summary=job.requirements_summary,
+        )
+        candidates = await self.repository.list_semantic_duplicate_candidates(
+            owner_user_id=message.owner_user_id,
+            posted_after=message.sent_at - timedelta(days=45),
+            exclude_opportunity_id=exclude_opportunity_id,
+        )
+        best = None
+        best_score = 0.0
+        for opportunity, detail in candidates:
+            if not self._compatible_duplicate(job, detail):
+                continue
+            candidate_embedding = build_job_feature_embedding(
+                title=detail.normalized_job_title or detail.job_title,
+                company=detail.company_name,
+                location=detail.location_text,
+                skills=detail.required_skills,
+                summary=detail.requirements_summary,
+            )
+            score = cosine_similarity(embedding, candidate_embedding)
+            if score >= 0.78 and score > best_score:
+                best = (opportunity, detail)
+                best_score = score
+        return best
+
+    @staticmethod
+    def _compatible_duplicate(job: ExtractedJob, detail: JobOpportunityDetail) -> bool:
+        if job.company_name and detail.company_name:
+            if normalize_text(job.company_name) != normalize_text(detail.company_name):
+                return False
+        if job.city and detail.city and normalize_text(job.city) != normalize_text(detail.city):
+            return False
+        if (
+            job.seniority.value != "unknown"
+            and detail.seniority.value != "unknown"
+            and job.seniority != detail.seniority
+        ):
+            return False
+        return True
 
     @staticmethod
     def _missing_evidence(analysis: JobAgentAnalysis) -> list[str]:

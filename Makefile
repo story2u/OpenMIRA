@@ -1,4 +1,4 @@
-.PHONY: harness-check backend-sync backend-check pi-agent-sync pi-agent-check frontend-check ios-check android-check check
+.PHONY: harness-check backend-sync backend-check pi-agent-sync pi-agent-check job-discovery-eval frontend-check ios-check android-check check
 
 PYTHON ?= python3
 UV ?= uv
@@ -23,6 +23,9 @@ pi-agent-check: pi-agent-sync
 	cd backend/pi-agent-runtime && npm run check
 	cd backend/pi-agent-runtime && npm test
 
+job-discovery-eval: backend-sync
+	cd backend && $(UV) run --locked python ../evals/job-discovery/evaluate.py
+
 frontend-check:
 	cd frontend && $(PNPM) lint
 	cd frontend && $(PNPM) typecheck
@@ -40,4 +43,4 @@ ios-check:
 android-check:
 	cd mobile/android && ./gradlew --no-daemon lintDebug testDebugUnitTest assembleDebug
 
-check: harness-check backend-check pi-agent-check frontend-check
+check: harness-check backend-check pi-agent-check job-discovery-eval frontend-check

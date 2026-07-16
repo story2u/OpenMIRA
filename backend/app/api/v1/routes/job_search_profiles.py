@@ -137,7 +137,7 @@ async def parse_profile(
     agent: PiAgentClient = Depends(get_pi_agent_client),
     subscription_repo: SubscriptionRepository = Depends(get_subscription_repo),
 ) -> JobProfileParseRead:
-    if not settings.pi_agent_enabled or not settings.pi_agent_api_key:
+    if not settings.pi_agent_enabled or not settings.effective_pi_agent_api_key:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Pi Agent is not configured",
