@@ -1,6 +1,7 @@
 from dataclasses import dataclass, field
 from uuid import UUID, uuid4
 
+from app.application.use_cases.prepare_job_discovery import PrepareJobDiscoveryUseCase
 from app.application.use_cases.schedule_agent_analysis import ScheduleAgentAnalysisUseCase
 from app.core.time_window import WorkScheduleConfig, WorkScheduleService, WorkTimeService
 from app.domain.enums import OpportunityStatus, RuleType
@@ -34,6 +35,7 @@ class IngestMessageUseCase:
         task_queue: TaskQueue,
         subscription_repo: SubscriptionRepository,
         user_settings_repo: UserSettingsRepository | None = None,
+        job_discovery: PrepareJobDiscoveryUseCase | None = None,
     ) -> None:
         self.message_repo = message_repo
         self.opportunity_repo = opportunity_repo
@@ -42,6 +44,7 @@ class IngestMessageUseCase:
         self.work_time = work_time
         self.user_settings_repo = user_settings_repo
         self.task_queue = task_queue
+        self.job_discovery = job_discovery
         self.agent_scheduler = ScheduleAgentAnalysisUseCase(
             message_repo=message_repo,
             subscription_repo=subscription_repo,
@@ -57,6 +60,8 @@ class IngestMessageUseCase:
             return existing
 
         message = await self.message_repo.create_incoming(inbound)
+        if self.job_discovery:
+            await self.job_discovery.execute(message)
         conversation = await self.message_repo.list_by_conversation(
             message.channel,
             message.conversation_id,

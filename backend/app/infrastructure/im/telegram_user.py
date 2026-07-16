@@ -84,6 +84,7 @@ class TelegramUserClient:
                 "message_id": message.id,
                 "group_name": group_name,
             },
+            sent_at=message.date,
         )
 
     def normalized_chats(self) -> list[int | str]:

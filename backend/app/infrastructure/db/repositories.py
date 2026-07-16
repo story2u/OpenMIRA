@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 import structlog
@@ -22,6 +22,7 @@ from app.domain.enums import (
     BillingSubscriptionStatus,
     FrontendOpportunityStatus,
     IMChannel,
+    JobMessageClassification,
     MessageDirection,
     MessageSource,
     OpportunityArchiveAction,
@@ -29,6 +30,7 @@ from app.domain.enums import (
     OpportunityStatus,
     PlanCode,
     Priority,
+    SourcePrimaryFunction,
     SubscriptionStatus,
     TelegramConnectionAttemptStatus,
     TelegramConnectionStatus,
@@ -44,6 +46,7 @@ from app.domain.enums import (
     WeComSourceType,
 )
 from app.domain.ports import AgentAnalysisProjection, DetectionRule, InboundMessage
+from app.domain.services.opportunity_state import InvalidOpportunityTransition
 from app.domain.services.subscription_policy import (
     BillingPeriod,
     PlanEntitlements,
@@ -52,19 +55,20 @@ from app.domain.services.subscription_policy import (
     get_plan_entitlements,
     utc_calendar_month,
 )
-from app.domain.services.opportunity_state import InvalidOpportunityTransition
 from app.infrastructure.db.models import (
     AppConfig,
     AuthAccount,
     AutoReplyDelivery,
     BillingEvent,
     BillingSubscription,
+    JobMessageAudit,
     Message,
     Opportunity,
     OpportunityArchiveEvent,
     PasswordResetChallenge,
     ReplyTemplate,
     Rule,
+    SourceFunctionalProfile,
     SubscriptionAccount,
     TelegramConnection,
     TelegramConnectionAttempt,
@@ -77,11 +81,11 @@ from app.infrastructure.db.models import (
     UserDetectionPreference,
     UserNotificationPreference,
     UserWorkSchedule,
-    WeComConnection,
     WeComArchiveConnection,
     WeComArchiveCursor,
     WeComArchiveEvent,
     WeComArchiveMemberBinding,
+    WeComConnection,
     WeComOutboundDelivery,
     WeComSource,
     WeComWebhookEvent,
@@ -869,11 +873,34 @@ class MessageRepository:
             group_name=inbound.group_name,
             raw_message_links=inbound.raw_message_links,
             raw_payload=inbound.raw_payload,
+            sent_at=inbound.sent_at or utc_now(),
         )
         self.session.add(message)
         await self.session.commit()
         await self.session.refresh(message)
         return message
+
+    async def list_recent_source_samples(
+        self,
+        *,
+        owner_user_id: UUID,
+        channel: IMChannel,
+        conversation_id: str,
+        limit: int = 20,
+    ) -> list[str]:
+        result = await self.session.exec(
+            select(Message.text)
+            .where(
+                Message.owner_user_id == owner_user_id,
+                Message.channel == channel,
+                Message.conversation_id == conversation_id,
+                Message.direction == MessageDirection.INCOMING,
+                Message.text.is_not(None),
+            )
+            .order_by(col(Message.sent_at).desc())
+            .limit(min(limit, 50))
+        )
+        return [text for text in result.all() if text]
 
     async def mark_agent_queued(self, message_id: UUID, *, force: bool = False) -> Message | None:
         message = await self.session.get(Message, message_id)
@@ -1718,7 +1745,7 @@ class OpportunityRepository:
         return opportunity
 
     async def pending_human_older_than(self, minutes: int) -> list[Opportunity]:
-        cutoff = datetime.now(timezone.utc) - timedelta(minutes=minutes)
+        cutoff = datetime.now(UTC) - timedelta(minutes=minutes)
         statement = select(Opportunity).where(
             Opportunity.status == OpportunityStatus.PENDING_HUMAN,
             Opportunity.archived_at.is_(None),
@@ -3747,6 +3774,162 @@ class WeComArchiveRepository:
             source.updated_at = utc_now()
             self.session.add(source)
         await self.session.commit()
+
+
+class SourceFunctionalProfileRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self.session = session
+
+    async def get(
+        self,
+        *,
+        owner_user_id: UUID,
+        channel: IMChannel,
+        external_source_id: str,
+    ) -> SourceFunctionalProfile | None:
+        result = await self.session.exec(
+            select(SourceFunctionalProfile).where(
+                SourceFunctionalProfile.owner_user_id == owner_user_id,
+                SourceFunctionalProfile.channel == channel,
+                SourceFunctionalProfile.external_source_id == external_source_id,
+            )
+        )
+        return result.first()
+
+    async def save_generated(
+        self,
+        *,
+        owner_user_id: UUID,
+        channel: IMChannel,
+        external_source_id: str,
+        source_display_name: str,
+        source_description: str | None,
+        source_username: str | None,
+        source_fingerprint: str,
+        primary_function: SourcePrimaryFunction,
+        secondary_functions: list[str],
+        industry_tags: list[str],
+        region_tags: list[str],
+        language_tags: list[str],
+        job_signal_prior: float,
+        estimated_noise_level: float,
+        reliability_score: float,
+        confidence: float,
+        evidence: list[str],
+        sampled_message_count: int,
+        expires_at: datetime,
+    ) -> SourceFunctionalProfile:
+        profile = await self.get(
+            owner_user_id=owner_user_id,
+            channel=channel,
+            external_source_id=external_source_id,
+        )
+        if profile is None:
+            profile = SourceFunctionalProfile(
+                owner_user_id=owner_user_id,
+                channel=channel,
+                external_source_id=external_source_id,
+                expires_at=expires_at,
+            )
+        profile.source_display_name = source_display_name
+        profile.source_description = source_description
+        profile.source_username = source_username
+        profile.source_fingerprint = source_fingerprint
+        profile.primary_function = primary_function
+        profile.secondary_functions = secondary_functions
+        profile.industry_tags = industry_tags
+        profile.region_tags = region_tags
+        profile.language_tags = language_tags
+        profile.job_signal_prior = job_signal_prior
+        profile.estimated_noise_level = estimated_noise_level
+        profile.reliability_score = reliability_score
+        profile.confidence = confidence
+        profile.evidence = evidence
+        profile.sampled_message_count = sampled_message_count
+        profile.profiled_at = utc_now()
+        profile.expires_at = expires_at
+        profile.updated_at = utc_now()
+        self.session.add(profile)
+        await self.session.commit()
+        await self.session.refresh(profile)
+        return profile
+
+    async def set_override(
+        self,
+        profile: SourceFunctionalProfile,
+        override: SourcePrimaryFunction | None,
+    ) -> SourceFunctionalProfile:
+        profile.manual_override = override
+        profile.updated_at = utc_now()
+        self.session.add(profile)
+        await self.session.commit()
+        await self.session.refresh(profile)
+        return profile
+
+
+class JobMessageAuditRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self.session = session
+
+    async def get_by_message(self, message_id: UUID) -> JobMessageAudit | None:
+        result = await self.session.exec(
+            select(JobMessageAudit).where(JobMessageAudit.message_id == message_id)
+        )
+        return result.first()
+
+    async def record(
+        self,
+        *,
+        owner_user_id: UUID,
+        message_id: UUID,
+        source_profile_id: UUID | None,
+        classification: JobMessageClassification,
+        confidence: float,
+        filter_reason: str,
+        prefilter_score: float,
+        agent_required: bool,
+    ) -> tuple[JobMessageAudit, bool]:
+        existing = await self.get_by_message(message_id)
+        if existing:
+            return existing, False
+        audit = JobMessageAudit(
+            owner_user_id=owner_user_id,
+            message_id=message_id,
+            source_profile_id=source_profile_id,
+            classification=classification,
+            confidence=confidence,
+            filter_reason=filter_reason,
+            prefilter_score=prefilter_score,
+            agent_required=agent_required,
+        )
+        self.session.add(audit)
+        try:
+            await self.session.commit()
+        except IntegrityError:
+            await self.session.rollback()
+            existing = await self.get_by_message(message_id)
+            if existing:
+                return existing, False
+            raise
+        await self.session.refresh(audit)
+        return audit, True
+
+    async def apply_agent_classification(
+        self,
+        audit: JobMessageAudit,
+        *,
+        classification: JobMessageClassification,
+        confidence: float,
+        reason: str,
+    ) -> JobMessageAudit:
+        audit.classification = classification
+        audit.confidence = confidence
+        audit.filter_reason = reason[:1000]
+        audit.updated_at = utc_now()
+        self.session.add(audit)
+        await self.session.commit()
+        await self.session.refresh(audit)
+        return audit
 
 
 class ReplyTemplateRepository:

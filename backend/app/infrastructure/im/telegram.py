@@ -1,4 +1,5 @@
 import re
+from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
@@ -85,6 +86,11 @@ class TelegramAdapter:
             else None,
             raw_message_links=self._extract_links(message, text),
             raw_payload=payload,
+            sent_at=(
+                datetime.fromtimestamp(int(message["date"]), tz=UTC)
+                if message.get("date")
+                else None
+            ),
         )
 
     async def send_message(

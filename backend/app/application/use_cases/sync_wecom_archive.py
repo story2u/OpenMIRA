@@ -1,12 +1,16 @@
 import asyncio
 from dataclasses import dataclass
+from datetime import UTC, datetime
 
 from app.domain.enums import IMChannel, MessageSource, WeComSourceType
 from app.domain.ports import InboundMessage
-from app.infrastructure.db.models import WeComArchiveConnection, WeComArchiveMemberBinding
-from app.infrastructure.db.repositories import MessageRepository, WeComArchiveRepository
-from app.infrastructure.db.repositories import SubscriptionRepository
 from app.domain.services.subscription_policy import GroupQuotaExceeded, ensure_group_quota
+from app.infrastructure.db.models import WeComArchiveConnection, WeComArchiveMemberBinding
+from app.infrastructure.db.repositories import (
+    MessageRepository,
+    SubscriptionRepository,
+    WeComArchiveRepository,
+)
 from app.infrastructure.im.wecom_archive import (
     WeComArchiveCredentials,
     WeComArchiveMessage,
@@ -86,9 +90,7 @@ class SyncWeComArchive:
                 if not should_process:
                     continue
                 if not message.is_text:
-                    await self.repository.complete_event(
-                        event, matched_user_count=0, ignored=True
-                    )
+                    await self.repository.complete_event(event, matched_user_count=0, ignored=True)
                     ignored += 1
                     current_event = None
                     continue
@@ -96,9 +98,7 @@ class SyncWeComArchive:
                     connection.id, message.participants
                 )
                 if not bindings:
-                    await self.repository.complete_event(
-                        event, matched_user_count=0, ignored=True
-                    )
+                    await self.repository.complete_event(event, matched_user_count=0, ignored=True)
                     ignored += 1
                     current_event = None
                     continue
@@ -106,9 +106,7 @@ class SyncWeComArchive:
                     await self._project_message(connection, binding, message)
                     await self.repository.mark_binding_matched(binding)
                     projected_users += 1
-                await self.repository.complete_event(
-                    event, matched_user_count=len(bindings)
-                )
+                await self.repository.complete_event(event, matched_user_count=len(bindings))
                 processed += 1
                 current_event = None
             await self.repository.finish_poll(
@@ -139,9 +137,7 @@ class SyncWeComArchive:
         binding: WeComArchiveMemberBinding,
         message: WeComArchiveMessage,
     ) -> None:
-        source_type, conversation_key, display_name = self._conversation_for(
-            binding, message
-        )
+        source_type, conversation_key, display_name = self._conversation_for(binding, message)
         group = source_type != WeComSourceType.PRIVATE
         existing_source = await self.repository.get_archive_source(
             connection_id=connection.id,
@@ -178,9 +174,7 @@ class SyncWeComArchive:
         external_message_id = (
             f"wecom-archive:{connection.id}:{binding.user_id}:{message.message_id}"
         )
-        conversation_id = (
-            f"wecom-archive:{connection.id}:{binding.user_id}:{conversation_key}"
-        )
+        conversation_id = f"wecom-archive:{connection.id}:{binding.user_id}:{conversation_key}"
         raw_payload = {
             "archive": True,
             "message_type": message.message_type,
@@ -215,6 +209,11 @@ class SyncWeComArchive:
                 source_type="group" if group else "private",
                 group_name=display_name if group else None,
                 raw_payload=raw_payload,
+                sent_at=(
+                    datetime.fromtimestamp(message.sent_at_ms / 1000, tz=UTC)
+                    if message.sent_at_ms is not None
+                    else None
+                ),
                 force_human_review=True,
             )
         )
@@ -232,7 +231,11 @@ class SyncWeComArchive:
             )
             return source_type, f"room:{message.room_id}", message.room_id
         counterpart = next(
-            (participant for participant in sorted(message.participants) if participant != binding.wecom_user_id),
+            (
+                participant
+                for participant in sorted(message.participants)
+                if participant != binding.wecom_user_id
+            ),
             message.sender_id or "unknown",
         )
         return WeComSourceType.PRIVATE, f"private:{counterpart}", counterpart
