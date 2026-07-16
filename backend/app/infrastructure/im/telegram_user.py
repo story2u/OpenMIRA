@@ -83,6 +83,7 @@ class TelegramUserClient:
                 "chat_id": chat_id,
                 "message_id": message.id,
                 "group_name": group_name,
+                "source_username": getattr(chat, "username", None),
             },
             sent_at=message.date,
         )

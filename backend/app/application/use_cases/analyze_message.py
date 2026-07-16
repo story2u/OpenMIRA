@@ -3,13 +3,19 @@ from __future__ import annotations
 import re
 from uuid import UUID
 
+from app.application.use_cases.persist_job_opportunity import PersistJobOpportunityUseCase
+from app.application.use_cases.match_job_opportunity import MatchJobOpportunityUseCase
 from app.domain.enums import OpportunityStatus
 from app.domain.ports import AgentAnalysisRequest, LinkInspector, MessageAgent, TaskQueue
 from app.domain.services.agent_policy import project_agent_result
 from app.infrastructure.db.models import Opportunity, utc_now
-from app.infrastructure.db.repositories import MessageRepository, OpportunityRepository
 from app.infrastructure.db.repositories import (
     JobMessageAuditRepository,
+    JobOpportunityRepository,
+    JobOpportunityMatchRepository,
+    JobSearchProfileRepository,
+    MessageRepository,
+    OpportunityRepository,
     SourceFunctionalProfileRepository,
 )
 
@@ -40,6 +46,9 @@ class AnalyzeMessageUseCase:
         max_links: int,
         job_audit_repo: JobMessageAuditRepository | None = None,
         source_profile_repo: SourceFunctionalProfileRepository | None = None,
+        job_opportunity_repo: JobOpportunityRepository | None = None,
+        job_search_profile_repo: JobSearchProfileRepository | None = None,
+        job_match_repo: JobOpportunityMatchRepository | None = None,
     ) -> None:
         self.message_repo = message_repo
         self.opportunity_repo = opportunity_repo
@@ -50,6 +59,9 @@ class AnalyzeMessageUseCase:
         self.max_links = max_links
         self.job_audit_repo = job_audit_repo
         self.source_profile_repo = source_profile_repo
+        self.job_opportunity_repo = job_opportunity_repo
+        self.job_search_profile_repo = job_search_profile_repo
+        self.job_match_repo = job_match_repo
 
     async def execute(self, message_id: UUID, *, force: bool = False) -> Opportunity | None:
         message = await self.message_repo.claim_agent_analysis(message_id, force=force)
@@ -70,6 +82,7 @@ class AnalyzeMessageUseCase:
                 else None
             )
             job_context = None
+            source_profile = None
             if (
                 job_audit
                 and job_audit.agent_required
@@ -77,16 +90,16 @@ class AnalyzeMessageUseCase:
                 and message.owner_user_id
                 and job_audit.source_profile_id
             ):
-                profile = await self.source_profile_repo.get_by_id_for_owner(
+                source_profile = await self.source_profile_repo.get_by_id_for_owner(
                     job_audit.source_profile_id, message.owner_user_id
                 )
-                if profile:
+                if source_profile:
                     job_context = {
                         "source_function": (
-                            profile.manual_override or profile.primary_function
+                            source_profile.manual_override or source_profile.primary_function
                         ).value,
-                        "job_signal_prior": profile.job_signal_prior,
-                        "source_reliability": profile.reliability_score,
+                        "job_signal_prior": source_profile.job_signal_prior,
+                        "source_reliability": source_profile.reliability_score,
                         "prefilter_score": job_audit.prefilter_score,
                     }
             result = await self.agent.analyze(
@@ -151,6 +164,34 @@ class AnalyzeMessageUseCase:
                     opportunity,
                     projection,
                 )
+            if result.job_analysis and source_profile and self.job_opportunity_repo:
+                persisted_job = await PersistJobOpportunityUseCase(
+                    self.job_opportunity_repo
+                ).execute(
+                    message=message,
+                    analysis=result.job_analysis,
+                    source_profile=source_profile,
+                    existing_opportunity=opportunity,
+                )
+                if persisted_job.opportunity:
+                    opportunity = persisted_job.opportunity
+                    if (
+                        opportunity.owner_user_id
+                        and self.job_search_profile_repo
+                        and self.job_match_repo
+                    ):
+                        await MatchJobOpportunityUseCase(
+                            job_repo=self.job_opportunity_repo,
+                            profile_repo=self.job_search_profile_repo,
+                            match_repo=self.job_match_repo,
+                        ).execute(opportunity.id, opportunity.owner_user_id)
+                elif persisted_job.rejected_reason and job_audit and self.job_audit_repo:
+                    await self.job_audit_repo.apply_agent_classification(
+                        job_audit,
+                        classification=result.job_analysis.classification,
+                        confidence=result.job_analysis.classification_confidence,
+                        reason=persisted_job.rejected_reason,
+                    )
             await self.message_repo.complete_agent_analysis(message, projection)
             if opportunity and opportunity.status == OpportunityStatus.AI_AUTO_REPLY:
                 self.task_queue.enqueue_ai_reply(opportunity.id)

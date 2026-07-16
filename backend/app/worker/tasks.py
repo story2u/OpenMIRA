@@ -29,6 +29,9 @@ from app.infrastructure.db.repositories import (
     AutoReplyDeliveryRepository,
     ConfigRepository,
     JobMessageAuditRepository,
+    JobOpportunityRepository,
+    JobOpportunityMatchRepository,
+    JobSearchProfileRepository,
     MessageRepository,
     OpportunityRepository,
     PasswordResetRepository,
@@ -426,6 +429,9 @@ async def _analyze_message(
             max_links=settings.pi_agent_max_links,
             job_audit_repo=JobMessageAuditRepository(session),
             source_profile_repo=SourceFunctionalProfileRepository(session),
+            job_opportunity_repo=JobOpportunityRepository(session),
+            job_search_profile_repo=JobSearchProfileRepository(session),
+            job_match_repo=JobOpportunityMatchRepository(session),
         )
         opportunity = await use_case.execute(message_id, force=force)
         if usage_ledger_id:

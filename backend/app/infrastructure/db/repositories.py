@@ -5,7 +5,7 @@ from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 import structlog
-from sqlalchemy import String, cast, func, update
+from sqlalchemy import String, cast, func, or_, update
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlmodel import col, select
@@ -23,6 +23,7 @@ from app.domain.enums import (
     FrontendOpportunityStatus,
     IMChannel,
     JobMessageClassification,
+    OpportunityType,
     MessageDirection,
     MessageSource,
     OpportunityArchiveAction,
@@ -62,6 +63,10 @@ from app.infrastructure.db.models import (
     BillingEvent,
     BillingSubscription,
     JobMessageAudit,
+    JobOpportunityDetail,
+    JobOpportunityMatch,
+    JobOpportunitySource,
+    JobSearchProfile,
     Message,
     Opportunity,
     OpportunityArchiveEvent,
@@ -3941,6 +3946,239 @@ class JobMessageAuditRepository:
         await self.session.commit()
         await self.session.refresh(audit)
         return audit
+
+
+class JobOpportunityRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self.session = session
+
+    async def find_duplicate(
+        self,
+        *,
+        owner_user_id: UUID,
+        application_url: str | None,
+        company_name: str | None,
+        normalized_job_title: str,
+        city: str | None,
+        content_fingerprint: str,
+        exclude_opportunity_id: UUID | None = None,
+    ) -> tuple[Opportunity, JobOpportunityDetail] | None:
+        candidates = [JobOpportunityDetail.content_fingerprint == content_fingerprint]
+        if application_url:
+            candidates.append(JobOpportunityDetail.application_url == application_url)
+        if company_name:
+            candidates.append(
+                (func.lower(JobOpportunityDetail.company_name) == company_name)
+                & (JobOpportunityDetail.normalized_job_title == normalized_job_title)
+                & (func.lower(JobOpportunityDetail.city) == city)
+            )
+        statement = (
+            select(Opportunity, JobOpportunityDetail)
+            .join(
+                JobOpportunityDetail,
+                JobOpportunityDetail.opportunity_id == Opportunity.id,
+            )
+            .where(
+                Opportunity.owner_user_id == owner_user_id,
+                Opportunity.opportunity_type == OpportunityType.JOB,
+                JobOpportunityDetail.duplicate_group_id.is_(None),
+                or_(*candidates),
+            )
+            .order_by(col(JobOpportunityDetail.posted_at).asc())
+        )
+        if exclude_opportunity_id:
+            statement = statement.where(Opportunity.id != exclude_opportunity_id)
+        result = await self.session.exec(statement.limit(1))
+        return result.first()
+
+    async def save_projection(
+        self,
+        *,
+        opportunity: Opportunity,
+        detail: JobOpportunityDetail,
+        source: JobOpportunitySource,
+        message: Message,
+        canonical: tuple[Opportunity, JobOpportunityDetail] | None,
+    ) -> Opportunity:
+        opportunity.opportunity_type = OpportunityType.JOB
+        opportunity.status = OpportunityStatus.PENDING_HUMAN
+        opportunity.title = detail.job_title
+        opportunity.summary = detail.requirements_summary
+        opportunity.last_message_at = message.sent_at
+        opportunity.updated_at = utc_now()
+        if canonical:
+            canonical_opportunity, canonical_detail = canonical
+            detail.duplicate_group_id = canonical_opportunity.id
+            if (
+                detail.salary_raw
+                and canonical_detail.salary_raw
+                and detail.salary_raw != canonical_detail.salary_raw
+            ):
+                canonical_detail.conflicting_source_data = True
+                canonical_detail.updated_at = utc_now()
+                self.session.add(canonical_detail)
+            source.opportunity_id = canonical_opportunity.id
+        message.opportunity_id = opportunity.id
+        message.processed_at = utc_now()
+        message.updated_at = utc_now()
+        self.session.add(opportunity)
+        self.session.add(detail)
+        self.session.add(source)
+        self.session.add(message)
+        try:
+            await self.session.commit()
+        except IntegrityError:
+            await self.session.rollback()
+            existing = await self.find_duplicate(
+                owner_user_id=source.owner_user_id,
+                application_url=detail.application_url,
+                company_name=detail.company_name,
+                normalized_job_title=detail.normalized_job_title or detail.job_title.casefold(),
+                city=detail.city,
+                content_fingerprint=detail.content_fingerprint,
+                exclude_opportunity_id=opportunity.id,
+            )
+            if existing:
+                return existing[0]
+            raise
+        await self.session.refresh(opportunity)
+        return canonical[0] if canonical else opportunity
+
+    async def get_detail_for_owner(
+        self, opportunity_id: UUID, owner_user_id: UUID
+    ) -> tuple[Opportunity, JobOpportunityDetail] | None:
+        result = await self.session.exec(
+            select(Opportunity, JobOpportunityDetail)
+            .join(
+                JobOpportunityDetail,
+                JobOpportunityDetail.opportunity_id == Opportunity.id,
+            )
+            .where(
+                Opportunity.id == opportunity_id,
+                Opportunity.owner_user_id == owner_user_id,
+                Opportunity.opportunity_type == OpportunityType.JOB,
+            )
+        )
+        return result.first()
+
+    async def list_sources(
+        self, opportunity_id: UUID, owner_user_id: UUID
+    ) -> list[JobOpportunitySource]:
+        result = await self.session.exec(
+            select(JobOpportunitySource)
+            .where(
+                JobOpportunitySource.opportunity_id == opportunity_id,
+                JobOpportunitySource.owner_user_id == owner_user_id,
+            )
+            .order_by(col(JobOpportunitySource.posted_at).desc())
+        )
+        return list(result.all())
+
+
+class JobSearchProfileRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self.session = session
+
+    async def list_for_owner(self, owner_user_id: UUID) -> list[JobSearchProfile]:
+        result = await self.session.exec(
+            select(JobSearchProfile)
+            .where(JobSearchProfile.user_id == owner_user_id)
+            .order_by(
+                col(JobSearchProfile.is_default).desc(), col(JobSearchProfile.created_at).asc()
+            )
+        )
+        return list(result.all())
+
+    async def list_enabled(self, owner_user_id: UUID) -> list[JobSearchProfile]:
+        result = await self.session.exec(
+            select(JobSearchProfile).where(
+                JobSearchProfile.user_id == owner_user_id,
+                JobSearchProfile.enabled.is_(True),
+            )
+        )
+        return list(result.all())
+
+    async def get_for_owner(self, profile_id: UUID, owner_user_id: UUID) -> JobSearchProfile | None:
+        result = await self.session.exec(
+            select(JobSearchProfile).where(
+                JobSearchProfile.id == profile_id,
+                JobSearchProfile.user_id == owner_user_id,
+            )
+        )
+        return result.first()
+
+    async def save(self, profile: JobSearchProfile) -> JobSearchProfile:
+        if profile.is_default:
+            await self.session.exec(
+                update(JobSearchProfile)
+                .where(
+                    JobSearchProfile.user_id == profile.user_id,
+                    JobSearchProfile.id != profile.id,
+                )
+                .values(is_default=False, updated_at=utc_now())
+            )
+        profile.updated_at = utc_now()
+        self.session.add(profile)
+        await self.session.commit()
+        await self.session.refresh(profile)
+        return profile
+
+    async def delete(self, profile: JobSearchProfile) -> None:
+        await self.session.delete(profile)
+        await self.session.commit()
+
+
+class JobOpportunityMatchRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self.session = session
+
+    async def upsert(
+        self,
+        *,
+        opportunity_id: UUID,
+        profile_id: UUID,
+        owner_user_id: UUID,
+        eligibility,
+        match_score: int,
+        matched_reasons: list[str],
+        mismatch_reasons: list[str],
+        unknown_constraints: list[str],
+        score_breakdown: dict[str, int],
+    ) -> JobOpportunityMatch:
+        result = await self.session.exec(
+            select(JobOpportunityMatch).where(
+                JobOpportunityMatch.opportunity_id == opportunity_id,
+                JobOpportunityMatch.job_search_profile_id == profile_id,
+            )
+        )
+        match = result.first() or JobOpportunityMatch(
+            opportunity_id=opportunity_id,
+            job_search_profile_id=profile_id,
+            owner_user_id=owner_user_id,
+        )
+        match.eligibility = eligibility
+        match.match_score = match_score
+        match.matched_reasons = matched_reasons
+        match.mismatch_reasons = mismatch_reasons
+        match.unknown_constraints = unknown_constraints
+        match.score_breakdown = score_breakdown
+        match.updated_at = utc_now()
+        self.session.add(match)
+        await self.session.commit()
+        await self.session.refresh(match)
+        return match
+
+    async def get(
+        self, opportunity_id: UUID, profile_id: UUID, owner_user_id: UUID
+    ) -> JobOpportunityMatch | None:
+        result = await self.session.exec(
+            select(JobOpportunityMatch).where(
+                JobOpportunityMatch.opportunity_id == opportunity_id,
+                JobOpportunityMatch.job_search_profile_id == profile_id,
+                JobOpportunityMatch.owner_user_id == owner_user_id,
+            )
+        )
+        return result.first()
 
 
 class ReplyTemplateRepository:
