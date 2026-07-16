@@ -1,6 +1,9 @@
 from uuid import uuid4
 
-from app.application.use_cases.analyze_message import AnalyzeMessageUseCase, message_links
+from app.application.use_cases.analyze_message import (
+    AnalyzeMessageUseCase,
+    message_links,
+)
 from app.domain.enums import (
     AgentActionType,
     IMChannel,
@@ -15,6 +18,7 @@ from app.domain.ports import (
     AgentContactExtraction,
     LinkInspection,
 )
+from app.domain.services.job_discovery import redact_source_sample
 from app.infrastructure.db.models import Message, Opportunity
 
 
@@ -219,3 +223,14 @@ def test_message_links_deduplicates_and_limits_urls() -> None:
         ["https://a.example/x"],
         limit=2,
     ) == ["https://a.example/x", "https://b.example/y"]
+
+
+def test_source_profile_samples_are_bounded_and_redacted() -> None:
+    sample = redact_source_sample(
+        "联系 recruiter@example.com，电话 +65 8123 4567，@example_recruiter，详情 https://jobs.example.com/1"
+    )
+    assert "recruiter@example.com" not in sample
+    assert "8123 4567" not in sample
+    assert "@example_recruiter" not in sample
+    assert "jobs.example.com" not in sample
+    assert sample == "联系 [email]，电话 [phone]，[handle]，详情 [url]"

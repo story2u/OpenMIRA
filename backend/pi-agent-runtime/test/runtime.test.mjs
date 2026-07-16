@@ -3,7 +3,13 @@ import test from 'node:test'
 
 import { fauxAssistantMessage, fauxProvider, fauxToolCall } from '@earendil-works/pi-ai/providers/faux'
 
-import { createSubmitAnalysisTool, runAnalysis, serializeUntrustedInput } from '../src/runtime.mjs'
+import {
+  createSubmitAnalysisTool,
+  runAnalysis,
+  runPreferenceParse,
+  runSourceProfile,
+  serializeUntrustedInput,
+} from '../src/runtime.mjs'
 
 const analysis = {
   is_opportunity: true,
@@ -32,6 +38,35 @@ const analysis = {
       requires_approval: true,
     },
   ],
+  job_analysis: null,
+  source_profile_analysis: null,
+}
+
+const jobAnalysis = {
+  ...analysis,
+  title: 'Senior Python Backend Engineer',
+  job_analysis: {
+    classification: 'job_post',
+    classification_confidence: 0.96,
+    noise_reasons: [],
+    job: {
+      job_title: 'Senior Python Backend Engineer',
+      normalized_job_title: 'python backend engineer',
+      company_name: 'Example Labs', department: null, company_industry: null, company_stage: null,
+      location_text: 'Singapore / Remote', country_code: 'SG', city: 'Singapore', timezone: null,
+      work_mode: 'remote', employment_type: 'full_time', seniority: 'senior',
+      salary: { raw: 'SGD 8k-12k/month', minimum: 8000, maximum: 12000, currency: 'SGD', period: 'monthly', negotiable: null },
+      equity_mentioned: null, requirements_summary: '5 years Python and FastAPI',
+      required_skills: ['Python', 'FastAPI'], preferred_skills: [], minimum_years_experience: 5,
+      maximum_years_experience: null, degree_required: null, degree_level: null, degree_field: null,
+      english_level: null, other_language_requirements: [], visa_sponsorship: null,
+      work_authorization_text: null, relocation_support: null, age_requirement_text: null,
+      application_url: 'https://jobs.example.com/123', application_deadline: null,
+      contact_methods: [],
+    },
+    field_evidence: { job_title: 'Senior Python Backend Engineer', salary: 'SGD 8k-12k/month' },
+    missing_fields: ['visa_sponsorship'], compliance_flags: [], extraction_confidence: 0.91,
+  },
 }
 
 test('runner exposes only the structured submit tool', async () => {
@@ -68,6 +103,61 @@ test('runner returns the tool submission from an isolated pi agent', async () =>
   assert.equal(faux.state.callCount, 1)
 })
 
+test('runner accepts evidence-backed job extraction only with prefilter context', async () => {
+  const faux = fauxProvider()
+  faux.setResponses([
+    fauxAssistantMessage(fauxToolCall('submit_analysis', jobAnalysis), { stopReason: 'toolUse' }),
+  ])
+  const result = await runAnalysis(
+    { text: 'Hiring Senior Python Backend Engineer', job_discovery: { prefilter_score: 0.9 } },
+    {
+      apiKey: 'test-key', getModelImpl: () => faux.getModel(),
+      streamFn: (model, context, options) => faux.provider.streamSimple(model, context, options),
+    },
+  )
+  assert.equal(result.job_analysis.job.job_title, 'Senior Python Backend Engineer')
+})
+
+test('runner accepts a bounded source profile assessment with redacted samples', async () => {
+  const faux = fauxProvider()
+  const resultWithProfile = {
+    ...jobAnalysis,
+    source_profile_analysis: {
+      primary_function: 'recruitment',
+      secondary_functions: ['career_networking'],
+      industry_tags: ['software'],
+      region_tags: ['europe'],
+      language_tags: ['zh', 'en'],
+      job_signal_prior: 0.9,
+      estimated_noise_level: 0.2,
+      reliability_score: 0.8,
+      confidence: 0.88,
+      evidence: ['source metadata and most supplied samples contain hiring signals'],
+    },
+  }
+  faux.setResponses([
+    fauxAssistantMessage(fauxToolCall('submit_analysis', resultWithProfile), { stopReason: 'toolUse' }),
+  ])
+
+  const result = await runAnalysis(
+    {
+      text: 'Hiring Senior Python Backend Engineer',
+      job_discovery: {
+        prefilter_score: 0.9,
+        source_profile_input: {
+          name: 'Example Remote Jobs', description: null, username: null,
+          recent_samples: ['Hiring [email] for a remote role'],
+        },
+      },
+    },
+    {
+      apiKey: 'test-key', getModelImpl: () => faux.getModel(),
+      streamFn: (model, context, options) => faux.provider.streamSimple(model, context, options),
+    },
+  )
+  assert.equal(result.source_profile_analysis.primary_function, 'recruitment')
+})
+
 test('runner fails closed when the model does not submit analysis', async () => {
   class SilentAgent {
     constructor() {
@@ -88,4 +178,63 @@ test('runner fails closed when the model does not submit analysis', async () => 
     ),
     /did not submit/,
   )
+})
+
+test('preference parser returns a confirmation-only profile without protected attributes', async () => {
+  const faux = fauxProvider()
+  const preview = {
+    name: '远程后端', target_roles: ['Python Backend Engineer'], excluded_roles: [],
+    target_industries: [], preferred_seniority: ['mid'], candidate_skills: ['Python'],
+    years_experience: 3, education_level: null, english_level: null, other_languages: [],
+    preferred_countries: [], preferred_cities: [], preferred_timezones: ['Europe/Berlin'],
+    work_modes: ['remote'], employment_types: ['full_time'], minimum_salary: 80000,
+    salary_currency: 'USD', salary_period: 'annual', visa_sponsorship_required: true,
+    relocation_acceptable: null, required_keywords: [], preferred_keywords: [], excluded_keywords: [],
+    require_salary_disclosed: false, minimum_match_score: 60, notification_enabled: false,
+    requires_confirmation: true,
+  }
+  faux.setResponses([
+    fauxAssistantMessage(fauxToolCall('submit_job_search_profile', preview), { stopReason: 'toolUse' }),
+  ])
+
+  const result = await runPreferenceParse(
+    { text: '远程 Python 后端，欧洲时区，年薪至少八万美元，需要签证支持' },
+    {
+      apiKey: 'test-key', getModelImpl: () => faux.getModel(),
+      streamFn: (model, context, options) => faux.provider.streamSimple(model, context, options),
+    },
+  )
+
+  assert.equal(result.requires_confirmation, true)
+  assert.equal(Object.hasOwn(result, 'age'), false)
+})
+
+test('source profiler exposes one application-owned persistence tool', async () => {
+  const faux = fauxProvider()
+  const profile = {
+    primary_function: 'technical_discussion', secondary_functions: ['career_networking'],
+    industry_tags: ['software'], region_tags: [], language_tags: ['zh'],
+    job_signal_prior: 0.35, estimated_noise_level: 0.55, reliability_score: 0.72,
+    confidence: 0.81, evidence: ['most supplied samples discuss software engineering'],
+  }
+  faux.setResponses([
+    fauxAssistantMessage(fauxToolCall('profileSourceFunction', profile), { stopReason: 'toolUse' }),
+  ])
+
+  const result = await runSourceProfile(
+    {
+      task: 'profile_source_function',
+      source: {
+        name: 'Example Engineering Community', description: null, username: null,
+        recent_samples: ['Discussing Python API design', 'Hiring [email] for one backend role'],
+      },
+    },
+    {
+      apiKey: 'test-key', getModelImpl: () => faux.getModel(),
+      streamFn: (model, context, options) => faux.provider.streamSimple(model, context, options),
+    },
+  )
+
+  assert.equal(result.primary_function, 'technical_discussion')
+  assert.equal(faux.state.callCount, 1)
 })

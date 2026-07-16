@@ -6,9 +6,11 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from app.api.deps import (
     get_adapter_registry,
     get_detector,
+    get_job_message_audit_repo,
     get_message_repo,
     get_opportunity_repo,
     get_rule_repo,
+    get_source_functional_profile_repo,
     get_subscription_repo,
     get_task_queue,
     get_user_settings_repo,
@@ -18,6 +20,7 @@ from app.api.deps import (
 )
 from app.application.mappers import to_opportunity_read
 from app.application.use_cases.ingest_message import IngestMessageUseCase
+from app.application.use_cases.prepare_job_discovery import PrepareJobDiscoveryUseCase
 from app.core.config import Settings, get_settings
 from app.core.security import encrypt_secret
 from app.domain.enums import IMChannel
@@ -25,8 +28,10 @@ from app.domain.services.detection_policy import OpportunityDetector
 from app.infrastructure.db.models import Opportunity
 from app.infrastructure.db.repositories import (
     MessageRepository,
+    JobMessageAuditRepository,
     OpportunityRepository,
     RuleRepository,
+    SourceFunctionalProfileRepository,
     SubscriptionRepository,
     UserSettingsRepository,
     WeComConnectionRepository,
@@ -72,6 +77,10 @@ async def wecom_webhook(
     task_queue: CeleryTaskQueue = Depends(get_task_queue),
     subscription_repo: SubscriptionRepository = Depends(get_subscription_repo),
     user_settings_repo: UserSettingsRepository = Depends(get_user_settings_repo),
+    job_audit_repo: JobMessageAuditRepository = Depends(get_job_message_audit_repo),
+    source_profile_repo: SourceFunctionalProfileRepository = Depends(
+        get_source_functional_profile_repo
+    ),
 ) -> dict:
     body = await request.body()
     payload = parse_xml_envelope(body)
@@ -93,6 +102,11 @@ async def wecom_webhook(
         task_queue=task_queue,
         subscription_repo=subscription_repo,
         user_settings_repo=user_settings_repo,
+        job_discovery=PrepareJobDiscoveryUseCase(
+            message_repo=message_repo,
+            profile_repo=source_profile_repo,
+            audit_repo=job_audit_repo,
+        ),
     )
     result = await use_case.execute(inbound)
     response = {"ok": True, "id": str(result.id), "type": result.__class__.__name__}

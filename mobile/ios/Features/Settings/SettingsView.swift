@@ -77,6 +77,11 @@ private struct SettingsList: View {
                     }
                 }
                 NavigationLink {
+                    JobSearchProfilesView()
+                } label: {
+                    settingsRow(icon: "briefcase", tint: AppColors.primary, title: "求职档案")
+                }
+                NavigationLink {
                     TelegramSettingsView()
                 } label: {
                     settingsRow(icon: "paperplane", tint: AppColors.telegram, title: String(localized: "settings.telegram", defaultValue: "Telegram 连接"))

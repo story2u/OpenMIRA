@@ -7,7 +7,7 @@
     "node": ">=22.19.0"
   },
   "scripts": {
-    "check": "node --check src/index.mjs && node --check src/runtime.mjs",
+    "check": "find src -name '*.mjs' -print0 | xargs -0 -n1 node --check",
     "test": "node --test"
   },
   "dependencies": {

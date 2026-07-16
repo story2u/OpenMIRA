@@ -85,6 +85,9 @@ jobs:
       - name: Run backend tests
         run: uv run --locked pytest -q
 
+      - name: Run job discovery deterministic evaluation
+        run: uv run --locked python ../evals/job-discovery/evaluate.py
+
   pi-agent:
     name: Pi Agent Runtime
     runs-on: ubuntu-latest
@@ -154,18 +157,25 @@ jobs:
   ios:
     name: iOS Build And Test
     runs-on: macos-15
-    timeout-minutes: 35
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v6
       - name: Install xcodegen
         run: brew install xcodegen
       - name: Generate project
         run: cd mobile/ios && xcodegen generate
+      - name: Ensure iOS 18.5 simulator runtime
+        run: |
+          sudo xcode-select -s /Applications/Xcode_16.4.app/Contents/Developer
+          if ! xcrun simctl list runtimes | grep -q 'iOS 18.5'; then
+            sudo xcodebuild -downloadPlatform iOS
+          fi
+          xcrun simctl list devices available
       - name: Build and test
         run: |
           cd mobile/ios
           xcodebuild test -project OpportunityRadar.xcodeproj -scheme OpportunityRadar \
-            -destination 'platform=iOS Simulator,OS=latest,name=iPhone 16' \
+            -destination 'platform=iOS Simulator,OS=18.5,name=iPhone 16' \
             -derivedDataPath .build/DerivedData CODE_SIGNING_ALLOWED=NO
 
   android:

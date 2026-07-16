@@ -29,6 +29,12 @@ import type {
   WeComArchiveConnection,
   WeComArchiveConnectionCreate,
   PasswordActionResponse,
+  JobFeedbackType,
+  JobOpportunityDetail,
+  JobsPage,
+  JobSearchProfile,
+  JobSearchProfileInput,
+  JobSearchProfilePreview,
 } from './types'
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? ''
@@ -171,6 +177,85 @@ export async function fetchOpportunities(archive: 'active' | 'archived' | 'all' 
 
 export async function fetchOpportunity(opportunityId: string): Promise<Opportunity> {
   return toOpportunity(await fetchJson<ApiOpportunity>(`/api/v1/opportunities/${opportunityId}`))
+}
+
+export interface JobFilters {
+  profileId?: string
+  query?: string
+  source?: 'telegram' | 'wecom'
+  postedFrom?: string
+  workMode?: string
+  employmentType?: string
+  seniority?: string
+  country?: string
+  city?: string
+  salaryMin?: number
+  salaryCurrency?: string
+  salaryDisclosed?: boolean
+  degreeLevel?: string
+  englishLevel?: string
+  visaSponsorship?: boolean
+  minimumMatchScore?: number
+  ageRequirementPresent?: boolean
+  excludeExpired?: boolean
+  sort?: 'match' | 'newest' | 'salary' | 'confidence' | 'source_reliability'
+  limit?: number
+  offset?: number
+}
+
+export async function fetchJobs(filters: JobFilters = {}): Promise<JobsPage> {
+  const params = new URLSearchParams()
+  for (const [key, value] of Object.entries(filters)) {
+    if (value === undefined || value === '' || value === null) continue
+    const apiKey = key.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)
+    params.set(apiKey, String(value))
+  }
+  return fetchJson<JobsPage>(`/api/v1/jobs?${params.toString()}`)
+}
+
+export async function fetchJob(opportunityId: string, profileId?: string): Promise<JobOpportunityDetail> {
+  const suffix = profileId ? `?profile_id=${encodeURIComponent(profileId)}` : ''
+  return fetchJson<JobOpportunityDetail>(`/api/v1/jobs/${opportunityId}${suffix}`)
+}
+
+export async function submitJobFeedback(
+  opportunityId: string,
+  feedbackType: JobFeedbackType,
+  note?: string,
+): Promise<void> {
+  await fetchJson(`/api/v1/jobs/${opportunityId}/feedback`, {
+    method: 'POST',
+    body: JSON.stringify({ feedbackType, note: note || null }),
+  })
+}
+
+export async function fetchJobSearchProfiles(): Promise<JobSearchProfile[]> {
+  return fetchJson<JobSearchProfile[]>('/api/v1/job-search-profiles')
+}
+
+export async function createJobSearchProfile(payload: JobSearchProfileInput): Promise<JobSearchProfile> {
+  return fetchJson<JobSearchProfile>('/api/v1/job-search-profiles', {
+    method: 'POST', body: JSON.stringify(payload),
+  })
+}
+
+export async function updateJobSearchProfile(
+  profileId: string,
+  payload: Partial<JobSearchProfileInput>,
+): Promise<JobSearchProfile> {
+  return fetchJson<JobSearchProfile>(`/api/v1/job-search-profiles/${profileId}`, {
+    method: 'PATCH', body: JSON.stringify(payload),
+  })
+}
+
+export async function deleteJobSearchProfile(profileId: string): Promise<void> {
+  await fetchJson(`/api/v1/job-search-profiles/${profileId}`, { method: 'DELETE' })
+}
+
+export async function parseJobSearchProfile(text: string): Promise<JobSearchProfilePreview> {
+  return fetchJson<JobSearchProfilePreview>('/api/v1/job-search-profiles/parse', {
+    method: 'POST', body: JSON.stringify({ text }),
+  })
 }
 
 export async function sendManualReply(

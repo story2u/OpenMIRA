@@ -11,15 +11,21 @@ from app.core.security import constant_time_equals, decode_access_token
 from app.core.time_window import WorkTimeConfig, WorkTimeService
 from app.domain.services.detection_policy import OpportunityDetector
 from app.infrastructure.ai.litellm_client import LiteLLMOpportunityClassifier, LiteLLMReplyGenerator
+from app.infrastructure.agent.pi_client import PiAgentClient
 from app.infrastructure.db.models import Opportunity, User
 from app.infrastructure.db.repositories import (
     BillingEventRepository,
     ConfigRepository,
     MessageRepository,
+    JobMessageAuditRepository,
+    JobOpportunityMatchRepository,
+    JobOpportunityRepository,
+    JobSearchProfileRepository,
     OpportunityRepository,
     PasswordResetRepository,
     ReplyTemplateRepository,
     RuleRepository,
+    SourceFunctionalProfileRepository,
     SubscriptionRepository,
     TelegramConnectionRepository,
     TelegramUserConfigRepository,
@@ -99,6 +105,47 @@ async def get_redis_client(
 
 def get_message_repo(session: AsyncSession = Depends(get_session)) -> MessageRepository:
     return MessageRepository(session)
+
+
+def get_job_message_audit_repo(
+    session: AsyncSession = Depends(get_session),
+) -> JobMessageAuditRepository:
+    return JobMessageAuditRepository(session)
+
+
+def get_source_functional_profile_repo(
+    session: AsyncSession = Depends(get_session),
+) -> SourceFunctionalProfileRepository:
+    return SourceFunctionalProfileRepository(session)
+
+
+def get_job_opportunity_repo(
+    session: AsyncSession = Depends(get_session),
+) -> JobOpportunityRepository:
+    return JobOpportunityRepository(session)
+
+
+def get_job_search_profile_repo(
+    session: AsyncSession = Depends(get_session),
+) -> JobSearchProfileRepository:
+    return JobSearchProfileRepository(session)
+
+
+def get_job_opportunity_match_repo(
+    session: AsyncSession = Depends(get_session),
+) -> JobOpportunityMatchRepository:
+    return JobOpportunityMatchRepository(session)
+
+
+def get_pi_agent_client(settings: Settings = Depends(get_settings)) -> PiAgentClient:
+    return PiAgentClient(
+        node_binary=settings.pi_agent_node_binary,
+        runner_path=settings.pi_agent_runner_path,
+        provider=settings.pi_agent_provider,
+        model=settings.pi_agent_model,
+        api_key=settings.effective_pi_agent_api_key,
+        timeout_seconds=settings.pi_agent_timeout_seconds,
+    )
 
 
 def get_opportunity_repo(session: AsyncSession = Depends(get_session)) -> OpportunityRepository:

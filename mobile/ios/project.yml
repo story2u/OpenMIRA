@@ -7,7 +7,7 @@ options:
 settings:
   base:
     SWIFT_VERSION: "6.0"
-    TARGETED_DEVICE_FAMILY: "1"
+    TARGETED_DEVICE_FAMILY: "1,2"
 packages:
   RevenueCat:
     url: https://github.com/RevenueCat/purchases-ios-spm.git
@@ -27,7 +27,7 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.codeiy.im
-        TARGETED_DEVICE_FAMILY: "1"
+        TARGETED_DEVICE_FAMILY: "1,2"
         INFOPLIST_FILE: Info.plist
         CODE_SIGN_ENTITLEMENTS: OpportunityRadar.entitlements
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon

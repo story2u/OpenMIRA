@@ -8,6 +8,14 @@ import com.codeiy.im.model.ChatMessage
 import com.codeiy.im.model.DashboardResponse
 import com.codeiy.im.model.DetectionSettings
 import com.codeiy.im.model.DetectionSettingsUpdate
+import com.codeiy.im.model.JobFeedbackRequest
+import com.codeiy.im.model.JobFeedbackResponse
+import com.codeiy.im.model.JobOpportunityDetail
+import com.codeiy.im.model.JobProfileParseRequest
+import com.codeiy.im.model.JobSearchProfile
+import com.codeiy.im.model.JobSearchProfilePreview
+import com.codeiy.im.model.JobSearchProfileWrite
+import com.codeiy.im.model.JobsPage
 import com.codeiy.im.model.ManualReplyRequest
 import com.codeiy.im.model.NativeLoginRequest
 import com.codeiy.im.model.NotificationSettings
@@ -30,6 +38,7 @@ import com.codeiy.im.model.TelegramConnectionHealth
 import com.codeiy.im.model.WorkSchedule
 import com.codeiy.im.model.WorkScheduleUpdate
 import retrofit2.http.Body
+import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.PATCH
 import retrofit2.http.POST
@@ -138,6 +147,44 @@ interface RadarApi {
         @Path("id") id: String,
         @Body body: TelegramConnectionEnabledUpdate,
     ): TelegramConnectionDTO
+
+    // 工作机会发现：服务端是筛选、匹配分和 owner 隔离的最终权威。
+    @GET("jobs")
+    suspend fun jobs(
+        @Query("profile_id") profileId: String? = null,
+        @Query("query") query: String? = null,
+        @Query("source") source: String? = null,
+        @Query("work_mode") workMode: String? = null,
+        @Query("employment_type") employmentType: String? = null,
+        @Query("seniority") seniority: String? = null,
+        @Query("minimum_match_score") minimumMatchScore: Int? = null,
+        @Query("age_requirement_present") ageRequirementPresent: Boolean? = null,
+        @Query("exclude_expired") excludeExpired: Boolean = true,
+        @Query("sort") sort: String = "match",
+        @Query("limit") limit: Int = 20,
+        @Query("offset") offset: Int = 0,
+    ): JobsPage
+
+    @GET("jobs/{id}")
+    suspend fun job(@Path("id") id: String, @Query("profile_id") profileId: String? = null): JobOpportunityDetail
+
+    @POST("jobs/{id}/feedback")
+    suspend fun saveJobFeedback(@Path("id") id: String, @Body body: JobFeedbackRequest): JobFeedbackResponse
+
+    @GET("job-search-profiles")
+    suspend fun jobSearchProfiles(): List<JobSearchProfile>
+
+    @POST("job-search-profiles")
+    suspend fun createJobSearchProfile(@Body body: JobSearchProfileWrite): JobSearchProfile
+
+    @PATCH("job-search-profiles/{id}")
+    suspend fun updateJobSearchProfile(@Path("id") id: String, @Body body: JobSearchProfileWrite): JobSearchProfile
+
+    @DELETE("job-search-profiles/{id}")
+    suspend fun deleteJobSearchProfile(@Path("id") id: String)
+
+    @POST("job-search-profiles/parse")
+    suspend fun parseJobSearchProfile(@Body body: JobProfileParseRequest): JobSearchProfilePreview
 }
 
 val ApiBaseUrl: String get() = BuildConfig.API_BASE_URL

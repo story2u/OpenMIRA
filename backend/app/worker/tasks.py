@@ -7,6 +7,7 @@ import structlog
 from app.application.use_cases.ai_reply import AIAutoReplyUseCase
 from app.application.use_cases.analyze_message import AnalyzeMessageUseCase
 from app.application.use_cases.ingest_message import IngestMessageUseCase
+from app.application.use_cases.prepare_job_discovery import PrepareJobDiscoveryUseCase
 from app.application.use_cases.sync_revenuecat_customer import SyncRevenueCatCustomer
 from app.application.use_cases.sync_wecom_archive import SyncWeComArchive
 from app.core.config import get_settings
@@ -27,10 +28,15 @@ from app.infrastructure.db.repositories import (
     BillingEventRepository,
     AutoReplyDeliveryRepository,
     ConfigRepository,
+    JobMessageAuditRepository,
+    JobOpportunityRepository,
+    JobOpportunityMatchRepository,
+    JobSearchProfileRepository,
     MessageRepository,
     OpportunityRepository,
     PasswordResetRepository,
     RuleRepository,
+    SourceFunctionalProfileRepository,
     SubscriptionRepository,
     TelegramConnectionRepository,
     TelegramUserConfigRepository,
@@ -272,8 +278,9 @@ async def _process_wecom_event(event_id: UUID) -> None:
             if raw_config
             else WorkTimeConfig.from_settings(settings)
         )
+        message_repo = MessageRepository(session)
         await IngestMessageUseCase(
-            message_repo=MessageRepository(session),
+            message_repo=message_repo,
             opportunity_repo=OpportunityRepository(session),
             rule_repo=RuleRepository(session),
             detector=OpportunityDetector(ai_classifier=LiteLLMOpportunityClassifier(settings)),
@@ -281,6 +288,11 @@ async def _process_wecom_event(event_id: UUID) -> None:
             task_queue=CeleryTaskQueue(),
             subscription_repo=SubscriptionRepository(session),
             user_settings_repo=UserSettingsRepository(session),
+            job_discovery=PrepareJobDiscoveryUseCase(
+                message_repo=message_repo,
+                profile_repo=SourceFunctionalProfileRepository(session),
+                audit_repo=JobMessageAuditRepository(session),
+            ),
         ).execute(inbound)
         await event_repo.finish(event.id)
 
@@ -343,6 +355,11 @@ async def _sync_wecom_archive_connection(connection_id: UUID, *, verifying: bool
             task_queue=CeleryTaskQueue(),
             subscription_repo=subscription_repository,
             user_settings_repo=UserSettingsRepository(session),
+            job_discovery=PrepareJobDiscoveryUseCase(
+                message_repo=message_repository,
+                profile_repo=SourceFunctionalProfileRepository(session),
+                audit_repo=JobMessageAuditRepository(session),
+            ),
         )
         result = await SyncWeComArchive(
             repository=repository,
@@ -410,6 +427,11 @@ async def _analyze_message(
             task_queue=CeleryTaskQueue(),
             min_opportunity_confidence=settings.pi_agent_min_opportunity_confidence,
             max_links=settings.pi_agent_max_links,
+            job_audit_repo=JobMessageAuditRepository(session),
+            source_profile_repo=SourceFunctionalProfileRepository(session),
+            job_opportunity_repo=JobOpportunityRepository(session),
+            job_search_profile_repo=JobSearchProfileRepository(session),
+            job_match_repo=JobOpportunityMatchRepository(session),
         )
         opportunity = await use_case.execute(message_id, force=force)
         if usage_ledger_id:

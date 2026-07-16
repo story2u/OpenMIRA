@@ -7,6 +7,7 @@ from uuid import UUID
 import structlog
 
 from app.application.use_cases.ingest_message import IngestMessageUseCase
+from app.application.use_cases.prepare_job_discovery import PrepareJobDiscoveryUseCase
 from app.core.config import Settings, get_settings
 from app.core.security import decrypt_secret
 from app.core.time_window import WorkTimeConfig, WorkTimeService
@@ -15,9 +16,11 @@ from app.domain.services.subscription_policy import telegram_group_capacity
 from app.infrastructure.ai.litellm_client import LiteLLMOpportunityClassifier
 from app.infrastructure.db.repositories import (
     ConfigRepository,
+    JobMessageAuditRepository,
     MessageRepository,
     OpportunityRepository,
     RuleRepository,
+    SourceFunctionalProfileRepository,
     SubscriptionRepository,
     TelegramUserConfigRepository,
 )
@@ -39,14 +42,20 @@ async def ingest(inbound) -> None:
             if raw_config
             else WorkTimeConfig.from_settings(settings)
         )
+        message_repo = MessageRepository(session)
         use_case = IngestMessageUseCase(
-            message_repo=MessageRepository(session),
+            message_repo=message_repo,
             opportunity_repo=OpportunityRepository(session),
             rule_repo=RuleRepository(session),
             detector=OpportunityDetector(ai_classifier=LiteLLMOpportunityClassifier(settings)),
             work_time=WorkTimeService(work_time_config),
             task_queue=CeleryTaskQueue(),
             subscription_repo=SubscriptionRepository(session),
+            job_discovery=PrepareJobDiscoveryUseCase(
+                message_repo=message_repo,
+                profile_repo=SourceFunctionalProfileRepository(session),
+                audit_repo=JobMessageAuditRepository(session),
+            ),
         )
         result = await use_case.execute(inbound)
         logger.info(

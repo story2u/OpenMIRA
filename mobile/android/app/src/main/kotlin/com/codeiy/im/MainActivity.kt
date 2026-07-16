@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Inbox
+import androidx.compose.material.icons.filled.Work
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -48,6 +49,9 @@ import com.codeiy.im.core.auth.TokenStore
 import com.codeiy.im.core.billing.RevenueCatBillingService
 import com.codeiy.im.feature.dashboard.DashboardScreen
 import com.codeiy.im.feature.login.LoginScreen
+import com.codeiy.im.feature.jobs.JobDetailScreen
+import com.codeiy.im.feature.jobs.JobDiscoveryScreen
+import com.codeiy.im.feature.jobs.JobSearchProfilesScreen
 import com.codeiy.im.feature.opportunity.OpportunityDetailScreen
 import com.codeiy.im.feature.settings.DetectionSettingsScreen
 import com.codeiy.im.feature.settings.NotificationSettingsScreen
@@ -107,11 +111,14 @@ private fun RootView(session: SessionStore) {
 private fun AppNavHost(session: SessionStore) {
     val navController = rememberNavController()
     NavHost(navController, startDestination = "main") {
-        // 一级 Tab 容器（商机/设置），各自内部导航到详情/设置子页。
+        // 一级 Tab 容器（商机/工作机会/设置），各自内部导航到详情/设置子页。
         composable("main") {
             MainTabs(
                 session = session,
                 onOpenOpportunity = { id -> navController.navigate("opportunity/$id") },
+                onOpenJob = { id, profileId ->
+                    navController.navigate("job/$id${profileId?.let { "?profileId=$it" }.orEmpty()}")
+                },
                 onOpenSettingsRoute = { route -> navController.navigate(route) },
             )
         }
@@ -131,6 +138,27 @@ private fun AppNavHost(session: SessionStore) {
                 opportunityId = opportunityId,
                 onBack = { navController.popBackStack() },
             )
+        }
+        composable(
+            route = "job/{jobId}?profileId={profileId}",
+            arguments = listOf(
+                navArgument("jobId") { type = NavType.StringType },
+                navArgument("profileId") { type = NavType.StringType; nullable = true; defaultValue = null },
+            ),
+            deepLinks = listOf(
+                navDeepLink { uriPattern = "opportunity-radar://job/{jobId}" },
+                navDeepLink { uriPattern = "https://im.story2u.xyz/app/job/{jobId}" },
+            ),
+        ) { entry ->
+            JobDetailScreen(
+                session = session,
+                opportunityId = entry.arguments?.getString("jobId").orEmpty(),
+                profileId = entry.arguments?.getString("profileId"),
+                onBack = { navController.popBackStack() },
+            )
+        }
+        composable("settings/job-search") {
+            JobSearchProfilesScreen(session = session, onBack = { navController.popBackStack() })
         }
         composable("settings/subscription") {
             SubscriptionScreen(session = session, onBack = { navController.popBackStack() })
@@ -153,11 +181,12 @@ private fun AppNavHost(session: SessionStore) {
     }
 }
 
-/** 两个一级 Tab：商机看板 / 设置中心。切 Tab 各自保留导航栈与数据（rememberSaveable 选中项）。 */
+/** 三个一级 Tab：商机看板 / 工作机会 / 设置中心。 */
 @Composable
 private fun MainTabs(
     session: SessionStore,
     onOpenOpportunity: (String) -> Unit,
+    onOpenJob: (String, String?) -> Unit,
     onOpenSettingsRoute: (String) -> Unit,
 ) {
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
@@ -173,6 +202,12 @@ private fun MainTabs(
                 NavigationBarItem(
                     selected = selectedTab == 1,
                     onClick = { selectedTab = 1 },
+                    icon = { Icon(Icons.Filled.Work, contentDescription = null) },
+                    label = { Text("工作机会") },
+                )
+                NavigationBarItem(
+                    selected = selectedTab == 2,
+                    onClick = { selectedTab = 2 },
                     icon = { Icon(Icons.Filled.Settings, contentDescription = null) },
                     label = { Text("设置") },
                 )
@@ -182,6 +217,11 @@ private fun MainTabs(
         Box(Modifier.padding(padding)) {
             when (selectedTab) {
                 0 -> DashboardScreen(session, onOpenOpportunity = onOpenOpportunity)
+                1 -> JobDiscoveryScreen(
+                    session = session,
+                    onOpenJob = onOpenJob,
+                    onOpenProfiles = { onOpenSettingsRoute("settings/job-search") },
+                )
                 else -> SettingsScreen(session) { route ->
                     when (route) {
                         SettingsRoute.Security -> onOpenSettingsRoute("settings/security")
@@ -190,6 +230,7 @@ private fun MainTabs(
                         SettingsRoute.Detection -> onOpenSettingsRoute("settings/detection")
                         SettingsRoute.WorkSchedule -> onOpenSettingsRoute("settings/work-schedule")
                         SettingsRoute.Notifications -> onOpenSettingsRoute("settings/notifications")
+                        SettingsRoute.JobSearch -> onOpenSettingsRoute("settings/job-search")
                     }
                 }
             }

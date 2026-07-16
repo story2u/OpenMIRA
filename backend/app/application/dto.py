@@ -1,4 +1,5 @@
 from datetime import datetime
+from decimal import Decimal
 from typing import Literal
 from uuid import UUID
 
@@ -12,11 +13,19 @@ from app.domain.enums import (
     BillingStore,
     FrontendOpportunityStatus,
     IMChannel,
+    JobEligibility,
+    JobEmploymentType,
+    JobFeedbackType,
+    JobMessageClassification,
+    JobSeniority,
+    JobWorkMode,
     MessageSource,
     OpportunityStatus,
     PlanCode,
     Priority,
     RuleType,
+    SalaryPeriod,
+    SourcePrimaryFunction,
     SubscriptionStatus,
     TelegramConnectionAttemptStatus,
     TelegramConnectionStatus,
@@ -69,6 +78,279 @@ class OpportunityRead(BaseModel):
     archivedAt: datetime | None = None
     archivedByUserId: UUID | None = None
     archiveReason: str | None = None
+
+
+class JobSearchProfileWrite(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length=1, max_length=120)
+    isDefault: bool = False
+    enabled: bool = True
+    targetRoles: list[str] = Field(default_factory=list, max_length=30)
+    excludedRoles: list[str] = Field(default_factory=list, max_length=30)
+    targetIndustries: list[str] = Field(default_factory=list, max_length=30)
+    preferredSeniority: list[JobSeniority] = Field(default_factory=list)
+    candidateSkills: list[str] = Field(default_factory=list, max_length=100)
+    yearsExperience: float | None = Field(default=None, ge=0, le=80)
+    educationLevel: str | None = Field(default=None, max_length=100)
+    englishLevel: str | None = Field(default=None, max_length=100)
+    otherLanguages: list[str] = Field(default_factory=list, max_length=30)
+    preferredCountries: list[str] = Field(default_factory=list, max_length=50)
+    preferredCities: list[str] = Field(default_factory=list, max_length=50)
+    preferredTimezones: list[str] = Field(default_factory=list, max_length=50)
+    workModes: list[JobWorkMode] = Field(default_factory=list)
+    employmentTypes: list[JobEmploymentType] = Field(default_factory=list)
+    minimumSalary: Decimal | None = Field(default=None, ge=0)
+    salaryCurrency: str | None = Field(default=None, min_length=3, max_length=3)
+    salaryPeriod: SalaryPeriod | None = None
+    visaSponsorshipRequired: bool | None = None
+    relocationAcceptable: bool | None = None
+    requiredKeywords: list[str] = Field(default_factory=list, max_length=50)
+    preferredKeywords: list[str] = Field(default_factory=list, max_length=50)
+    excludedKeywords: list[str] = Field(default_factory=list, max_length=50)
+    requireSalaryDisclosed: bool = False
+    minimumMatchScore: int = Field(default=0, ge=0, le=100)
+    notificationEnabled: bool = False
+
+
+class JobSearchProfileUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str | None = Field(default=None, min_length=1, max_length=120)
+    isDefault: bool | None = None
+    enabled: bool | None = None
+    targetRoles: list[str] | None = Field(default=None, max_length=30)
+    excludedRoles: list[str] | None = Field(default=None, max_length=30)
+    targetIndustries: list[str] | None = Field(default=None, max_length=30)
+    preferredSeniority: list[JobSeniority] | None = None
+    candidateSkills: list[str] | None = Field(default=None, max_length=100)
+    yearsExperience: float | None = Field(default=None, ge=0, le=80)
+    educationLevel: str | None = Field(default=None, max_length=100)
+    englishLevel: str | None = Field(default=None, max_length=100)
+    otherLanguages: list[str] | None = Field(default=None, max_length=30)
+    preferredCountries: list[str] | None = Field(default=None, max_length=50)
+    preferredCities: list[str] | None = Field(default=None, max_length=50)
+    preferredTimezones: list[str] | None = Field(default=None, max_length=50)
+    workModes: list[JobWorkMode] | None = None
+    employmentTypes: list[JobEmploymentType] | None = None
+    minimumSalary: Decimal | None = Field(default=None, ge=0)
+    salaryCurrency: str | None = Field(default=None, min_length=3, max_length=3)
+    salaryPeriod: SalaryPeriod | None = None
+    visaSponsorshipRequired: bool | None = None
+    relocationAcceptable: bool | None = None
+    requiredKeywords: list[str] | None = Field(default=None, max_length=50)
+    preferredKeywords: list[str] | None = Field(default=None, max_length=50)
+    excludedKeywords: list[str] | None = Field(default=None, max_length=50)
+    requireSalaryDisclosed: bool | None = None
+    minimumMatchScore: int | None = Field(default=None, ge=0, le=100)
+    notificationEnabled: bool | None = None
+
+    @model_validator(mode="after")
+    def reject_null_for_required_fields(self):
+        required = {
+            "name",
+            "isDefault",
+            "enabled",
+            "targetRoles",
+            "excludedRoles",
+            "targetIndustries",
+            "preferredSeniority",
+            "candidateSkills",
+            "otherLanguages",
+            "preferredCountries",
+            "preferredCities",
+            "preferredTimezones",
+            "workModes",
+            "employmentTypes",
+            "requiredKeywords",
+            "preferredKeywords",
+            "excludedKeywords",
+            "requireSalaryDisclosed",
+            "minimumMatchScore",
+            "notificationEnabled",
+        }
+        null_fields = [name for name in required & self.model_fields_set if getattr(self, name) is None]
+        if null_fields:
+            raise ValueError(f"fields cannot be null: {', '.join(sorted(null_fields))}")
+        return self
+
+
+class JobSearchProfileRead(JobSearchProfileWrite):
+    id: UUID
+    createdAt: datetime
+    updatedAt: datetime
+
+
+class JobProfileParseRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    text: str = Field(min_length=5, max_length=4000)
+
+
+class JobProfileParseRead(JobSearchProfileWrite):
+    requiresConfirmation: bool = True
+
+
+class JobMatchRead(BaseModel):
+    eligibility: JobEligibility
+    matchScore: int = Field(ge=0, le=100)
+    matchedReasons: list[str] = Field(default_factory=list)
+    mismatchReasons: list[str] = Field(default_factory=list)
+    unknownConstraints: list[str] = Field(default_factory=list)
+    scoreBreakdown: dict[str, int] = Field(default_factory=dict)
+
+
+class JobSourceRead(BaseModel):
+    id: UUID
+    channel: IMChannel
+    chatName: str | None = None
+    authorName: str | None = None
+    postedAt: datetime
+    sourceMessageUrl: str | None = None
+    reliabilityScore: float
+
+
+class JobOpportunityRead(BaseModel):
+    opportunityId: UUID
+    jobTitle: str
+    companyName: str | None = None
+    sourceChannel: IMChannel
+    sourceChatName: str | None = None
+    postedAt: datetime
+    locationText: str | None = None
+    countryCode: str | None = None
+    city: str | None = None
+    workMode: JobWorkMode
+    employmentType: JobEmploymentType
+    seniority: JobSeniority
+    salaryRaw: str | None = None
+    salaryMin: Decimal | None = None
+    salaryMax: Decimal | None = None
+    salaryCurrency: str | None = None
+    salaryPeriod: SalaryPeriod
+    requiredSkills: list[str] = Field(default_factory=list)
+    degreeLevel: str | None = None
+    englishLevel: str | None = None
+    visaSponsorship: bool | None = None
+    applicationDeadline: datetime | None = None
+    sourceReliabilityScore: float
+    extractionConfidence: float
+    sourceCount: int = 1
+    conflictingSourceData: bool = False
+    complianceFlags: list[str] = Field(default_factory=list)
+    isExpired: bool = False
+    match: JobMatchRead | None = None
+
+
+class JobOpportunityDetailRead(JobOpportunityRead):
+    sourceMessageUrl: str | None = None
+    sourceAuthorName: str | None = None
+    department: str | None = None
+    companyIndustry: str | None = None
+    companyStage: str | None = None
+    timezone: str | None = None
+    salaryNegotiable: bool | None = None
+    equityMentioned: bool | None = None
+    requirementsSummary: str | None = None
+    preferredSkills: list[str] = Field(default_factory=list)
+    minimumYearsExperience: float | None = None
+    maximumYearsExperience: float | None = None
+    degreeRequired: bool | None = None
+    degreeField: str | None = None
+    otherLanguageRequirements: list[str] = Field(default_factory=list)
+    workAuthorizationText: str | None = None
+    relocationSupport: bool | None = None
+    ageRequirementText: str | None = None
+    ageRequirementPresent: bool = False
+    applicationUrl: str | None = None
+    contactMethods: list[dict] = Field(default_factory=list)
+    missingFields: list[str] = Field(default_factory=list)
+    fieldEvidence: dict[str, str] = Field(default_factory=dict)
+    rawExcerpt: str
+    expiredReason: str | None = None
+    sources: list[JobSourceRead] = Field(default_factory=list)
+
+
+class JobsPageRead(BaseModel):
+    items: list[JobOpportunityRead]
+    total: int
+    limit: int
+    offset: int
+    filterSummary: dict
+    profile: JobSearchProfileRead | None = None
+
+
+class JobFeedbackRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    feedbackType: JobFeedbackType
+    note: str | None = Field(default=None, max_length=1000)
+
+
+class JobFeedbackRead(BaseModel):
+    id: UUID
+    feedbackType: JobFeedbackType
+    note: str | None = None
+    updatedAt: datetime
+
+
+class JobMessageAuditRead(BaseModel):
+    id: UUID
+    messageId: UUID
+    channel: IMChannel
+    sourceName: str | None = None
+    messageExcerpt: str
+    classification: JobMessageClassification
+    confidence: float
+    filterReason: str | None = None
+    prefilterScore: float
+    agentRequired: bool
+    manuallyCorrected: bool
+    sentAt: datetime
+    updatedAt: datetime
+
+
+class JobMessageAuditPageRead(BaseModel):
+    items: list[JobMessageAuditRead]
+    total: int
+    limit: int
+    offset: int
+
+
+class JobMessageAuditCorrectionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    isJob: bool
+    note: str | None = Field(default=None, max_length=500)
+
+
+class SourceFunctionalProfileRead(BaseModel):
+    id: UUID
+    channel: IMChannel
+    externalSourceId: str
+    sourceDisplayName: str
+    sourceDescription: str | None = None
+    primaryFunction: SourcePrimaryFunction
+    effectiveFunction: SourcePrimaryFunction
+    secondaryFunctions: list[str]
+    industryTags: list[str]
+    regionTags: list[str]
+    languageTags: list[str]
+    jobSignalPrior: float
+    estimatedNoiseLevel: float
+    reliabilityScore: float
+    confidence: float
+    evidence: list[str]
+    manualOverride: SourcePrimaryFunction | None = None
+    sampledMessageCount: int
+    profiledAt: datetime
+    expiresAt: datetime
+
+
+class SourceFunctionOverrideRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    override: SourcePrimaryFunction | None
 
 
 class OpportunityDetailRead(OpportunityRead):

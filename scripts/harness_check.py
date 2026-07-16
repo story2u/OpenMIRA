@@ -25,6 +25,7 @@ REQUIRED_FILES = (
     "backend/pi-agent-runtime/src/runtime.mjs",
     "backend/uv.lock",
     "docs/README.md",
+    "docs/architecture/job-opportunity-discovery.md",
     "docs/architecture/overview.md",
     "docs/product/feature-map.md",
     "docs/development/standards.md",
@@ -45,7 +46,10 @@ REQUIRED_FILES = (
     "docs/decisions/0002-integrate-pi-as-constrained-runner.md",
     "docs/decisions/0003-enable-pi-agent-by-default.md",
     "docs/decisions/0008-revenuecat-paddle-unified-billing.md",
+    "docs/decisions/0011-job-discovery-evidence-and-deterministic-matching.md",
     "docs/integrations/revenuecat-paddle-billing.md",
+    "evals/job-discovery/README.md",
+    "evals/job-discovery/evaluate.py",
     "mobile/android/gradlew",
     "mobile/android/gradle/wrapper/gradle-wrapper.jar",
 )

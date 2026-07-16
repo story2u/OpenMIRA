@@ -37,7 +37,7 @@ struct RootView: View {
     }
 }
 
-/// 两个一级 Tab：商机看板 / 设置中心。每个 Tab 内部各自持有 NavigationStack，
+/// 三个一级 Tab：商机看板 / 工作机会 / 设置中心。每个 Tab 内部各自持有导航状态，
 /// 切 Tab 保留各自的导航栈、滚动位置、筛选与已加载数据（SwiftUI TabView 默认行为）。
 struct MainTabView: View {
     var body: some View {
@@ -45,6 +45,10 @@ struct MainTabView: View {
             DashboardView()
                 .tabItem {
                     Label(String(localized: "tab.dashboard", defaultValue: "商机"), systemImage: "tray.full")
+                }
+            JobDiscoveryView()
+                .tabItem {
+                    Label("工作机会", systemImage: "briefcase")
                 }
             SettingsView()
                 .tabItem {

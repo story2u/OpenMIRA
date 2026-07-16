@@ -1,4 +1,10 @@
 export type Platform = 'telegram' | 'wecom'
+export type JobWorkMode = 'remote' | 'hybrid' | 'on_site' | 'flexible' | 'unknown'
+export type JobEmploymentType = 'full_time' | 'part_time' | 'contract' | 'internship' | 'freelance' | 'temporary' | 'unknown'
+export type JobSeniority = 'intern' | 'junior' | 'mid' | 'senior' | 'lead' | 'manager' | 'director' | 'executive' | 'unknown'
+export type SalaryPeriod = 'hourly' | 'daily' | 'monthly' | 'annual' | 'project' | 'unknown'
+export type JobEligibility = 'eligible' | 'not_eligible' | 'unknown'
+export type JobFeedbackType = 'relevant' | 'not_relevant' | 'not_a_job' | 'duplicate' | 'expired' | 'scam' | 'wrong_extraction'
 export type PlanCode = 'free' | 'plus' | 'pro' | 'max'
 export type SubscriptionStatus = 'active' | 'trialing' | 'past_due' | 'canceled' | 'inactive'
 export type BillingStore = 'app_store' | 'play_store' | 'paddle' | 'test_store' | 'unknown'
@@ -82,6 +88,136 @@ export interface Opportunity {
   archivedAt: string | null
   archivedByUserId: string | null
   archiveReason: string | null
+}
+
+export interface JobSearchProfileInput {
+  name: string
+  isDefault: boolean
+  enabled: boolean
+  targetRoles: string[]
+  excludedRoles: string[]
+  targetIndustries: string[]
+  preferredSeniority: JobSeniority[]
+  candidateSkills: string[]
+  yearsExperience: number | null
+  educationLevel: string | null
+  englishLevel: string | null
+  otherLanguages: string[]
+  preferredCountries: string[]
+  preferredCities: string[]
+  preferredTimezones: string[]
+  workModes: JobWorkMode[]
+  employmentTypes: JobEmploymentType[]
+  minimumSalary: number | null
+  salaryCurrency: string | null
+  salaryPeriod: SalaryPeriod | null
+  visaSponsorshipRequired: boolean | null
+  relocationAcceptable: boolean | null
+  requiredKeywords: string[]
+  preferredKeywords: string[]
+  excludedKeywords: string[]
+  requireSalaryDisclosed: boolean
+  minimumMatchScore: number
+  notificationEnabled: boolean
+}
+
+export interface JobSearchProfile extends JobSearchProfileInput {
+  id: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface JobSearchProfilePreview extends JobSearchProfileInput {
+  requiresConfirmation: true
+}
+
+export interface JobMatch {
+  eligibility: JobEligibility
+  matchScore: number
+  matchedReasons: string[]
+  mismatchReasons: string[]
+  unknownConstraints: string[]
+  scoreBreakdown: Record<string, number>
+}
+
+export interface JobSource {
+  id: string
+  channel: Platform
+  chatName: string | null
+  authorName: string | null
+  postedAt: string
+  sourceMessageUrl: string | null
+  reliabilityScore: number
+}
+
+export interface JobOpportunity {
+  opportunityId: string
+  jobTitle: string
+  companyName: string | null
+  sourceChannel: Platform
+  sourceChatName: string | null
+  postedAt: string
+  locationText: string | null
+  countryCode: string | null
+  city: string | null
+  workMode: JobWorkMode
+  employmentType: JobEmploymentType
+  seniority: JobSeniority
+  salaryRaw: string | null
+  salaryMin: number | null
+  salaryMax: number | null
+  salaryCurrency: string | null
+  salaryPeriod: SalaryPeriod
+  requiredSkills: string[]
+  degreeLevel: string | null
+  englishLevel: string | null
+  visaSponsorship: boolean | null
+  applicationDeadline: string | null
+  sourceReliabilityScore: number
+  extractionConfidence: number
+  sourceCount: number
+  conflictingSourceData: boolean
+  complianceFlags: string[]
+  isExpired: boolean
+  match: JobMatch | null
+}
+
+export interface JobOpportunityDetail extends JobOpportunity {
+  sourceMessageUrl: string | null
+  sourceAuthorName: string | null
+  department: string | null
+  companyIndustry: string | null
+  companyStage: string | null
+  timezone: string | null
+  salaryNegotiable: boolean | null
+  equityMentioned: boolean | null
+  requirementsSummary: string | null
+  preferredSkills: string[]
+  minimumYearsExperience: number | null
+  maximumYearsExperience: number | null
+  degreeRequired: boolean | null
+  degreeField: string | null
+  otherLanguageRequirements: string[]
+  workAuthorizationText: string | null
+  relocationSupport: boolean | null
+  ageRequirementText: string | null
+  ageRequirementPresent: boolean
+  applicationUrl: string | null
+  contactMethods: Array<{ type: string; value: string }>
+  missingFields: string[]
+  fieldEvidence: Record<string, string>
+  rawExcerpt: string
+  expiredReason: string | null
+  sources: JobSource[]
+}
+
+export interface JobsPage {
+  items: JobOpportunity[]
+  total: number
+  limit: number
+  offset: number
+  filterSummary: Record<string, unknown>
+  profile: JobSearchProfile | null
 }
 
 export interface ChatMessage {

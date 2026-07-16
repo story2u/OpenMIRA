@@ -1,0 +1,5 @@
+{"id":"source-recruitment","name":"Example Remote AI Jobs","description":"虚构的远程技术岗位与内推交流","username":"example_remote_ai_jobs","samples":["Hiring Python engineer, remote, apply at https://jobs.example.com/1","招聘算法工程师，薪资面议"],"expected_primary_function":"recruitment"}
+{"id":"source-technical","name":"Example Python Engineering","description":"API、数据库与部署技术讨论","username":"example_python_engineering","samples":["How should we tune PostgreSQL indexes?","招 Python 后端，远程合同制"],"expected_primary_function":"technical_discussion"}
+{"id":"source-training","name":"Example Career Bootcamp","description":"付费课程与训练营通知","username":"example_training","samples":["三个月课程，本周开班","付费训练营招生"],"expected_primary_function":"education_training"}
+{"id":"source-general","name":"Example City Neighbors","description":"社区生活聊天","username":"example_neighbors","samples":["周末有社区活动吗？","附近地铁几点停运？"],"expected_primary_function":"general_chat"}
+{"id":"source-advertising","name":"Example Deals Advertising","description":"广告推广与交易信息","username":"example_deals","samples":["新品推广","限时折扣广告"],"expected_primary_function":"advertising"}

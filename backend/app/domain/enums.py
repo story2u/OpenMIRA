@@ -25,6 +25,99 @@ class OpportunityStatus(StrEnum):
     CLOSED = "closed"
 
 
+class OpportunityType(StrEnum):
+    BUSINESS = "business"
+    JOB = "job"
+
+
+class SourcePrimaryFunction(StrEnum):
+    RECRUITMENT = "recruitment"
+    JOB_REFERRAL = "job_referral"
+    CAREER_NETWORKING = "career_networking"
+    TECHNICAL_DISCUSSION = "technical_discussion"
+    INDUSTRY_COMMUNITY = "industry_community"
+    COMPANY_OFFICIAL = "company_official"
+    ALUMNI_COMMUNITY = "alumni_community"
+    GENERAL_CHAT = "general_chat"
+    EDUCATION_TRAINING = "education_training"
+    MARKETPLACE = "marketplace"
+    INVESTMENT_CRYPTO = "investment_crypto"
+    ADVERTISING = "advertising"
+    UNKNOWN = "unknown"
+
+
+class JobMessageClassification(StrEnum):
+    JOB_POST = "job_post"
+    JOB_REPOST = "job_repost"
+    CANDIDATE_SELF_PROMOTION = "candidate_self_promotion"
+    JOB_SEEKING_REQUEST = "job_seeking_request"
+    JOB_DISCUSSION = "job_discussion"
+    RECRUITER_CHATTER = "recruiter_chatter"
+    REFERRAL_REQUEST = "referral_request"
+    TRAINING_AD = "training_ad"
+    PAID_COURSE_AD = "paid_course_ad"
+    GENERIC_AD = "generic_ad"
+    SPAM = "spam"
+    SCAM = "scam"
+    UNRELATED_CHAT = "unrelated_chat"
+    UNKNOWN = "unknown"
+
+
+class JobWorkMode(StrEnum):
+    REMOTE = "remote"
+    HYBRID = "hybrid"
+    ON_SITE = "on_site"
+    FLEXIBLE = "flexible"
+    UNKNOWN = "unknown"
+
+
+class JobEmploymentType(StrEnum):
+    FULL_TIME = "full_time"
+    PART_TIME = "part_time"
+    CONTRACT = "contract"
+    INTERNSHIP = "internship"
+    FREELANCE = "freelance"
+    TEMPORARY = "temporary"
+    UNKNOWN = "unknown"
+
+
+class JobSeniority(StrEnum):
+    INTERN = "intern"
+    JUNIOR = "junior"
+    MID = "mid"
+    SENIOR = "senior"
+    LEAD = "lead"
+    MANAGER = "manager"
+    DIRECTOR = "director"
+    EXECUTIVE = "executive"
+    UNKNOWN = "unknown"
+
+
+class SalaryPeriod(StrEnum):
+    HOURLY = "hourly"
+    DAILY = "daily"
+    MONTHLY = "monthly"
+    ANNUAL = "annual"
+    PROJECT = "project"
+    UNKNOWN = "unknown"
+
+
+class JobEligibility(StrEnum):
+    ELIGIBLE = "eligible"
+    NOT_ELIGIBLE = "not_eligible"
+    UNKNOWN = "unknown"
+
+
+class JobFeedbackType(StrEnum):
+    RELEVANT = "relevant"
+    NOT_RELEVANT = "not_relevant"
+    NOT_A_JOB = "not_a_job"
+    DUPLICATE = "duplicate"
+    EXPIRED = "expired"
+    SCAM = "scam"
+    WRONG_EXTRACTION = "wrong_extraction"
+
+
 class FrontendOpportunityStatus(StrEnum):
     PENDING = "pending"
     REPLIED = "replied"

@@ -12,6 +12,7 @@ from app.domain.enums import (
     Priority,
     RuleType,
 )
+from app.domain.job_models import JobAgentAnalysis, SourceProfileAgentAssessment
 
 
 class InboundMessage(BaseModel):
@@ -26,6 +27,7 @@ class InboundMessage(BaseModel):
     group_name: str | None = None
     raw_message_links: list[str] = Field(default_factory=list)
     raw_payload: dict[str, Any] = Field(default_factory=dict)
+    sent_at: datetime | None = None
     force_human_review: bool = False
     auto_reply_allowed: bool = False
 
@@ -98,6 +100,7 @@ class AgentAnalysisRequest(BaseModel):
     group_name: str | None = Field(default=None, max_length=256)
     text: str = Field(default="", max_length=20000)
     links: list[LinkInspection] = Field(default_factory=list, max_length=10)
+    job_discovery: dict[str, Any] | None = None
 
 
 class AgentContactExtraction(BaseModel):
@@ -129,6 +132,8 @@ class AgentAnalysisResult(BaseModel):
     risk_flags: list[str] = Field(default_factory=list, max_length=20)
     contacts: AgentContactExtraction = Field(default_factory=AgentContactExtraction)
     actions: list[AgentActionRecommendation] = Field(default_factory=list, max_length=8)
+    job_analysis: JobAgentAnalysis | None = None
+    source_profile_analysis: SourceProfileAgentAssessment | None = None
 
 
 class AgentAnalysisProjection(BaseModel):

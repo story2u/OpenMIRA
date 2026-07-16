@@ -1,0 +1,10 @@
+{"id":"job-zh","text":"招聘 Python 后端工程师，20-30K，深圳，可远程，本科以上，投递 https://jobs.example.com/zh-1","source_function":"recruitment","job_signal_prior":0.9,"expected_classification":"job_post"}
+{"id":"job-tech-group","text":"Hiring Senior Go Engineer, full-time, remote, salary USD 120k annual, apply with CV","source_function":"technical_discussion","job_signal_prior":0.2,"expected_classification":"job_post"}
+{"id":"job-repost-mixed","text":"转发招聘 / Hiring: AI Engineer，Singapore hybrid，SGD 10k monthly，https://jobs.example.com/mixed","source_function":"industry_community","job_signal_prior":0.35,"expected_classification":"job_repost"}
+{"id":"candidate-self-promotion","text":"本人 5 年 Java 经验，正在求职，希望有机会内推","source_function":"career_networking","job_signal_prior":0.5,"expected_classification":"candidate_self_promotion"}
+{"id":"job-discussion","text":"大家觉得 Example Labs 这个岗位怎么样，面试难吗？","source_function":"technical_discussion","job_signal_prior":0.2,"expected_classification":"job_discussion"}
+{"id":"recruiter-chatter","text":"今天和候选人聊了岗位方向，晚点再同步反馈","source_function":"recruitment","job_signal_prior":0.9,"expected_classification":"recruiter_chatter"}
+{"id":"training-ad","text":"付费 Python 训练营，三个月包就业，现在报名","source_function":"education_training","job_signal_prior":0.1,"expected_classification":"training_ad"}
+{"id":"scam-part-time","text":"居家兼职日赚 500，不限经验，入职前先交押金","source_function":"advertising","job_signal_prior":0.1,"expected_classification":"scam"}
+{"id":"unrelated-chat","text":"今晚的技术分享改到八点，会议链接稍后发","source_function":"technical_discussion","job_signal_prior":0.2,"expected_classification":"unrelated_chat"}
+{"id":"generic-ad","text":"企业软件限时优惠，采购十套送两套","source_function":"advertising","job_signal_prior":0.1,"expected_classification":"generic_ad"}

@@ -57,6 +57,15 @@ cd backend/pi-agent-runtime && npm test
 必须同时修改 `package.json` / `package-lock.json`，使用精确版本并审查 transitive diff；禁止运行未知
 lifecycle script。
 
+工作机会发现的虚构样本确定性评估：
+
+```bash
+make job-discovery-eval
+```
+
+该命令不调用真实模型，不得把输出当作生产招聘识别准确率。使用经人工复核的 Agent 输出评分方法见
+[`evals/job-discovery/README.md`](../../evals/job-discovery/README.md)。
+
 ## 前端
 
 首次安装与常用检查：
@@ -80,7 +89,8 @@ cd mobile/ios && xcodegen generate && open OpportunityRadar.xcodeproj
 ```
 
 `ios-check` 用 xcodegen 生成工程并在 iPhone 16 Simulator 上执行 build + XCTest（不签名）。
-`make check` 不包含 `ios-check`，因为 Linux 本地环境无法执行；CI 使用独立 macOS job。
+`make check` 不包含 `ios-check`，因为 Linux 本地环境无法执行；CI 使用 Xcode 16.4 + iOS 18.5 的
+独立 macOS job，runner 缺少对应 runtime 时会先通过 `xcodebuild` 安装。
 
 ## Android App
 
@@ -99,8 +109,8 @@ make android-check                    # ./gradlew lintDebug testDebugUnitTest as
 make check
 ```
 
-依次运行 harness、uv locked sync、后端语法/lint/test、pi runtime locked install/test、前端
-lint/typecheck/build。需要安装 uv、Node/npm 与 pnpm。
+依次运行 harness、uv locked sync、后端语法/lint/test、pi runtime locked install/test、工作机会
+确定性评估、前端 lint/typecheck/test/build。需要安装 uv、Node/npm 与 pnpm。
 
 ## Docker 集成环境
 
