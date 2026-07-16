@@ -89,7 +89,8 @@ cd mobile/ios && xcodegen generate && open OpportunityRadar.xcodeproj
 ```
 
 `ios-check` 用 xcodegen 生成工程并在 iPhone 16 Simulator 上执行 build + XCTest（不签名）。
-`make check` 不包含 `ios-check`，因为 Linux 本地环境无法执行；CI 使用独立 macOS job。
+`make check` 不包含 `ios-check`，因为 Linux 本地环境无法执行；CI 使用 Xcode 16.4 + iOS 18.5 的
+独立 macOS job，runner 缺少对应 runtime 时会先通过 `xcodebuild` 安装。
 
 ## Android App
 
