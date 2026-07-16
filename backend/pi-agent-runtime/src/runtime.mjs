@@ -5,6 +5,8 @@ import { Type } from 'typebox'
 import { JOB_DISCOVERY_PROMPT } from './job-discovery/prompts.mjs'
 import { validateJobAnalysisContext } from './job-discovery/policy.mjs'
 import { JobAnalysisSchema } from './job-discovery/schemas.mjs'
+import { JobSearchProfilePreviewSchema } from './job-discovery/schemas.mjs'
+import { PREFERENCE_PARSE_PROMPT } from './job-discovery/preference-parser.mjs'
 
 const nullableString = (options) => Type.Union([Type.Null(), Type.String(options)])
 
@@ -141,5 +143,60 @@ export async function runAnalysis(input, options = {}) {
   if (agent.state.errorMessage) throw new Error('pi agent provider request failed')
   if (!submitted) throw new Error('pi agent did not submit a structured analysis')
   validateJobAnalysisContext(input, submitted)
+  return submitted
+}
+
+export async function runPreferenceParse(input, options = {}) {
+  const provider = options.provider ?? process.env.PI_AGENT_PROVIDER ?? 'openai'
+  const modelId = options.model ?? process.env.PI_AGENT_MODEL ?? 'gpt-4o-mini'
+  const apiKey = options.apiKey ?? process.env.PI_AGENT_API_KEY
+  if (!apiKey) throw new Error('PI_AGENT_API_KEY is required')
+  if (typeof input?.text !== 'string' || input.text.length < 5 || input.text.length > 4000) {
+    throw new Error('job profile text is invalid')
+  }
+  const model = (options.getModelImpl ?? getModel)(provider, modelId)
+  if (!model) throw new Error(`Unknown pi model: ${provider}/${modelId}`)
+
+  let submitted
+  const submitTool = {
+    name: 'submit_job_search_profile',
+    label: 'Submit job search profile preview',
+    description: 'Submit a structured preview that the user must confirm before saving.',
+    parameters: JobSearchProfilePreviewSchema,
+    executionMode: 'sequential',
+    execute: async (_toolCallId, params) => {
+      if (submitted) throw new Error('submit_job_search_profile may only be called once')
+      submitted = params
+      return { content: [{ type: 'text', text: 'Profile preview accepted.' }], details: {}, terminate: true }
+    },
+  }
+  const AgentImpl = options.AgentImpl ?? Agent
+  const agent = new AgentImpl({
+    initialState: {
+      systemPrompt: PREFERENCE_PARSE_PROMPT,
+      model,
+      thinkingLevel: 'low',
+      tools: [submitTool],
+      messages: [],
+    },
+    getApiKey: () => apiKey,
+    streamFn: options.streamFn,
+    toolExecution: 'sequential',
+    beforeToolCall: async ({ toolCall }) =>
+      toolCall.name === 'submit_job_search_profile'
+        ? undefined
+        : { block: true, reason: 'Only submit_job_search_profile is allowed' },
+  })
+  await agent.prompt(
+    `Parse the following untrusted user preference text as a preview.\n` +
+      `<preference-data>${serializeUntrustedInput({ text: input.text })}</preference-data>`,
+  )
+  if (agent.state.errorMessage) throw new Error('pi agent provider request failed')
+  if (!submitted) throw new Error('pi agent did not submit a profile preview')
+  for (const key of Object.keys(submitted)) {
+    if (['age', 'gender', 'race', 'ethnicity', 'religion', 'marital_status', 'disability'].includes(key)) {
+      throw new Error('protected profile field is not allowed')
+    }
+  }
   return submitted
 }

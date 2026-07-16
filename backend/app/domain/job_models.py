@@ -86,3 +86,33 @@ class JobAgentAnalysis(BaseModel):
             }
             and self.job is not None
         )
+
+
+class JobSearchProfilePreview(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    target_roles: list[str] = Field(default_factory=list, max_length=30)
+    excluded_roles: list[str] = Field(default_factory=list, max_length=30)
+    target_industries: list[str] = Field(default_factory=list, max_length=30)
+    preferred_seniority: list[JobSeniority] = Field(default_factory=list)
+    candidate_skills: list[str] = Field(default_factory=list, max_length=100)
+    years_experience: float | None = Field(default=None, ge=0, le=80)
+    education_level: str | None = Field(default=None, max_length=100)
+    english_level: str | None = Field(default=None, max_length=100)
+    other_languages: list[str] = Field(default_factory=list, max_length=30)
+    preferred_countries: list[str] = Field(default_factory=list, max_length=50)
+    preferred_cities: list[str] = Field(default_factory=list, max_length=50)
+    preferred_timezones: list[str] = Field(default_factory=list, max_length=50)
+    work_modes: list[JobWorkMode] = Field(default_factory=list)
+    employment_types: list[JobEmploymentType] = Field(default_factory=list)
+    minimum_salary: Decimal | None = Field(default=None, ge=0)
+    salary_currency: str | None = Field(default=None, min_length=3, max_length=3)
+    salary_period: SalaryPeriod | None = None
+    visa_sponsorship_required: bool | None = None
+    relocation_acceptable: bool | None = None
+    required_keywords: list[str] = Field(default_factory=list, max_length=50)
+    preferred_keywords: list[str] = Field(default_factory=list, max_length=50)
+    excluded_keywords: list[str] = Field(default_factory=list, max_length=50)
+    require_salary_disclosed: bool = False
+    minimum_match_score: int = Field(default=0, ge=0, le=100)
+    notification_enabled: bool = False
+    requires_confirmation: bool = True

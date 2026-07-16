@@ -7,6 +7,7 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
+from app.domain.job_models import JobSearchProfilePreview
 from app.domain.ports import AgentAnalysisRequest, AgentAnalysisResult
 
 
@@ -35,6 +36,22 @@ class PiAgentClient:
         self.max_output_bytes = max_output_bytes
 
     async def analyze(self, request: AgentAnalysisRequest) -> AgentAnalysisResult:
+        raw_result = await self._execute(request.model_dump(mode="json"))
+        try:
+            return AgentAnalysisResult.model_validate(raw_result)
+        except ValidationError as exc:
+            raise PiAgentError("pi agent returned an invalid analysis contract") from exc
+
+    async def parse_job_search_profile(self, text: str) -> JobSearchProfilePreview:
+        raw_result = await self._execute(
+            {"task": "parse_job_search_profile", "text": text}
+        )
+        try:
+            return JobSearchProfilePreview.model_validate(raw_result)
+        except ValidationError as exc:
+            raise PiAgentError("pi agent returned an invalid profile contract") from exc
+
+    async def _execute(self, payload: dict) -> dict:
         if not self.api_key:
             raise PiAgentError("pi agent API key is not configured")
         if not self.runner_path.is_file():
@@ -57,10 +74,10 @@ class PiAgentClient:
             stderr=asyncio.subprocess.PIPE,
             env=env,
         )
-        payload = json.dumps(request.model_dump(mode="json"), ensure_ascii=False).encode()
+        encoded_payload = json.dumps(payload, ensure_ascii=False).encode()
         try:
             stdout, _stderr = await asyncio.wait_for(
-                process.communicate(payload),
+                process.communicate(encoded_payload),
                 timeout=self.timeout_seconds,
             )
         except TimeoutError as exc:
@@ -79,6 +96,8 @@ class PiAgentClient:
             raise PiAgentError("pi agent returned an empty or oversized response")
         try:
             raw_result = json.loads(stdout)
-            return AgentAnalysisResult.model_validate(raw_result)
-        except (json.JSONDecodeError, ValidationError, TypeError) as exc:
-            raise PiAgentError("pi agent returned an invalid analysis contract") from exc
+            if not isinstance(raw_result, dict):
+                raise TypeError("result must be an object")
+            return raw_result
+        except (json.JSONDecodeError, TypeError) as exc:
+            raise PiAgentError("pi agent returned invalid JSON") from exc

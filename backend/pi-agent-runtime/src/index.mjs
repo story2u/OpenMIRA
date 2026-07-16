@@ -1,6 +1,6 @@
 import process from 'node:process'
 
-import { runAnalysis } from './runtime.mjs'
+import { runAnalysis, runPreferenceParse } from './runtime.mjs'
 
 async function readStdin(maxBytes = 512_000) {
   const chunks = []
@@ -16,7 +16,9 @@ async function readStdin(maxBytes = 512_000) {
 
 try {
   const input = await readStdin()
-  const result = await runAnalysis(input)
+  const result = input?.task === 'parse_job_search_profile'
+    ? await runPreferenceParse(input)
+    : await runAnalysis(input)
   process.stdout.write(JSON.stringify(result))
 } catch (error) {
   const message = error instanceof Error ? error.message : 'unknown error'

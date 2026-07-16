@@ -622,6 +622,9 @@ class JobOpportunitySource(TimestampMixin, table=True):
     opportunity_id: UUID = Field(foreign_key="opportunities.id", index=True)
     message_id: UUID = Field(foreign_key="messages.id", index=True)
     owner_user_id: UUID = Field(foreign_key="users.id", index=True)
+    source_channel: IMChannel = Field(
+        sa_column=Column(SAEnum(IMChannel, native_enum=False), nullable=False, index=True)
+    )
     source_message_url: str | None = Field(default=None, max_length=2000)
     source_chat_name: str | None = Field(default=None, max_length=500)
     source_author_name: str | None = Field(default=None, max_length=500)

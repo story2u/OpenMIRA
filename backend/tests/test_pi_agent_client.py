@@ -92,3 +92,53 @@ async def test_pi_agent_client_kills_timed_out_runner(tmp_path) -> None:
 
     with pytest.raises(PiAgentError, match="timed out"):
         await client.analyze(request())
+
+
+async def test_pi_agent_client_validates_job_profile_preview(tmp_path) -> None:
+    runner = tmp_path / "runner.py"
+    preview = {
+        "name": "远程后端",
+        "target_roles": ["Python Backend Engineer"],
+        "excluded_roles": [],
+        "target_industries": [],
+        "preferred_seniority": ["mid"],
+        "candidate_skills": ["Python", "FastAPI"],
+        "years_experience": 3,
+        "education_level": None,
+        "english_level": None,
+        "other_languages": [],
+        "preferred_countries": [],
+        "preferred_cities": [],
+        "preferred_timezones": ["Europe/Berlin"],
+        "work_modes": ["remote"],
+        "employment_types": ["full_time"],
+        "minimum_salary": 80000,
+        "salary_currency": "USD",
+        "salary_period": "annual",
+        "visa_sponsorship_required": True,
+        "relocation_acceptable": None,
+        "required_keywords": [],
+        "preferred_keywords": [],
+        "excluded_keywords": [],
+        "require_salary_disclosed": False,
+        "minimum_match_score": 60,
+        "notification_enabled": False,
+        "requires_confirmation": True,
+    }
+    runner.write_text(
+        f"import json, sys\njson.load(sys.stdin)\njson.dump({preview!r}, sys.stdout)\n",
+        encoding="utf-8",
+    )
+    client = PiAgentClient(
+        node_binary=sys.executable,
+        runner_path=str(runner),
+        provider="fake",
+        model="fake",
+        api_key="secret",
+        timeout_seconds=2,
+    )
+
+    result = await client.parse_job_search_profile("远程 Python 后端，欧洲时区")
+
+    assert result.requires_confirmation is True
+    assert result.work_modes == ["remote"]

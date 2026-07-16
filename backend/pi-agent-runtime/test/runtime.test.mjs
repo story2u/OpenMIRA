@@ -3,7 +3,12 @@ import test from 'node:test'
 
 import { fauxAssistantMessage, fauxProvider, fauxToolCall } from '@earendil-works/pi-ai/providers/faux'
 
-import { createSubmitAnalysisTool, runAnalysis, serializeUntrustedInput } from '../src/runtime.mjs'
+import {
+  createSubmitAnalysisTool,
+  runAnalysis,
+  runPreferenceParse,
+  serializeUntrustedInput,
+} from '../src/runtime.mjs'
 
 const analysis = {
   is_opportunity: true,
@@ -131,4 +136,33 @@ test('runner fails closed when the model does not submit analysis', async () => 
     ),
     /did not submit/,
   )
+})
+
+test('preference parser returns a confirmation-only profile without protected attributes', async () => {
+  const faux = fauxProvider()
+  const preview = {
+    name: '远程后端', target_roles: ['Python Backend Engineer'], excluded_roles: [],
+    target_industries: [], preferred_seniority: ['mid'], candidate_skills: ['Python'],
+    years_experience: 3, education_level: null, english_level: null, other_languages: [],
+    preferred_countries: [], preferred_cities: [], preferred_timezones: ['Europe/Berlin'],
+    work_modes: ['remote'], employment_types: ['full_time'], minimum_salary: 80000,
+    salary_currency: 'USD', salary_period: 'annual', visa_sponsorship_required: true,
+    relocation_acceptable: null, required_keywords: [], preferred_keywords: [], excluded_keywords: [],
+    require_salary_disclosed: false, minimum_match_score: 60, notification_enabled: false,
+    requires_confirmation: true,
+  }
+  faux.setResponses([
+    fauxAssistantMessage(fauxToolCall('submit_job_search_profile', preview), { stopReason: 'toolUse' }),
+  ])
+
+  const result = await runPreferenceParse(
+    { text: '远程 Python 后端，欧洲时区，年薪至少八万美元，需要签证支持' },
+    {
+      apiKey: 'test-key', getModelImpl: () => faux.getModel(),
+      streamFn: (model, context, options) => faux.provider.streamSimple(model, context, options),
+    },
+  )
+
+  assert.equal(result.requires_confirmation, true)
+  assert.equal(Object.hasOwn(result, 'age'), false)
 })

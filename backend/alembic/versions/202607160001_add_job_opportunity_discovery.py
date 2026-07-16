@@ -282,6 +282,7 @@ def upgrade() -> None:
         sa.Column("opportunity_id", sa.Uuid(), nullable=False),
         sa.Column("message_id", sa.Uuid(), nullable=False),
         sa.Column("owner_user_id", sa.Uuid(), nullable=False),
+        sa.Column("source_channel", sa.String(32), nullable=False),
         sa.Column("source_message_url", sa.String(2000), nullable=True),
         sa.Column("source_chat_name", sa.String(500), nullable=True),
         sa.Column("source_author_name", sa.String(500), nullable=True),
@@ -295,7 +296,7 @@ def upgrade() -> None:
             "opportunity_id", "message_id", name="uq_job_sources_opportunity_message"
         ),
     )
-    for column in ("opportunity_id", "message_id", "owner_user_id"):
+    for column in ("opportunity_id", "message_id", "owner_user_id", "source_channel"):
         op.create_index(f"ix_job_opportunity_sources_{column}", "job_opportunity_sources", [column])
 
     op.create_table(

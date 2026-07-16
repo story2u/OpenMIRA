@@ -23,6 +23,7 @@ from app.domain.enums import (
     FrontendOpportunityStatus,
     IMChannel,
     JobMessageClassification,
+    JobFeedbackType,
     OpportunityType,
     MessageDirection,
     MessageSource,
@@ -64,6 +65,7 @@ from app.infrastructure.db.models import (
     BillingSubscription,
     JobMessageAudit,
     JobOpportunityDetail,
+    JobOpportunityFeedback,
     JobOpportunityMatch,
     JobOpportunitySource,
     JobSearchProfile,
@@ -727,7 +729,7 @@ class SubscriptionRepository:
         self,
         *,
         user_id: UUID,
-        message_id: UUID,
+        message_id: UUID | None,
         idempotency_key: str,
         now: datetime | None = None,
     ) -> UsageReservation:
@@ -1433,7 +1435,9 @@ class OpportunityRepository:
         limit: int = 100,
         offset: int = 0,
     ) -> list[Opportunity]:
-        statement = select(Opportunity)
+        statement = select(Opportunity).where(
+            Opportunity.opportunity_type == OpportunityType.BUSINESS
+        )
         if frontend_status:
             statement = statement.where(
                 Opportunity.status.in_(FRONTEND_STATUS_MAP[frontend_status])
@@ -1470,6 +1474,7 @@ class OpportunityRepository:
 
         clauses = [
             Opportunity.owner_user_id == owner_user_id,
+            Opportunity.opportunity_type == OpportunityType.BUSINESS,
             Opportunity.archived_at.is_(None),
         ]
         if frontend_status:
@@ -1557,6 +1562,7 @@ class OpportunityRepository:
             .select_from(Opportunity)
             .where(
                 Opportunity.owner_user_id == owner_user_id,
+                Opportunity.opportunity_type == OpportunityType.BUSINESS,
                 Opportunity.archived_at.is_(None),
                 Opportunity.status.in_(FRONTEND_STATUS_MAP[FrontendOpportunityStatus.PENDING]),
             )
@@ -1569,6 +1575,7 @@ class OpportunityRepository:
             select(Opportunity)
             .where(
                 Opportunity.owner_user_id == owner_user_id,
+                Opportunity.opportunity_type == OpportunityType.BUSINESS,
                 Opportunity.archived_at.is_(None),
                 Opportunity.attention_required.is_(True),
                 Opportunity.status.in_(FRONTEND_STATUS_MAP[FrontendOpportunityStatus.PENDING]),
@@ -1583,6 +1590,7 @@ class OpportunityRepository:
         """当前用户真实商机里出现过的关键词并集（用于筛选面板选项）。"""
         statement = select(Opportunity.matched_keywords).where(
             Opportunity.owner_user_id == owner_user_id,
+            Opportunity.opportunity_type == OpportunityType.BUSINESS,
             Opportunity.archived_at.is_(None),
             func.jsonb_array_length(col(Opportunity.matched_keywords)) > 0,
         )
@@ -4073,6 +4081,184 @@ class JobOpportunityRepository:
             .order_by(col(JobOpportunitySource.posted_at).desc())
         )
         return list(result.all())
+
+    async def list_canonical_ids(self, owner_user_id: UUID) -> list[UUID]:
+        result = await self.session.exec(
+            select(Opportunity.id)
+            .join(JobOpportunityDetail, JobOpportunityDetail.opportunity_id == Opportunity.id)
+            .where(
+                Opportunity.owner_user_id == owner_user_id,
+                Opportunity.opportunity_type == OpportunityType.JOB,
+                JobOpportunityDetail.duplicate_group_id.is_(None),
+            )
+        )
+        return list(result.all())
+
+    async def source_counts(
+        self, opportunity_ids: list[UUID], owner_user_id: UUID
+    ) -> dict[UUID, int]:
+        if not opportunity_ids:
+            return {}
+        result = await self.session.exec(
+            select(JobOpportunitySource.opportunity_id, func.count())
+            .where(
+                JobOpportunitySource.owner_user_id == owner_user_id,
+                col(JobOpportunitySource.opportunity_id).in_(opportunity_ids),
+            )
+            .group_by(JobOpportunitySource.opportunity_id)
+        )
+        return {opportunity_id: int(count) for opportunity_id, count in result.all()}
+
+    async def list_for_owner(
+        self,
+        *,
+        owner_user_id: UUID,
+        profile_id: UUID | None,
+        query: str | None,
+        source: IMChannel | None,
+        posted_from: datetime | None,
+        posted_to: datetime | None,
+        work_mode: str | None,
+        employment_type: str | None,
+        seniority: str | None,
+        country: str | None,
+        city: str | None,
+        salary_min: float | None,
+        salary_currency: str | None,
+        salary_disclosed: bool | None,
+        degree_level: str | None,
+        english_level: str | None,
+        visa_sponsorship: bool | None,
+        minimum_match_score: int | None,
+        age_requirement_present: bool | None,
+        exclude_expired: bool,
+        sort: str,
+        limit: int,
+        offset: int,
+    ) -> tuple[list[tuple[Opportunity, JobOpportunityDetail, JobOpportunityMatch | None]], int]:
+        statement = (
+            select(Opportunity, JobOpportunityDetail, JobOpportunityMatch)
+            .join(JobOpportunityDetail, JobOpportunityDetail.opportunity_id == Opportunity.id)
+            .outerjoin(
+                JobOpportunityMatch,
+                (JobOpportunityMatch.opportunity_id == Opportunity.id)
+                & (JobOpportunityMatch.job_search_profile_id == profile_id),
+            )
+            .where(
+                Opportunity.owner_user_id == owner_user_id,
+                Opportunity.opportunity_type == OpportunityType.JOB,
+                Opportunity.archived_at.is_(None),
+                JobOpportunityDetail.duplicate_group_id.is_(None),
+            )
+        )
+        if profile_id is None:
+            statement = statement.where(JobOpportunityMatch.id.is_(None))
+        if query:
+            pattern = f"%{query.strip()[:200]}%"
+            statement = statement.where(
+                or_(
+                    JobOpportunityDetail.job_title.ilike(pattern),
+                    JobOpportunityDetail.company_name.ilike(pattern),
+                    JobOpportunityDetail.requirements_summary.ilike(pattern),
+                )
+            )
+        if source:
+            statement = statement.where(JobOpportunityDetail.source_channel == source)
+        if posted_from:
+            statement = statement.where(JobOpportunityDetail.posted_at >= posted_from)
+        if posted_to:
+            statement = statement.where(JobOpportunityDetail.posted_at <= posted_to)
+        if work_mode:
+            statement = statement.where(JobOpportunityDetail.work_mode == work_mode)
+        if employment_type:
+            statement = statement.where(JobOpportunityDetail.employment_type == employment_type)
+        if seniority:
+            statement = statement.where(JobOpportunityDetail.seniority == seniority)
+        if country:
+            statement = statement.where(JobOpportunityDetail.country_code == country.upper())
+        if city:
+            statement = statement.where(func.lower(JobOpportunityDetail.city) == city.casefold())
+        if salary_min is not None:
+            statement = statement.where(JobOpportunityDetail.salary_max >= salary_min)
+        if salary_currency:
+            statement = statement.where(
+                JobOpportunityDetail.salary_currency == salary_currency.upper()
+            )
+        if salary_disclosed is True:
+            statement = statement.where(JobOpportunityDetail.salary_raw.is_not(None))
+        elif salary_disclosed is False:
+            statement = statement.where(JobOpportunityDetail.salary_raw.is_(None))
+        if degree_level:
+            statement = statement.where(JobOpportunityDetail.degree_level == degree_level)
+        if english_level:
+            statement = statement.where(JobOpportunityDetail.english_level == english_level)
+        if visa_sponsorship is not None:
+            statement = statement.where(
+                JobOpportunityDetail.visa_sponsorship == visa_sponsorship
+            )
+        if minimum_match_score is not None:
+            statement = statement.where(JobOpportunityMatch.match_score >= minimum_match_score)
+        if age_requirement_present is not None:
+            statement = statement.where(
+                JobOpportunityDetail.age_requirement_present == age_requirement_present
+            )
+        if exclude_expired:
+            statement = statement.where(JobOpportunityDetail.is_expired.is_(False))
+
+        count_statement = select(func.count()).select_from(statement.subquery())
+        total_result = await self.session.exec(count_statement)
+        total = int(total_result.one())
+        if sort == "match":
+            statement = statement.order_by(
+                col(JobOpportunityMatch.match_score).desc(),
+                col(JobOpportunityDetail.posted_at).desc(),
+            )
+        elif sort == "salary":
+            statement = statement.order_by(
+                col(JobOpportunityDetail.salary_max).desc().nullslast(),
+                col(JobOpportunityDetail.posted_at).desc(),
+            )
+        elif sort == "confidence":
+            statement = statement.order_by(
+                col(JobOpportunityDetail.extraction_confidence).desc(),
+                col(JobOpportunityDetail.posted_at).desc(),
+            )
+        elif sort == "source_reliability":
+            statement = statement.order_by(
+                col(JobOpportunityDetail.source_reliability_score).desc(),
+                col(JobOpportunityDetail.posted_at).desc(),
+            )
+        else:
+            statement = statement.order_by(col(JobOpportunityDetail.posted_at).desc())
+        result = await self.session.exec(statement.offset(offset).limit(limit))
+        return list(result.all()), total
+
+    async def save_feedback(
+        self,
+        *,
+        opportunity_id: UUID,
+        owner_user_id: UUID,
+        feedback_type: JobFeedbackType,
+        note: str | None,
+    ) -> JobOpportunityFeedback:
+        result = await self.session.exec(
+            select(JobOpportunityFeedback).where(
+                JobOpportunityFeedback.opportunity_id == opportunity_id,
+                JobOpportunityFeedback.owner_user_id == owner_user_id,
+            )
+        )
+        feedback = result.first() or JobOpportunityFeedback(
+            opportunity_id=opportunity_id,
+            owner_user_id=owner_user_id,
+            feedback_type=feedback_type,
+        )
+        feedback.feedback_type = feedback_type
+        feedback.note = note
+        feedback.updated_at = utc_now()
+        self.session.add(feedback)
+        await self.session.commit()
+        await self.session.refresh(feedback)
+        return feedback
 
 
 class JobSearchProfileRepository:

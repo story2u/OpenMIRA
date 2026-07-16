@@ -161,6 +161,7 @@ class PersistJobOpportunityUseCase:
             opportunity_id=opportunity.id,
             message_id=message.id,
             owner_user_id=message.owner_user_id,
+            source_channel=message.channel,
             source_message_url=source_message_url,
             source_chat_name=message.group_name,
             source_author_name=message.sender_display_name,

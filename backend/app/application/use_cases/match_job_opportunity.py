@@ -44,6 +44,27 @@ class MatchJobOpportunityUseCase:
             )
         return len(profiles)
 
+    async def execute_for_profile(self, profile: JobSearchProfile) -> int:
+        opportunity_ids = await self.job_repo.list_canonical_ids(profile.user_id)
+        for opportunity_id in opportunity_ids:
+            pair = await self.job_repo.get_detail_for_owner(opportunity_id, profile.user_id)
+            if not pair:
+                continue
+            _, detail = pair
+            decision = calculate_job_match(self._job_facts(detail), self._preferences(profile))
+            await self.match_repo.upsert(
+                opportunity_id=opportunity_id,
+                profile_id=profile.id,
+                owner_user_id=profile.user_id,
+                eligibility=decision.eligibility,
+                match_score=decision.match_score,
+                matched_reasons=decision.matched_reasons,
+                mismatch_reasons=decision.mismatch_reasons,
+                unknown_constraints=decision.unknown_constraints,
+                score_breakdown=decision.score_breakdown,
+            )
+        return len(opportunity_ids)
+
     @staticmethod
     def _job_facts(detail: JobOpportunityDetail) -> JobFacts:
         return JobFacts(

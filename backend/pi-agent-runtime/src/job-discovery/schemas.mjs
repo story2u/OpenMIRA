@@ -106,3 +106,57 @@ export const JobAnalysisSchema = Type.Union([
     { additionalProperties: false },
   ),
 ])
+
+const profileSeniority = Type.Union(
+  ['intern', 'junior', 'mid', 'senior', 'lead', 'manager', 'director', 'executive', 'unknown'].map(
+    (value) => Type.Literal(value),
+  ),
+)
+
+export const JobSearchProfilePreviewSchema = Type.Object(
+  {
+    name: Type.String({ minLength: 1, maxLength: 120 }),
+    target_roles: shortStrings(),
+    excluded_roles: shortStrings(),
+    target_industries: shortStrings(),
+    preferred_seniority: Type.Array(profileSeniority, { maxItems: 10 }),
+    candidate_skills: shortStrings(100),
+    years_experience: nullableNumber,
+    education_level: nullableString(100),
+    english_level: nullableString(100),
+    other_languages: shortStrings(),
+    preferred_countries: shortStrings(50),
+    preferred_cities: shortStrings(50),
+    preferred_timezones: shortStrings(50),
+    work_modes: Type.Array(
+      Type.Union(['remote', 'hybrid', 'on_site', 'flexible', 'unknown'].map((value) => Type.Literal(value))),
+      { maxItems: 5 },
+    ),
+    employment_types: Type.Array(
+      Type.Union(
+        ['full_time', 'part_time', 'contract', 'internship', 'freelance', 'temporary', 'unknown'].map(
+          (value) => Type.Literal(value),
+        ),
+      ),
+      { maxItems: 7 },
+    ),
+    minimum_salary: nullableNumber,
+    salary_currency: Type.Union([Type.Null(), Type.String({ minLength: 3, maxLength: 3 })]),
+    salary_period: Type.Union([
+      Type.Null(),
+      ...['hourly', 'daily', 'monthly', 'annual', 'project', 'unknown'].map((value) =>
+        Type.Literal(value),
+      ),
+    ]),
+    visa_sponsorship_required: nullableBoolean,
+    relocation_acceptable: nullableBoolean,
+    required_keywords: shortStrings(50),
+    preferred_keywords: shortStrings(50),
+    excluded_keywords: shortStrings(50),
+    require_salary_disclosed: Type.Boolean(),
+    minimum_match_score: Type.Integer({ minimum: 0, maximum: 100 }),
+    notification_enabled: Type.Boolean(),
+    requires_confirmation: Type.Literal(true),
+  },
+  { additionalProperties: false },
+)
