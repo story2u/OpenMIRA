@@ -1,6 +1,6 @@
 'use client'
 
-import { BookText, LayoutGrid, LogOut, Moon, Settings, Sun, UserRound } from 'lucide-react'
+import { BookText, BriefcaseBusiness, LayoutGrid, LogOut, Moon, Settings, Sun, UserRound } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useTheme } from 'next-themes'
@@ -14,6 +14,7 @@ import { cn } from '@/lib/utils'
 
 const navItems = [
   { href: '/', label: '商机看板', icon: LayoutGrid },
+  { href: '/jobs', label: '工作机会', icon: BriefcaseBusiness },
   { href: '/templates', label: '回复模板', icon: BookText },
   { href: '/settings', label: '设置中心', icon: Settings },
 ]
