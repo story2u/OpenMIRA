@@ -61,6 +61,9 @@ Node TypeBox 和 Python Pydantic 双重校验。
 
 - 档案：`/api/v1/job-search-profiles` CRUD 与 `/parse` 预览，解析结果必须由用户确认后保存。
 - 职位：`GET /api/v1/jobs`、`GET /jobs/{id}`、`POST /jobs/{id}/feedback`。
+- 误判审计：`GET /api/v1/job-message-audits`、
+  `PATCH /job-message-audits/{id}/correction`。接口只返回 owner 自有消息的有限摘要；人工纠正
+  进入评估审计，不绕过 UsageLedger 自动调用模型或创建职位。
 - 来源画像：`GET/PATCH .../functional-profile` 与 `POST .../recompute`。
 - Web：`/jobs`、`/jobs/[id]`、`/settings/job-search`。
 - iOS/Android：工作机会一级入口、列表、详情、档案和筛选；都通过各自唯一 API boundary。
@@ -74,4 +77,3 @@ Node TypeBox 和 Python Pydantic 双重校验。
 不记录 prompt、完整输出、凭据或 Telegram Session。离线虚构数据位于 `evals/job-discovery/`；
 `make job-discovery-eval` 只验证规则路由、确定性匹配和评估 harness。真实 Pi Agent 提取、真实群噪音、
 多语言表现与生产阈值必须用经授权脱敏的金标样本另行验证。
-

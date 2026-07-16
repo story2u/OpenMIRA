@@ -3901,6 +3901,70 @@ class JobMessageAuditRepository:
         )
         return result.first()
 
+    async def list_for_owner(
+        self,
+        *,
+        owner_user_id: UUID,
+        classification: JobMessageClassification | None,
+        manually_corrected: bool | None,
+        limit: int,
+        offset: int,
+    ) -> tuple[list[tuple[JobMessageAudit, Message]], int]:
+        filters = [JobMessageAudit.owner_user_id == owner_user_id]
+        if classification is not None:
+            filters.append(JobMessageAudit.classification == classification)
+        if manually_corrected is not None:
+            filters.append(JobMessageAudit.manually_corrected == manually_corrected)
+        statement = (
+            select(JobMessageAudit, Message)
+            .join(Message, Message.id == JobMessageAudit.message_id)
+            .where(*filters)
+            .order_by(JobMessageAudit.updated_at.desc())
+            .offset(offset)
+            .limit(limit)
+        )
+        count_statement = select(func.count(JobMessageAudit.id)).where(*filters)
+        rows = list((await self.session.exec(statement)).all())
+        total = int((await self.session.exec(count_statement)).one())
+        return rows, total
+
+    async def correct_for_owner(
+        self,
+        *,
+        audit_id: UUID,
+        owner_user_id: UUID,
+        is_job: bool,
+        note: str | None,
+    ) -> tuple[JobMessageAudit, Message] | None:
+        result = await self.session.exec(
+            select(JobMessageAudit, Message)
+            .join(Message, Message.id == JobMessageAudit.message_id)
+            .where(
+                JobMessageAudit.id == audit_id,
+                JobMessageAudit.owner_user_id == owner_user_id,
+            )
+        )
+        row = result.first()
+        if not row:
+            return None
+        audit, message = row
+        previous = audit.classification.value
+        audit.classification = (
+            JobMessageClassification.JOB_POST
+            if is_job
+            else JobMessageClassification.UNRELATED_CHAT
+        )
+        audit.manually_corrected = True
+        correction = f"manual correction: {previous} -> {audit.classification.value}"
+        if note:
+            correction = f"{correction}; {note.strip()}"
+        audit.filter_reason = correction[:1000]
+        audit.updated_at = utc_now()
+        self.session.add(audit)
+        await self.session.commit()
+        await self.session.refresh(audit)
+        return audit, message
+
     async def record(
         self,
         *,

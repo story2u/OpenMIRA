@@ -16,6 +16,7 @@ from app.domain.enums import (
     JobEligibility,
     JobEmploymentType,
     JobFeedbackType,
+    JobMessageClassification,
     JobSeniority,
     JobWorkMode,
     MessageSource,
@@ -291,6 +292,36 @@ class JobFeedbackRead(BaseModel):
     feedbackType: JobFeedbackType
     note: str | None = None
     updatedAt: datetime
+
+
+class JobMessageAuditRead(BaseModel):
+    id: UUID
+    messageId: UUID
+    channel: IMChannel
+    sourceName: str | None = None
+    messageExcerpt: str
+    classification: JobMessageClassification
+    confidence: float
+    filterReason: str | None = None
+    prefilterScore: float
+    agentRequired: bool
+    manuallyCorrected: bool
+    sentAt: datetime
+    updatedAt: datetime
+
+
+class JobMessageAuditPageRead(BaseModel):
+    items: list[JobMessageAuditRead]
+    total: int
+    limit: int
+    offset: int
+
+
+class JobMessageAuditCorrectionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    isJob: bool
+    note: str | None = Field(default=None, max_length=500)
 
 
 class SourceFunctionalProfileRead(BaseModel):

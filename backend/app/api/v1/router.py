@@ -4,14 +4,15 @@ from app.api.v1.routes import (
     auth,
     configs,
     health,
+    job_message_audits,
     job_search_profiles,
     jobs,
     messages,
     opportunities,
     rules,
     settings,
-    stats,
     source_profiles,
+    stats,
     subscriptions,
     telegram_connections,
     telegram_user_configs,
@@ -19,8 +20,8 @@ from app.api.v1.routes import (
     webhooks_revenuecat,
     webhooks_telegram,
     webhooks_wecom,
-    wecom_connections,
     wecom_archive_connections,
+    wecom_connections,
 )
 
 api_router = APIRouter()
@@ -33,6 +34,11 @@ api_router.include_router(
 )
 api_router.include_router(opportunities.router, prefix="/opportunities", tags=["opportunities"])
 api_router.include_router(jobs.router, prefix="/jobs", tags=["jobs"])
+api_router.include_router(
+    job_message_audits.router,
+    prefix="/job-message-audits",
+    tags=["job-message-audits"],
+)
 api_router.include_router(
     job_search_profiles.router,
     prefix="/job-search-profiles",

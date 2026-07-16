@@ -5,13 +5,26 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from app.api.deps import (
+    get_job_message_audit_repo,
     get_job_opportunity_repo,
     get_job_search_profile_repo,
     require_user,
 )
-from app.api.v1.routes import job_search_profiles, jobs
-from app.domain.enums import IMChannel, OpportunityType
-from app.infrastructure.db.models import JobOpportunityDetail, JobSearchProfile, Opportunity, User
+from app.api.v1.routes import job_message_audits, job_search_profiles, jobs
+from app.domain.enums import (
+    IMChannel,
+    JobMessageClassification,
+    MessageDirection,
+    OpportunityType,
+)
+from app.infrastructure.db.models import (
+    JobMessageAudit,
+    JobOpportunityDetail,
+    JobSearchProfile,
+    Message,
+    Opportunity,
+    User,
+)
 
 
 class FakeProfileRepo:
@@ -45,6 +58,31 @@ class FakeJobRepo:
 
     async def source_counts(self, opportunity_ids, owner_user_id):
         return {self.opportunity.id: 1}
+
+
+class FakeJobAuditRepo:
+    def __init__(self, audit: JobMessageAudit, message: Message) -> None:
+        self.audit = audit
+        self.message = message
+
+    async def list_for_owner(self, **kwargs):
+        if kwargs["owner_user_id"] != self.audit.owner_user_id:
+            return [], 0
+        return [(self.audit, self.message)], 1
+
+    async def correct_for_owner(self, **kwargs):
+        if (
+            kwargs["owner_user_id"] != self.audit.owner_user_id
+            or kwargs["audit_id"] != self.audit.id
+        ):
+            return None
+        self.audit.classification = (
+            JobMessageClassification.JOB_POST
+            if kwargs["is_job"]
+            else JobMessageClassification.UNRELATED_CHAT
+        )
+        self.audit.manually_corrected = True
+        return self.audit, self.message
 
 
 def _models(owner_id: UUID):
@@ -132,3 +170,49 @@ def test_profile_contract_rejects_protected_attributes() -> None:
     )
 
     assert response.status_code == 422
+
+
+def test_job_audit_list_and_correction_are_owner_scoped() -> None:
+    owner_id = uuid4()
+    now = datetime(2026, 7, 16, 8, tzinfo=UTC)
+    message = Message(
+        owner_user_id=owner_id,
+        channel=IMChannel.TELEGRAM,
+        external_message_id="audit-1",
+        conversation_id="jobs-1",
+        direction=MessageDirection.INCOMING,
+        group_name="Example Jobs",
+        text="招 Python 后端，支持远程",
+        sent_at=now,
+        created_at=now,
+        updated_at=now,
+    )
+    audit = JobMessageAudit(
+        owner_user_id=owner_id,
+        message_id=message.id,
+        classification=JobMessageClassification.UNRELATED_CHAT,
+        confidence=0.6,
+        filter_reason="prefilter rejected",
+        created_at=now,
+        updated_at=now,
+    )
+    repo = FakeJobAuditRepo(audit, message)
+    app = FastAPI()
+    app.include_router(job_message_audits.router, prefix="/job-message-audits")
+    app.dependency_overrides[require_user] = lambda: User(
+        id=owner_id, email="owner@example.test"
+    )
+    app.dependency_overrides[get_job_message_audit_repo] = lambda: repo
+    client = TestClient(app)
+
+    listed = client.get("/job-message-audits")
+    corrected = client.patch(
+        f"/job-message-audits/{audit.id}/correction",
+        json={"isJob": True, "note": "人工确认"},
+    )
+
+    assert listed.status_code == 200
+    assert listed.json()["items"][0]["messageExcerpt"] == "招 Python 后端，支持远程"
+    assert corrected.status_code == 200
+    assert corrected.json()["classification"] == "job_post"
+    assert corrected.json()["manuallyCorrected"] is True
