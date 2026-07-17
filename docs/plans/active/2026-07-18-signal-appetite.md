@@ -90,6 +90,9 @@
 - 2026-07-18：完成 Commit 4。原因 Sheet 支持正负建议与自由文本，重复 capture 只更新同一 example 的原因、
   不重复 Session 计数；教学结束后生成候选、运行本地历史试跑并保持“尚未生效”，应用前展示独立确认层，
   确认后才写 `PreferenceApplied` 和带版本的过滤决定。
+- 2026-07-18：完成首页与意图地图切片。首页升级为注意力控制台并保留机会入口；SVG 地图以确定性布局呈现
+  核心、上下文、降低与临时意图，支持平移/缩放、节点解释和线性无障碍替代。一天时间轴直接融入地图，
+  选择时刻会突出当时生效的意图；节点总量限制为 30。Shadow、安静区和消息解释仍留在 S6 后续切片。
 
 ## 发现日志
 
@@ -124,6 +127,9 @@
 | `pnpm --dir mobile/radar typecheck` | 通过 | S2/v4 工具类型检查通过 |
 | Signal Appetite sync targeted checks | 通过 | radar-api 14 files / 62 tests；RN 49 files / 163 tests；后端 19 tests |
 | `pnpm --dir mobile/radar test` | 通过 | 教学卡片与原因/候选切片后 50 files / 167 tests |
+| `pnpm --dir mobile/radar test` | 通过 | 首页、意图地图与时间轴后 52 files / 170 tests |
+| `pnpm --dir mobile/radar typecheck` | 通过 | 首页、地图、SVG 手势与时间轴类型检查通过 |
+| `pnpm --dir mobile/radar export:ios` | 通过 | 地图切片 Hermes bundle 成功；未替代真机地图手势/FPS 验收 |
 | `pnpm --dir mobile/radar export:ios` / `export:android` | 通过 | Hermes bundle 成功；不等同真机 haptic/FPS 验收 |
 | `make backend-check` | 待运行 | 服务端同步切片后 |
 | 双平台 Hermes export / Release | 待运行 | 不能替代真机手势、haptic 和 FPS |
