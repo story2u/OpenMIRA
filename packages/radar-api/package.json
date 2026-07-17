@@ -1,0 +1,79 @@
+{
+  "name": "@story2u/radar-api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    "./analysis-runs": {
+      "types": "./src/analysis-runs.ts",
+      "default": "./src/analysis-runs.ts"
+    },
+    "./client": {
+      "types": "./src/client.ts",
+      "default": "./src/client.ts"
+    },
+    "./auth": {
+      "types": "./src/auth.ts",
+      "default": "./src/auth.ts"
+    },
+    "./devices": {
+      "types": "./src/devices.ts",
+      "default": "./src/devices.ts"
+    },
+    "./interactive-agent": {
+      "types": "./src/interactive-agent.ts",
+      "default": "./src/interactive-agent.ts"
+    },
+    "./opportunities": {
+      "types": "./src/opportunities.ts",
+      "default": "./src/opportunities.ts"
+    },
+    "./messages": {
+      "types": "./src/messages.ts",
+      "default": "./src/messages.ts"
+    },
+    "./opportunity-actions": {
+      "types": "./src/opportunity-actions.ts",
+      "default": "./src/opportunity-actions.ts"
+    },
+    "./templates": {
+      "types": "./src/templates.ts",
+      "default": "./src/templates.ts"
+    },
+    "./settings": {
+      "types": "./src/settings.ts",
+      "default": "./src/settings.ts"
+    },
+    "./telegram": {
+      "types": "./src/telegram.ts",
+      "default": "./src/telegram.ts"
+    },
+    "./subscriptions": {
+      "types": "./src/subscriptions.ts",
+      "default": "./src/subscriptions.ts"
+    },
+    "./sync": {
+      "types": "./src/sync.ts",
+      "default": "./src/sync.ts"
+    },
+    "./typebox-decoder": {
+      "types": "./src/typebox-decoder.ts",
+      "default": "./src/typebox-decoder.ts"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "check": "pnpm typecheck && pnpm test"
+  },
+  "dependencies": {
+    "@story2u/radar-agent": "workspace:*",
+    "@story2u/radar-contracts": "workspace:*",
+    "typebox": "1.1.38"
+  },
+  "devDependencies": {
+    "typescript": "5.7.3",
+    "vitest": "4.1.10"
+  }
+}

@@ -45,9 +45,16 @@ final class APIClient: Sendable {
     func post<T: Decodable>(
         _ path: String,
         query: [URLQueryItem] = [],
+        headers: [String: String] = [:],
         body: (some Encodable)? = nil as Never?
     ) async throws -> T {
-        try Self.decode(await data(method: "POST", path: path, query: query, body: Self.encode(body)))
+        try Self.decode(await data(
+            method: "POST",
+            path: path,
+            query: query,
+            headers: headers,
+            body: Self.encode(body)
+        ))
     }
 
     func patch<T: Decodable>(_ path: String, body: some Encodable) async throws -> T {
@@ -60,6 +67,7 @@ final class APIClient: Sendable {
         method: String,
         path: String,
         query: [URLQueryItem],
+        headers: [String: String] = [:],
         body: Data?
     ) async throws -> Data {
         var components = URLComponents(
@@ -77,6 +85,9 @@ final class APIClient: Sendable {
         }
         if let token = tokenProvider() {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        for (field, value) in headers {
+            request.setValue(value, forHTTPHeaderField: field)
         }
 
         let data: Data

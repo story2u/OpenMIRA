@@ -7,6 +7,7 @@ from uuid import UUID
 import structlog
 
 from app.application.use_cases.ingest_message import IngestMessageUseCase
+from app.application.use_cases.analysis_run import DeviceAgentRoutingService
 from app.core.config import Settings, get_settings
 from app.core.security import decrypt_secret
 from app.core.time_window import WorkTimeConfig, WorkTimeService
@@ -22,6 +23,7 @@ from app.infrastructure.db.repositories import (
     TelegramUserConfigRepository,
 )
 from app.infrastructure.db.session import AsyncSessionLocal
+from app.infrastructure.db.analysis_run_repository import AnalysisRunRepository
 from app.infrastructure.im.telegram_user import TelegramUserClient, TelegramUserClientConfig
 from app.worker.queue import CeleryTaskQueue
 
@@ -47,6 +49,10 @@ async def ingest(inbound) -> None:
             work_time=WorkTimeService(work_time_config),
             task_queue=CeleryTaskQueue(),
             subscription_repo=SubscriptionRepository(session),
+            device_routing=DeviceAgentRoutingService(
+                run_repo=AnalysisRunRepository(session),
+                settings=settings,
+            ),
         )
         result = await use_case.execute(inbound)
         logger.info(

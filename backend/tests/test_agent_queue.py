@@ -28,8 +28,8 @@ def test_agent_queue_is_a_noop_when_feature_is_disabled(monkeypatch) -> None:
     assert CeleryTaskQueue().enqueue_agent_analysis(uuid4()) is False
 
 
-def test_agent_queue_routes_message_id_and_force_flag(monkeypatch) -> None:
-    sent: list[tuple[str, list]] = []
+def test_agent_queue_routes_message_id_force_flag_and_delay(monkeypatch) -> None:
+    sent: list[tuple[str, list, int]] = []
     monkeypatch.setattr(
         queue_module,
         "get_settings",
@@ -42,7 +42,7 @@ def test_agent_queue_routes_message_id_and_force_flag(monkeypatch) -> None:
     monkeypatch.setattr(
         queue_module.celery_app,
         "send_task",
-        lambda name, args: sent.append((name, args)),
+        lambda name, args, countdown: sent.append((name, args, countdown)),
     )
     message_id = uuid4()
     ledger_id = uuid4()
@@ -52,10 +52,13 @@ def test_agent_queue_routes_message_id_and_force_flag(monkeypatch) -> None:
             message_id,
             force=True,
             usage_ledger_id=ledger_id,
+            delay_seconds=90,
         )
         is True
     )
-    assert sent == [("agent.analyze_message", [str(message_id), True, str(ledger_id)])]
+    assert sent == [
+        ("agent.analyze_message", [str(message_id), True, str(ledger_id)], 90)
+    ]
 
 
 def test_agent_queue_is_a_noop_until_provider_key_is_configured(monkeypatch) -> None:

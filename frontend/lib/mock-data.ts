@@ -10,11 +10,22 @@ type OpportunitySeed = Omit<
   | 'archivedAt'
   | 'archivedByUserId'
   | 'archiveReason'
+  | 'internalStatus'
+  | 'aiReplyDraft'
+  | 'finalReply'
+  | 'detectionReason'
+  | 'assignedTo'
 >
 
 function withAgentDefaults(opportunity: OpportunitySeed): Opportunity {
   return {
     ...opportunity,
+    internalStatus:
+      opportunity.status === 'pending'
+        ? 'pending_human'
+        : opportunity.status === 'replied'
+          ? 'replied'
+          : 'ignored',
     agentActions: [],
     agentAnalysisStatus: 'not_requested',
     agentAnalysisError: null,
@@ -23,6 +34,10 @@ function withAgentDefaults(opportunity: OpportunitySeed): Opportunity {
     archivedAt: null,
     archivedByUserId: null,
     archiveReason: null,
+    aiReplyDraft: null,
+    finalReply: null,
+    detectionReason: null,
+    assignedTo: null,
   }
 }
 

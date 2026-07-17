@@ -63,20 +63,33 @@ async def quota_subject() -> AsyncIterator[tuple[async_sessionmaker[AsyncSession
         await session.exec(
             delete(SubscriptionAccount).where(SubscriptionAccount.user_id == user.id)
         )
-        await session.exec(delete(Message).where(Message.id == message.id))
+        await session.exec(delete(Message).where(Message.owner_user_id == user.id))
         await session.exec(delete(User).where(User.id == user.id))
         await session.commit()
     await engine.dispose()
 
 
 async def test_free_quota_is_atomic_under_concurrent_reservations(quota_subject) -> None:
-    session_factory, user, message = quota_subject
+    session_factory, user, _ = quota_subject
+    messages = [
+        Message(
+            owner_user_id=user.id,
+            channel=IMChannel.TELEGRAM,
+            external_message_id=f"concurrent-{os.urandom(8).hex()}",
+            conversation_id="quota-concurrent",
+            direction=MessageDirection.INCOMING,
+        )
+        for _ in range(105)
+    ]
+    async with session_factory() as session:
+        session.add_all(messages)
+        await session.commit()
 
     async def reserve(index: int) -> bool:
         async with session_factory() as session:
             result = await SubscriptionRepository(session).reserve_agent_analysis(
                 user_id=user.id,
-                message_id=message.id,
+                message_id=messages[index].id,
                 idempotency_key=f"concurrent-{index}",
             )
             return result.allowed
@@ -121,6 +134,28 @@ async def test_repeated_idempotency_key_only_allocates_once(quota_subject) -> No
         assert second.ledger is not None
         await repo.release_usage(second.ledger.id, "provider unavailable")
         assert await repo.usage_counts(user_id=user.id, period=snapshot.period) == (1, 0)
+
+
+async def test_different_keys_share_one_active_message_reservation(quota_subject) -> None:
+    session_factory, user, message = quota_subject
+
+    async with session_factory() as session:
+        first = await SubscriptionRepository(session).reserve_agent_analysis(
+            user_id=user.id,
+            message_id=message.id,
+            idempotency_key="automatic",
+        )
+    async with session_factory() as session:
+        second = await SubscriptionRepository(session).reserve_agent_analysis(
+            user_id=user.id,
+            message_id=message.id,
+            idempotency_key="manual-different-key",
+        )
+
+    assert first.ledger is not None and second.ledger is not None
+    assert first.created is True
+    assert second.created is False
+    assert second.ledger.id == first.ledger.id
 
 
 async def test_annual_subscription_uses_utc_month_for_usage_and_upgrade_keeps_usage(quota_subject) -> None:

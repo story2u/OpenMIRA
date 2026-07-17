@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from app.api.deps import (
     get_adapter_registry,
     get_detector,
+    get_device_agent_routing_service,
     get_message_repo,
     get_opportunity_repo,
     get_rule_repo,
@@ -16,6 +17,7 @@ from app.api.deps import (
     get_wecom_event_repo,
     get_work_time_service,
 )
+from app.application.use_cases.analysis_run import DeviceAgentRoutingService
 from app.application.mappers import to_opportunity_read
 from app.application.use_cases.ingest_message import IngestMessageUseCase
 from app.core.config import Settings, get_settings
@@ -72,6 +74,7 @@ async def wecom_webhook(
     task_queue: CeleryTaskQueue = Depends(get_task_queue),
     subscription_repo: SubscriptionRepository = Depends(get_subscription_repo),
     user_settings_repo: UserSettingsRepository = Depends(get_user_settings_repo),
+    device_routing: DeviceAgentRoutingService = Depends(get_device_agent_routing_service),
 ) -> dict:
     body = await request.body()
     payload = parse_xml_envelope(body)
@@ -93,6 +96,7 @@ async def wecom_webhook(
         task_queue=task_queue,
         subscription_repo=subscription_repo,
         user_settings_repo=user_settings_repo,
+        device_routing=device_routing,
     )
     result = await use_case.execute(inbound)
     response = {"ok": True, "id": str(result.id), "type": result.__class__.__name__}

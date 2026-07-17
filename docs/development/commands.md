@@ -62,13 +62,63 @@ lifecycle script。
 首次安装与常用检查：
 
 ```bash
-cd frontend && pnpm install --frozen-lockfile
+pnpm install --frozen-lockfile
 make frontend-check
 cd frontend && pnpm dev
 ```
 
 `frontend-check` 运行 ESLint、独立 `tsc --noEmit`、Vitest 和 production build。独立 typecheck 是必须项，
 因为当前 `next.config.mjs` 的 build 兼容设置会跳过 TypeScript 错误。
+
+## React Native 与共享 TypeScript
+
+Web、`mobile/radar` 和 `packages/*` 使用根 `pnpm-lock.yaml`；`backend/pi-agent-runtime` 继续使用独立
+`package-lock.json`。首次安装与 P1 检查：
+
+```bash
+pnpm install --frozen-lockfile
+make contracts-check
+make shared-check
+make rn-check
+```
+
+`contracts-check` 先确认 FastAPI OpenAPI snapshot 未漂移，再检查生成的 TypeScript；`shared-check` 覆盖
+core/API/Agent 共享包；`rn-check` 追加 RN typecheck、Vitest、Expo 依赖矩阵和双平台 Hermes export。
+RN Vitest 还会校验中英文 catalog key/插值参数一致，并扫描生产 `.tsx`，阻止把新的硬编码中文界面文案
+绕过 catalog 提交；交互式 Agent 测试另覆盖真实文件 SQLite、真实 pi loop + faux SSE、本地三工具与
+content-free turn 协调。后端对应 PostgreSQL 用例需要显式传入测试数据库 URL，不能把 skipped 当通过。
+原生 Release 构建由 CI 的 `rn-ios` / `rn-android` job 执行，本地需要 Xcode 或 Android SDK 时可按
+`mobile/radar/README.md` 运行。开发包的本地明文 SSE 例外不得复制到生产 bundle 配置。
+
+RN 认证、在线 dashboard、详情/消息、回复/状态与设置/Telegram shell 需要显式 origin：
+
+```bash
+EXPO_PUBLIC_API_BASE_URL=https://api.example.com pnpm --dir mobile/radar start
+pnpm --dir mobile/radar fixture:auth
+```
+
+本地 fixture 只接受 README 中的固定 `.test` 假账号，并返回确定性看板、商机详情、Agent 发现、分页/
+空消息数据，以及进程内模板/AI 草稿/认领/状态/幂等回复、用户设置、Telegram 连接/套餐暂停来源和
+只读订阅目录/用量/管理快照；订阅 sync 固定返回未配置，不模拟 Offering 或交易成功；
+不连接外部 IM 或数据库。Release 生产 bundle 仍拒绝明文 HTTP。
+
+原生 Google 登录的 prebuild/release 构建必须成对传入 `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` 与
+`EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID`；前者同步加入后端 `GOOGLE_NATIVE_CLIENT_IDS`，后者用于 iOS
+SDK 与回调 scheme。Apple 构建的精确 bundle ID 必须加入 `APPLE_NATIVE_CLIENT_IDS`。本地可用格式
+合法的假 ID 验证编译/config plugin；CI 的 RN 双平台 Release job 也只用非敏感假 ID 覆盖原生依赖链，
+真实登录、错误 audience 和首次建号只能在隔离 provider 环境验收。
+
+商店换装构建必须显式设置 `RADAR_APP_VARIANT=production`，并提供新的 `RADAR_APP_VERSION`（严格
+`major.minor.patch`）与正整数 `RADAR_BUILD_NUMBER`。该变体生成既有 `com.codeiy.im` 双平台身份和
+`opportunity-radar` deep-link scheme，并关闭 dev 包的 loopback/明文网络例外；缺版本信息会在 Expo
+config 阶段 fail closed。production 还必须在构建期提供不含路径/凭据/查询的 HTTPS
+`EXPO_PUBLIC_API_BASE_URL`，防止产出只能显示配置错误的商店包。CI 使用 `.test` 占位 origin 和占位
+版本验证无签名 Release 编译，实际发版值仍由商店与生产部署记录决定。
+
+RN 语言声明来自 `mobile/radar/app.json` 的 `expo-localization` config plugin。`prebuild --clean` 后，iOS
+产物应在 `Info.plist` 含 `en`/`zh-Hans`，Android 应生成含 `en`/`zh-CN` 的
+`res/xml/locales_config.xml` 并在 manifest 引用；修改支持语言时必须同时复跑 `rn-check` 和双平台
+production Release 构建。
 
 ## iOS App
 
@@ -133,7 +183,8 @@ alembic downgrade -1
 - `.github/workflows/ci.yml` 的 harness job：`python scripts/harness_check.py`。
 - backend job：固定 uv 版本、Python 3.12、`uv sync --locked`、migration upgrade/downgrade/upgrade、compileall、Ruff、pytest。
 - pi-agent job：Node 22、`npm ci --ignore-scripts`、语法检查和 faux-provider 测试。
-- frontend job：Node 22、pnpm 10、frozen install、lint、独立 typecheck、Vitest、build。
-- ios/android jobs：xcodegen + XCTest；Gradle lint + unit test + debug assemble。
+- frontend job：Node 22、pnpm 10、根 frozen install、共享包/RN JS、Web lint/typecheck/Vitest/build。
+- ios/android jobs：原生旧 App 的 xcodegen/XCTest 与 Gradle 检查；`rn-ios` / `rn-android` 另做 Expo
+  prebuild 和 RN Release 构建。
 
 若本地命令与 CI 漂移，优先统一根 Makefile和本文件，不在入口提示词复制更多命令。

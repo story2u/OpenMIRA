@@ -14,6 +14,7 @@ from app.infrastructure.im.wecom import (
     WeComCryptoError,
     parse_xml_envelope,
 )
+from app.infrastructure.im.base import IMSendDisabledError
 
 TOKEN = "callback-token"
 CORP_ID = "ww-test-corp"
@@ -121,3 +122,11 @@ async def test_callback_rejects_wrong_receive_id() -> None:
 def test_xml_parser_rejects_entity_declarations() -> None:
     with pytest.raises(WeComCryptoError, match="unsafe"):
         parse_xml_envelope(b'<!DOCTYPE xml [<!ENTITY xxe SYSTEM "file:///etc/passwd">]><xml/>')
+
+
+@pytest.mark.asyncio
+async def test_wecom_send_is_explicitly_disabled_instead_of_dry_run_success() -> None:
+    adapter = WeComAdapter(_settings())
+
+    with pytest.raises(IMSendDisabledError):
+        await adapter.send_message("zhangsan", "真实回复")

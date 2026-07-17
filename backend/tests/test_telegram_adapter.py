@@ -4,6 +4,7 @@ from uuid import uuid4
 import pytest
 
 from app.infrastructure.im.telegram import TelegramAdapter
+from app.infrastructure.im.base import IMSendDisabledError
 
 
 @pytest.mark.asyncio
@@ -60,3 +61,17 @@ async def test_telegram_adapter_namespaces_connection_messages_and_sets_owner() 
     assert inbound is not None
     assert inbound.owner_user_id == owner_id
     assert inbound.external_message_id == "connection:123:-1001:9"
+
+
+@pytest.mark.asyncio
+async def test_telegram_send_is_explicitly_disabled_instead_of_dry_run_success() -> None:
+    adapter = TelegramAdapter(
+        SimpleNamespace(
+            telegram_bot_token="token",
+            telegram_webhook_secret="secret",
+            im_send_enabled=False,
+        )
+    )
+
+    with pytest.raises(IMSendDisabledError):
+        await adapter.send_message("123", "真实回复")

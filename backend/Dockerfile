@@ -2,10 +2,12 @@ FROM node:22.22.0-slim AS pi-agent-runtime
 
 WORKDIR /pi-agent-runtime
 
-COPY pi-agent-runtime/package.json pi-agent-runtime/package-lock.json ./
+COPY backend/pi-agent-runtime/package.json backend/pi-agent-runtime/package-lock.json ./
+COPY packages/radar-agent/package.json /packages/radar-agent/package.json
+COPY packages/radar-agent/src /packages/radar-agent/src
 RUN npm ci --omit=dev --ignore-scripts
 
-COPY pi-agent-runtime/src ./src
+COPY backend/pi-agent-runtime/src ./src
 
 
 FROM python:3.12-slim
@@ -21,11 +23,11 @@ WORKDIR /app
 
 RUN adduser --disabled-password --gecos "" appuser
 
-COPY pyproject.toml uv.lock ./
+COPY backend/pyproject.toml backend/uv.lock ./
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked --no-dev --no-install-project
 
-COPY . .
+COPY backend/ .
 COPY --from=pi-agent-runtime /usr/local/ /usr/local/
 COPY --from=pi-agent-runtime /pi-agent-runtime /app/pi-agent-runtime
 

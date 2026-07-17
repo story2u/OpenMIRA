@@ -3,6 +3,7 @@ from uuid import uuid4
 from app.application.use_cases.analyze_message import AnalyzeMessageUseCase, message_links
 from app.domain.enums import (
     AgentActionType,
+    AnalysisRunExecutor,
     IMChannel,
     LinkSafetyStatus,
     MessageDirection,
@@ -13,6 +14,7 @@ from app.domain.ports import (
     AgentActionRecommendation,
     AgentAnalysisResult,
     AgentContactExtraction,
+    AgentExecutionMetadata,
     LinkInspection,
 )
 from app.infrastructure.db.models import Message, Opportunity
@@ -32,10 +34,11 @@ class FakeMessageRepository:
         assert message_id == self.message.id
         self.message.opportunity_id = opportunity_id
 
-    async def complete_agent_analysis(self, message, projection):
+    async def complete_agent_analysis(self, message, projection, *, execution):
         assert message is self.message
         self.completed = True
         self.projection = projection
+        self.execution = execution
         return message
 
     async def fail_agent_analysis(self, message_id, error) -> None:
@@ -49,10 +52,18 @@ class FakeOpportunityRepository:
         self.create_status: OpportunityStatus | None = None
 
     async def get(self, opportunity_id):
-        return self.opportunity if self.opportunity and self.opportunity.id == opportunity_id else None
+        return (
+            self.opportunity
+            if self.opportunity and self.opportunity.id == opportunity_id
+            else None
+        )
 
     async def get_by_source_message(self, message_id):
-        return self.opportunity if self.opportunity and self.opportunity.source_message_id == message_id else None
+        return (
+            self.opportunity
+            if self.opportunity and self.opportunity.source_message_id == message_id
+            else None
+        )
 
     async def create(self, **values):
         self.create_status = values["status"]
@@ -117,9 +128,11 @@ class FakeTaskQueue:
         *,
         force=False,
         usage_ledger_id=None,
+        delay_seconds: int = 0,
     ) -> bool:
         raise AssertionError(
-            f"must not recursively enqueue {message_id}/{force}/{usage_ledger_id}"
+            f"must not recursively enqueue "
+            f"{message_id}/{force}/{usage_ledger_id}/{delay_seconds}"
         )
 
 
@@ -146,6 +159,14 @@ async def test_pi_agent_can_promote_rule_miss_but_only_to_human_review() -> None
         agent=FakeAgent(),
         link_inspector=FakeLinkInspector(),
         task_queue=queue,
+        execution=AgentExecutionMetadata(
+            executed_by=AnalysisRunExecutor.SERVER,
+            run_id=uuid4(),
+            runtime_version="node-pi-0.80.6",
+            schema_version=1,
+            model_version="test-model",
+            policy_version="agent-policy-v1",
+        ),
         min_opportunity_confidence=0.75,
         max_links=5,
     )
@@ -158,6 +179,7 @@ async def test_pi_agent_can_promote_rule_miss_but_only_to_human_review() -> None
     assert message_repo.completed is True
     assert message_repo.failed is None
     assert message_repo.projection.actions[0]["requires_approval"] is True
+    assert message_repo.execution.executed_by == AnalysisRunExecutor.SERVER
 
 
 def test_message_links_deduplicates_and_limits_urls() -> None:

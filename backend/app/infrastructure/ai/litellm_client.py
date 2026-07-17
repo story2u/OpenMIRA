@@ -13,6 +13,14 @@ from app.infrastructure.ai.prompts import OPPORTUNITY_CLASSIFIER_PROMPT
 from app.infrastructure.db.repositories import MessageRepository, OpportunityRepository
 
 
+class AIReplyUnavailableError(RuntimeError):
+    pass
+
+
+class AIReplyGenerationError(RuntimeError):
+    pass
+
+
 class OpportunityClassifierResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -101,32 +109,33 @@ class LiteLLMReplyGenerator:
         )
 
         if not self.settings.ai_enabled:
-            keywords = "、".join(opportunity.matched_keywords) or "您的需求"
-            return (
-                f"{opportunity.contact_name} 您好！关于您提到的「{keywords}」，"
-                "我们可以为您整理一份针对性的方案。方便的话，我想先确认一下使用场景、"
-                "团队规模和期望上线时间，然后安排顾问进一步沟通。"
-            )
+            raise AIReplyUnavailableError("AI reply generation is disabled")
 
         llm = ChatLiteLLM(model=self.settings.litellm_model, temperature=0.3)
-        response = await llm.ainvoke(
-            [
-                SystemMessage(
-                    content=(
-                        "你是B2B商机助手。回复要自然、专业、简洁。"
-                        "不要承诺最低价、合同条款、绝对交付结果。"
-                        "目标是确认需求并推动下一步沟通。"
-                    )
-                ),
-                HumanMessage(
-                    content=(
-                        f"联系人：{opportunity.contact_name}\n"
-                        f"商机摘要：{opportunity.summary}\n"
-                        f"关键词：{opportunity.matched_keywords}\n"
-                        f"聊天历史：\n{history}\n\n"
-                        "请生成一条可直接发送的回复，长度控制在120字内。"
-                    )
-                ),
-            ]
-        )
-        return str(response.content).strip()
+        try:
+            response = await llm.ainvoke(
+                [
+                    SystemMessage(
+                        content=(
+                            "你是B2B商机助手。回复要自然、专业、简洁。"
+                            "不要承诺最低价、合同条款、绝对交付结果。"
+                            "目标是确认需求并推动下一步沟通。"
+                        )
+                    ),
+                    HumanMessage(
+                        content=(
+                            f"联系人：{opportunity.contact_name}\n"
+                            f"商机摘要：{opportunity.summary}\n"
+                            f"关键词：{opportunity.matched_keywords}\n"
+                            f"聊天历史：\n{history}\n\n"
+                            "请生成一条可直接发送的回复，长度控制在120字内。"
+                        )
+                    ),
+                ]
+            )
+        except Exception as exc:
+            raise AIReplyGenerationError("AI reply provider is unavailable") from exc
+        draft = str(response.content).strip()
+        if not draft or len(draft) > 4000:
+            raise AIReplyGenerationError("AI reply provider returned an invalid draft")
+        return draft

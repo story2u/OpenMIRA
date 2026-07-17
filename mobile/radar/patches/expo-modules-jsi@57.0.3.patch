@@ -1,0 +1,14 @@
+diff --git a/apple/Sources/ExpoModulesJSI/Coding/JavaScriptCodable+Date.swift b/apple/Sources/ExpoModulesJSI/Coding/JavaScriptCodable+Date.swift
+index eb1cc942ba5ec3ff7e359be3b0a3822b24685fe9..1a5e75844c8b94c93c2403ad91600560d079f2b9 100644
+--- a/apple/Sources/ExpoModulesJSI/Coding/JavaScriptCodable+Date.swift
++++ b/apple/Sources/ExpoModulesJSI/Coding/JavaScriptCodable+Date.swift
+@@ -50,7 +50,8 @@ let maxJavaScriptDateMilliseconds: Double = 8_640_000_000_000_000
+ /// faithful to `new Date(number)`; the `Date`/string branches pass an already-clipped `getTime()` through.
+ @usableFromInline
+ func dateFromMilliseconds(_ milliseconds: Double) throws -> Date {
+-  guard milliseconds.isFinite, abs(milliseconds) <= maxJavaScriptDateMilliseconds else {
++  // Swift 6 with C++ interop can see both Swift.abs and C++ abs here.
++  guard milliseconds.isFinite, Swift.abs(milliseconds) <= maxJavaScriptDateMilliseconds else {
+     throw InvalidDateException()
+   }
+   return Date(timeIntervalSince1970: milliseconds.rounded(.towardZero) / 1000.0)

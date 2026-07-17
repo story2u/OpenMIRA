@@ -34,6 +34,18 @@ class InvalidOpportunityTransition(ValueError):
     pass
 
 
+class OpportunityClaimConflict(ValueError):
+    pass
+
+
+class OpportunityVersionConflict(ValueError):
+    pass
+
+
+class InternalCommandIdempotencyConflict(ValueError):
+    pass
+
+
 def ensure_transition_allowed(current: OpportunityStatus, target: OpportunityStatus) -> None:
     if current == target:
         return

@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 import structlog
-from sqlalchemy import String, cast, func
+from sqlalchemy import String, cast, delete, func, or_, update
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlmodel import col, select
@@ -13,13 +13,18 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.domain.enums import (
     AgentAnalysisStatus,
+    AnalysisRunStatus,
     BillingEventStatus,
     BillingInterval,
     BillingProvider,
     BillingStore,
     BillingSubscriptionStatus,
+    DeviceCredentialStatus,
+    DevicePlatform,
+    DeviceStatus,
     FrontendOpportunityStatus,
     IMChannel,
+    ManualReplyDeliveryStatus,
     MessageDirection,
     MessageSource,
     OpportunityArchiveAction,
@@ -27,6 +32,9 @@ from app.domain.enums import (
     OpportunityStatus,
     PlanCode,
     Priority,
+    PushEnvironment,
+    PushProvider,
+    PushRegistrationStatus,
     SubscriptionStatus,
     TelegramConnectionAttemptStatus,
     TelegramConnectionStatus,
@@ -41,7 +49,27 @@ from app.domain.enums import (
     WeComSendCapability,
     WeComSourceType,
 )
-from app.domain.ports import AgentAnalysisProjection, DetectionRule, InboundMessage
+from app.domain.ports import (
+    AgentAnalysisProjection,
+    AgentExecutionMetadata,
+    DetectionRule,
+    InboundMessage,
+)
+from app.domain.services.device_session import (
+    DeviceCredentialRejectedError,
+    DeviceCredentialReuseDetectedError,
+    DeviceLimitReachedError,
+    DeviceNotFoundError,
+    DeviceRevokedError,
+)
+from app.domain.services.opportunity_state import (
+    InternalCommandIdempotencyConflict,
+    InvalidOpportunityTransition,
+    OpportunityClaimConflict,
+    OpportunityVersionConflict,
+    ensure_transition_allowed,
+)
+from app.domain.services.push_delivery import PendingPushDelivery
 from app.domain.services.subscription_policy import (
     BillingPeriod,
     PlanEntitlements,
@@ -51,16 +79,23 @@ from app.domain.services.subscription_policy import (
     utc_calendar_month,
 )
 from app.infrastructure.db.models import (
+    AnalysisRun,
     AppConfig,
     AuthAccount,
     BillingEvent,
     BillingSubscription,
+    Device,
+    DeviceCredential,
+    InternalCommandReceipt,
+    ManualReplyDelivery,
     Message,
     Opportunity,
     OpportunityArchiveEvent,
+    PushRegistration,
     ReplyTemplate,
     Rule,
     SubscriptionAccount,
+    SyncChange,
     TelegramConnection,
     TelegramConnectionAttempt,
     TelegramMonitor,
@@ -78,6 +113,9 @@ from app.infrastructure.db.models import (
     WeComWebhookEvent,
     utc_now,
 )
+from app.infrastructure.db.sync_feed import install_sync_change_tracking
+
+install_sync_change_tracking()
 
 logger = structlog.get_logger(__name__)
 
@@ -235,6 +273,513 @@ class UserRepository:
         await self.session.commit()
         await self.session.refresh(user)
         return user
+
+
+class DeviceRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self.session = session
+
+    async def list_owned(self, owner_user_id: UUID) -> list[Device]:
+        result = await self.session.exec(
+            select(Device)
+            .where(Device.owner_user_id == owner_user_id)
+            .order_by(col(Device.last_seen_at).desc(), col(Device.created_at).desc())
+        )
+        return list(result.all())
+
+    async def get_active_owned(self, owner_user_id: UUID, device_id: UUID) -> Device | None:
+        result = await self.session.exec(
+            select(Device).where(
+                Device.id == device_id,
+                Device.owner_user_id == owner_user_id,
+                Device.status == DeviceStatus.ACTIVE,
+            )
+        )
+        return result.first()
+
+    async def register(
+        self,
+        *,
+        owner_user_id: UUID,
+        installation_id_hash: str,
+        platform: DevicePlatform,
+        display_name: str,
+        app_variant: str,
+        app_version: str,
+        app_build: str,
+        os_version: str | None,
+        locale: str | None,
+        timezone_name: str | None,
+        capabilities: dict,
+        credential_hash: str,
+        credential_expires_at: datetime,
+        max_active_devices: int,
+        now: datetime | None = None,
+    ) -> tuple[Device, DeviceCredential]:
+        current = now or utc_now()
+        # Serialize registrations per owner so the active-device limit cannot be raced.
+        owner = await self.session.get(User, owner_user_id, with_for_update=True)
+        if not owner or not owner.is_active:
+            await self.session.rollback()
+            raise DeviceCredentialRejectedError
+
+        existing_result = await self.session.exec(
+            select(Device)
+            .where(
+                Device.owner_user_id == owner_user_id,
+                Device.installation_id_hash == installation_id_hash,
+            )
+            .with_for_update()
+        )
+        device = existing_result.first()
+        if device and device.status == DeviceStatus.REVOKED:
+            await self.session.rollback()
+            raise DeviceRevokedError
+
+        if device is None:
+            active_count = await self.session.scalar(
+                select(func.count())
+                .select_from(Device)
+                .where(
+                    Device.owner_user_id == owner_user_id,
+                    Device.status == DeviceStatus.ACTIVE,
+                )
+            )
+            if int(active_count or 0) >= max_active_devices:
+                await self.session.rollback()
+                raise DeviceLimitReachedError
+            device = Device(
+                owner_user_id=owner_user_id,
+                installation_id_hash=installation_id_hash,
+                platform=platform,
+                display_name=display_name,
+                app_variant=app_variant,
+                app_version=app_version,
+                app_build=app_build,
+                os_version=os_version,
+                locale=locale,
+                timezone=timezone_name,
+                capabilities=capabilities,
+                last_seen_at=current,
+                created_at=current,
+                updated_at=current,
+            )
+            self.session.add(device)
+            await self.session.flush()
+        else:
+            device.platform = platform
+            device.display_name = display_name
+            device.app_variant = app_variant
+            device.app_version = app_version
+            device.app_build = app_build
+            device.os_version = os_version
+            device.locale = locale
+            device.timezone = timezone_name
+            device.capabilities = capabilities
+            device.last_seen_at = current
+            device.updated_at = current
+            self.session.add(device)
+            await self.session.exec(
+                update(DeviceCredential)
+                .where(
+                    DeviceCredential.device_id == device.id,
+                    DeviceCredential.status.in_(
+                        [DeviceCredentialStatus.PENDING, DeviceCredentialStatus.ACTIVE]
+                    ),
+                )
+                .values(
+                    status=DeviceCredentialStatus.REVOKED,
+                    revoked_at=current,
+                    updated_at=current,
+                )
+            )
+
+        credential = DeviceCredential(
+            owner_user_id=owner_user_id,
+            device_id=device.id,
+            token_hash=credential_hash,
+            status=DeviceCredentialStatus.ACTIVE,
+            expires_at=credential_expires_at,
+            created_at=current,
+            updated_at=current,
+        )
+        self.session.add(credential)
+        await self.session.commit()
+        await self.session.refresh(device)
+        await self.session.refresh(credential)
+        return device, credential
+
+    async def rotate_credential(
+        self,
+        *,
+        credential_hash: str,
+        replacement_hash: str,
+        replacement_expires_at: datetime,
+        now: datetime | None = None,
+    ) -> tuple[User, Device, DeviceCredential]:
+        current = now or utc_now()
+        result = await self.session.exec(
+            select(DeviceCredential)
+            .where(DeviceCredential.token_hash == credential_hash)
+            .with_for_update()
+        )
+        credential = result.first()
+        if credential is None:
+            await self.session.rollback()
+            raise DeviceCredentialRejectedError
+
+        if credential.status == DeviceCredentialStatus.ROTATED:
+            await self._mark_credential_reuse(credential, current)
+            await self.session.commit()
+            logger.warning(
+                "device.credential_reuse_detected",
+                device_id=str(credential.device_id),
+                credential_family_id=str(credential.token_family_id),
+            )
+            raise DeviceCredentialReuseDetectedError
+        if credential.status != DeviceCredentialStatus.ACTIVE:
+            await self.session.rollback()
+            raise DeviceCredentialRejectedError
+        if credential.expires_at <= current:
+            credential.status = DeviceCredentialStatus.REVOKED
+            credential.revoked_at = current
+            credential.updated_at = current
+            self.session.add(credential)
+            await self.session.commit()
+            raise DeviceCredentialRejectedError
+
+        device = await self.session.get(Device, credential.device_id, with_for_update=True)
+        owner = await self.session.get(User, credential.owner_user_id)
+        if not device or device.status != DeviceStatus.ACTIVE or not owner or not owner.is_active:
+            if device and device.status == DeviceStatus.ACTIVE:
+                await self._revoke_device_records(device, "inactive_owner", current)
+            else:
+                credential.status = DeviceCredentialStatus.REVOKED
+                credential.revoked_at = current
+                credential.updated_at = current
+                self.session.add(credential)
+            await self.session.commit()
+            raise DeviceCredentialRejectedError
+
+        replacement = DeviceCredential(
+            owner_user_id=credential.owner_user_id,
+            device_id=credential.device_id,
+            token_hash=replacement_hash,
+            token_family_id=credential.token_family_id,
+            status=DeviceCredentialStatus.PENDING,
+            expires_at=replacement_expires_at,
+            created_at=current,
+            updated_at=current,
+        )
+        self.session.add(replacement)
+        await self.session.flush()
+
+        credential.status = DeviceCredentialStatus.ROTATED
+        credential.rotated_at = current
+        credential.replaced_by_credential_id = replacement.id
+        credential.last_used_at = current
+        credential.updated_at = current
+        self.session.add(credential)
+        await self.session.flush()
+
+        replacement.status = DeviceCredentialStatus.ACTIVE
+        replacement.updated_at = current
+        device.last_seen_at = current
+        device.updated_at = current
+        self.session.add_all([replacement, device])
+        await self.session.commit()
+        await self.session.refresh(device)
+        await self.session.refresh(replacement)
+        return owner, device, replacement
+
+    async def revoke_owned(
+        self,
+        *,
+        owner_user_id: UUID,
+        device_id: UUID,
+        reason: str,
+        now: datetime | None = None,
+    ) -> Device:
+        current = now or utc_now()
+        result = await self.session.exec(
+            select(Device)
+            .where(Device.id == device_id, Device.owner_user_id == owner_user_id)
+            .with_for_update()
+        )
+        device = result.first()
+        if not device:
+            await self.session.rollback()
+            raise DeviceNotFoundError
+        if device.status == DeviceStatus.ACTIVE:
+            await self._revoke_device_records(device, reason, current)
+            await self.session.commit()
+            await self.session.refresh(device)
+        else:
+            await self.session.commit()
+        return device
+
+    async def _mark_credential_reuse(
+        self,
+        credential: DeviceCredential,
+        now: datetime,
+    ) -> None:
+        await self.session.exec(
+            update(DeviceCredential)
+            .where(DeviceCredential.token_family_id == credential.token_family_id)
+            .values(
+                status=DeviceCredentialStatus.REUSE_DETECTED,
+                revoked_at=now,
+                reuse_detected_at=now,
+                updated_at=now,
+            )
+        )
+        device = await self.session.get(Device, credential.device_id, with_for_update=True)
+        if device:
+            device.status = DeviceStatus.REVOKED
+            device.revoked_at = now
+            device.revocation_reason = "credential_reuse_detected"
+            device.updated_at = now
+            self.session.add(device)
+        await self.session.exec(
+            update(PushRegistration)
+            .where(
+                PushRegistration.device_id == credential.device_id,
+                PushRegistration.status != PushRegistrationStatus.REVOKED,
+            )
+            .values(
+                status=PushRegistrationStatus.REVOKED,
+                revoked_at=now,
+                updated_at=now,
+            )
+        )
+
+    async def _revoke_device_records(
+        self,
+        device: Device,
+        reason: str,
+        now: datetime,
+    ) -> None:
+        device.status = DeviceStatus.REVOKED
+        device.revoked_at = now
+        device.revocation_reason = reason[:255]
+        device.updated_at = now
+        self.session.add(device)
+        await self.session.exec(
+            update(DeviceCredential)
+            .where(
+                DeviceCredential.device_id == device.id,
+                DeviceCredential.status != DeviceCredentialStatus.REUSE_DETECTED,
+            )
+            .values(
+                status=DeviceCredentialStatus.REVOKED,
+                revoked_at=now,
+                updated_at=now,
+            )
+        )
+        await self.session.exec(
+            update(PushRegistration)
+            .where(
+                PushRegistration.device_id == device.id,
+                PushRegistration.status != PushRegistrationStatus.REVOKED,
+            )
+            .values(
+                status=PushRegistrationStatus.REVOKED,
+                revoked_at=now,
+                updated_at=now,
+            )
+        )
+
+
+class PushRegistrationRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self.session = session
+
+    async def register(
+        self,
+        *,
+        owner_user_id: UUID,
+        device_id: UUID,
+        provider: PushProvider,
+        environment: PushEnvironment,
+        token_hash: str,
+        token_encrypted: str,
+    ) -> PushRegistration:
+        now = utc_now()
+        token_registration = (
+            await self.session.exec(
+                select(PushRegistration)
+                .where(PushRegistration.token_hash == token_hash)
+                .with_for_update()
+            )
+        ).one_or_none()
+        active = (
+            await self.session.exec(
+                select(PushRegistration)
+                .where(
+                    PushRegistration.device_id == device_id,
+                    PushRegistration.provider == provider,
+                    PushRegistration.environment == environment,
+                    PushRegistration.status == PushRegistrationStatus.ACTIVE,
+                )
+                .with_for_update()
+            )
+        ).one_or_none()
+
+        if active is not None and active.id != getattr(token_registration, "id", None):
+            active.status = PushRegistrationStatus.INVALIDATED
+            active.invalidated_at = now
+            active.last_error_code = "token_rotated"
+            active.updated_at = now
+            self.session.add(active)
+            await self.session.flush()
+
+        registration = token_registration or PushRegistration(
+            owner_user_id=owner_user_id,
+            device_id=device_id,
+            provider=provider,
+            environment=environment,
+            token_hash=token_hash,
+            token_encrypted=token_encrypted,
+        )
+        registration.owner_user_id = owner_user_id
+        registration.device_id = device_id
+        registration.provider = provider
+        registration.environment = environment
+        registration.token_encrypted = token_encrypted
+        registration.status = PushRegistrationStatus.ACTIVE
+        registration.last_registered_at = now
+        registration.invalidated_at = None
+        registration.revoked_at = None
+        registration.failure_count = 0
+        registration.last_error_code = None
+        registration.next_attempt_at = None
+        registration.updated_at = now
+        self.session.add(registration)
+        await self.session.commit()
+        await self.session.refresh(registration)
+        return registration
+
+    async def revoke(
+        self,
+        *,
+        owner_user_id: UUID,
+        device_id: UUID,
+        provider: PushProvider,
+        environment: PushEnvironment,
+    ) -> bool:
+        now = utc_now()
+        result = await self.session.exec(
+            update(PushRegistration)
+            .where(
+                PushRegistration.owner_user_id == owner_user_id,
+                PushRegistration.device_id == device_id,
+                PushRegistration.provider == provider,
+                PushRegistration.environment == environment,
+                PushRegistration.status == PushRegistrationStatus.ACTIVE,
+            )
+            .values(
+                status=PushRegistrationStatus.REVOKED,
+                revoked_at=now,
+                next_attempt_at=None,
+                updated_at=now,
+            )
+        )
+        await self.session.commit()
+        return bool(result.rowcount)
+
+    async def claim_pending(
+        self,
+        *,
+        limit: int,
+        lease_seconds: int,
+    ) -> list[PendingPushDelivery]:
+        now = utc_now()
+        latest_cursor = (
+            select(
+                SyncChange.owner_user_id.label("owner_user_id"),
+                func.max(SyncChange.cursor).label("cursor"),
+            )
+            .group_by(SyncChange.owner_user_id)
+            .subquery()
+        )
+        rows = (
+            await self.session.exec(
+                select(PushRegistration, latest_cursor.c.cursor)
+                .join(
+                    latest_cursor,
+                    latest_cursor.c.owner_user_id == PushRegistration.owner_user_id,
+                )
+                .where(
+                    PushRegistration.status == PushRegistrationStatus.ACTIVE,
+                    latest_cursor.c.cursor > PushRegistration.last_notified_cursor,
+                    or_(
+                        PushRegistration.next_attempt_at.is_(None),
+                        PushRegistration.next_attempt_at <= now,
+                    ),
+                )
+                .order_by(PushRegistration.last_attempt_at.asc().nullsfirst())
+                .limit(limit)
+                .with_for_update(skip_locked=True, of=PushRegistration)
+            )
+        ).all()
+        lease_until = now + timedelta(seconds=lease_seconds)
+        deliveries: list[PendingPushDelivery] = []
+        for registration, cursor in rows:
+            registration.last_attempt_at = now
+            registration.next_attempt_at = lease_until
+            registration.updated_at = now
+            self.session.add(registration)
+            deliveries.append(
+                PendingPushDelivery(
+                    registration_id=registration.id,
+                    provider=registration.provider,
+                    environment=registration.environment,
+                    token_encrypted=registration.token_encrypted,
+                    cursor=int(cursor),
+                )
+            )
+        await self.session.commit()
+        return deliveries
+
+    async def mark_success(self, registration_id: UUID, cursor: int) -> None:
+        registration = await self.session.get(PushRegistration, registration_id)
+        if registration is None or registration.status != PushRegistrationStatus.ACTIVE:
+            return
+        now = utc_now()
+        registration.last_notified_cursor = max(registration.last_notified_cursor, cursor)
+        registration.last_success_at = now
+        registration.failure_count = 0
+        registration.last_error_code = None
+        registration.next_attempt_at = None
+        registration.updated_at = now
+        self.session.add(registration)
+        await self.session.commit()
+
+    async def mark_invalid(self, registration_id: UUID, error_code: str) -> None:
+        registration = await self.session.get(PushRegistration, registration_id)
+        if registration is None or registration.status != PushRegistrationStatus.ACTIVE:
+            return
+        now = utc_now()
+        registration.status = PushRegistrationStatus.INVALIDATED
+        registration.invalidated_at = now
+        registration.last_error_code = error_code[:64]
+        registration.next_attempt_at = None
+        registration.updated_at = now
+        self.session.add(registration)
+        await self.session.commit()
+
+    async def mark_failure(self, registration_id: UUID, error_code: str) -> None:
+        registration = await self.session.get(PushRegistration, registration_id)
+        if registration is None or registration.status != PushRegistrationStatus.ACTIVE:
+            return
+        now = utc_now()
+        registration.failure_count += 1
+        delay_seconds = min(3600, 2 ** min(registration.failure_count, 10) * 15)
+        registration.last_error_code = error_code[:64]
+        registration.next_attempt_at = now + timedelta(seconds=delay_seconds)
+        registration.updated_at = now
+        self.session.add(registration)
+        await self.session.commit()
 
 
 @dataclass(frozen=True, slots=True)
@@ -590,6 +1135,29 @@ class SubscriptionRepository:
         idempotency_key: str,
         now: datetime | None = None,
     ) -> UsageReservation:
+        reservation = await self.reserve_agent_analysis_in_transaction(
+            user_id=user_id,
+            message_id=message_id,
+            idempotency_key=idempotency_key,
+            now=now,
+        )
+        if reservation.allowed:
+            await self.session.commit()
+            if reservation.created and reservation.ledger:
+                await self.session.refresh(reservation.ledger)
+        else:
+            await self.session.rollback()
+        return reservation
+
+    async def reserve_agent_analysis_in_transaction(
+        self,
+        *,
+        user_id: UUID,
+        message_id: UUID,
+        idempotency_key: str,
+        now: datetime | None = None,
+    ) -> UsageReservation:
+        """Reserve quota without committing so a caller can bind it to a run atomically."""
         current = now or utc_now()
         normalized_key = idempotency_key.strip()[:255]
         if not normalized_key:
@@ -598,7 +1166,6 @@ class SubscriptionRepository:
         # have a subscription_accounts row. This prevents concurrent reservations overspending.
         user = await self.session.get(User, user_id, with_for_update=True)
         if not user or not user.is_active:
-            await self.session.rollback()
             return UsageReservation(False, False, None, 0, 0)
 
         existing_statement = select(UsageLedger).where(
@@ -610,7 +1177,11 @@ class SubscriptionRepository:
         existing = existing_result.first()
         snapshot = await self.get_snapshot(user_id, now=current)
         limit = snapshot.entitlements.pi_agent_analysis_monthly_limit
-        allocated = await self._allocated_usage(user_id, snapshot.usage_period)
+        allocated = await self._allocated_usage(
+            user_id,
+            snapshot.usage_period,
+            feature=UsageFeature.PI_AGENT_ANALYSIS,
+        )
         if existing:
             reservation = UsageReservation(
                 allowed=existing.status in {UsageStatus.RESERVED, UsageStatus.CONSUMED},
@@ -619,10 +1190,27 @@ class SubscriptionRepository:
                 limit=limit,
                 allocated=allocated,
             )
-            await self.session.commit()
             return reservation
+        reserved_for_message_result = await self.session.exec(
+            select(UsageLedger)
+            .where(
+                UsageLedger.user_id == user_id,
+                UsageLedger.feature == UsageFeature.PI_AGENT_ANALYSIS,
+                UsageLedger.source_message_id == message_id,
+                UsageLedger.status == UsageStatus.RESERVED,
+            )
+            .with_for_update()
+        )
+        reserved_for_message = reserved_for_message_result.first()
+        if reserved_for_message:
+            return UsageReservation(
+                allowed=True,
+                created=False,
+                ledger=reserved_for_message,
+                limit=limit,
+                allocated=allocated,
+            )
         if allocated >= limit:
-            await self.session.rollback()
             return UsageReservation(False, False, None, limit, allocated)
 
         ledger = UsageLedger(
@@ -636,8 +1224,63 @@ class SubscriptionRepository:
             status=UsageStatus.RESERVED,
         )
         self.session.add(ledger)
-        await self.session.commit()
-        await self.session.refresh(ledger)
+        await self.session.flush()
+        return UsageReservation(True, True, ledger, limit, allocated + 1)
+
+    async def reserve_interactive_agent_turn_in_transaction(
+        self,
+        *,
+        user_id: UUID,
+        idempotency_key: str,
+        limit: int,
+        now: datetime | None = None,
+    ) -> UsageReservation:
+        """Reserve one independent interactive turn without persisting turn content."""
+        current = now or utc_now()
+        normalized_key = idempotency_key.strip()[:128]
+        if not normalized_key:
+            raise ValueError("idempotency_key is required")
+        user = await self.session.get(User, user_id, with_for_update=True)
+        if not user or not user.is_active:
+            return UsageReservation(False, False, None, limit, 0)
+
+        period = utc_calendar_month(current)
+        existing_result = await self.session.exec(
+            select(UsageLedger).where(
+                UsageLedger.user_id == user_id,
+                UsageLedger.feature == UsageFeature.INTERACTIVE_AGENT_TURN,
+                UsageLedger.idempotency_key == normalized_key,
+            )
+        )
+        existing = existing_result.first()
+        allocated = await self._allocated_usage(
+            user_id,
+            period,
+            feature=UsageFeature.INTERACTIVE_AGENT_TURN,
+        )
+        if existing:
+            return UsageReservation(
+                allowed=existing.status in {UsageStatus.RESERVED, UsageStatus.CONSUMED},
+                created=False,
+                ledger=existing,
+                limit=limit,
+                allocated=allocated,
+            )
+        if allocated >= limit:
+            return UsageReservation(False, False, None, limit, allocated)
+
+        ledger = UsageLedger(
+            user_id=user_id,
+            feature=UsageFeature.INTERACTIVE_AGENT_TURN,
+            quantity=1,
+            period_start=period.start,
+            period_end=period.end,
+            idempotency_key=normalized_key,
+            source_message_id=None,
+            status=UsageStatus.RESERVED,
+        )
+        self.session.add(ledger)
+        await self.session.flush()
         return UsageReservation(True, True, ledger, limit, allocated + 1)
 
     async def usage_counts(
@@ -662,6 +1305,13 @@ class SubscriptionRepository:
         return counts.get(UsageStatus.CONSUMED, 0), counts.get(UsageStatus.RESERVED, 0)
 
     async def consume_usage(self, ledger_id: UUID) -> UsageLedger | None:
+        ledger = await self.consume_usage_in_transaction(ledger_id)
+        if ledger:
+            await self.session.commit()
+            await self.session.refresh(ledger)
+        return ledger
+
+    async def consume_usage_in_transaction(self, ledger_id: UUID) -> UsageLedger | None:
         ledger = await self.session.get(UsageLedger, ledger_id, with_for_update=True)
         if not ledger:
             return None
@@ -674,11 +1324,40 @@ class SubscriptionRepository:
         ledger.consumed_at = now
         ledger.updated_at = now
         self.session.add(ledger)
-        await self.session.commit()
-        await self.session.refresh(ledger)
+        await self.session.flush()
         return ledger
 
     async def release_usage(self, ledger_id: UUID, reason: str) -> UsageLedger | None:
+        # Server queue failures may race a device claim that reuses the same ledger.
+        # Follow the claim lock order (Message -> UsageLedger) and never release a
+        # reservation while an active device run owns it.
+        candidate = await self.session.get(UsageLedger, ledger_id)
+        if candidate and candidate.source_message_id:
+            await self.session.get(
+                Message,
+                candidate.source_message_id,
+                with_for_update=True,
+            )
+            active_result = await self.session.exec(
+                select(AnalysisRun.id).where(
+                    AnalysisRun.usage_ledger_id == ledger_id,
+                    AnalysisRun.status.in_((AnalysisRunStatus.CLAIMED, AnalysisRunStatus.RUNNING)),
+                )
+            )
+            if active_result.first() is not None:
+                await self.session.rollback()
+                return None
+        ledger = await self.release_usage_in_transaction(ledger_id, reason)
+        if ledger:
+            await self.session.commit()
+            await self.session.refresh(ledger)
+        return ledger
+
+    async def release_usage_in_transaction(
+        self,
+        ledger_id: UUID,
+        reason: str,
+    ) -> UsageLedger | None:
         ledger = await self.session.get(UsageLedger, ledger_id, with_for_update=True)
         if not ledger:
             return None
@@ -690,14 +1369,19 @@ class SubscriptionRepository:
         ledger.failure_reason = reason[:500]
         ledger.updated_at = now
         self.session.add(ledger)
-        await self.session.commit()
-        await self.session.refresh(ledger)
+        await self.session.flush()
         return ledger
 
-    async def _allocated_usage(self, user_id: UUID, period: BillingPeriod) -> int:
+    async def _allocated_usage(
+        self,
+        user_id: UUID,
+        period: BillingPeriod,
+        *,
+        feature: UsageFeature,
+    ) -> int:
         statement = select(func.coalesce(func.sum(UsageLedger.quantity), 0)).where(
             UsageLedger.user_id == user_id,
-            UsageLedger.feature == UsageFeature.PI_AGENT_ANALYSIS,
+            UsageLedger.feature == feature,
             UsageLedger.period_start == period.start,
             UsageLedger.period_end == period.end,
             UsageLedger.status.in_([UsageStatus.RESERVED, UsageStatus.CONSUMED]),
@@ -783,6 +1467,14 @@ class MessageRepository:
         message = await self.session.get(Message, message_id, with_for_update=True)
         if not message:
             return None
+        active_device_run = await self.session.exec(
+            select(AnalysisRun.id).where(
+                AnalysisRun.message_id == message_id,
+                AnalysisRun.status.in_((AnalysisRunStatus.CLAIMED, AnalysisRunStatus.RUNNING)),
+            )
+        )
+        if active_device_run.first() is not None:
+            return None
         if (
             message.agent_analysis_status == AgentAnalysisStatus.RUNNING
             and message.agent_started_at
@@ -813,22 +1505,38 @@ class MessageRepository:
         self,
         message: Message,
         projection: AgentAnalysisProjection,
+        *,
+        execution: AgentExecutionMetadata,
+        commit: bool = True,
     ) -> Message:
         message.agent_analysis_status = AgentAnalysisStatus.COMPLETED
         message.agent_result = projection.model_dump(mode="json")
+        message.agent_execution = execution.model_dump(mode="json")
         message.agent_error = None
         message.agent_analyzed_at = projection.analyzed_at
         message.updated_at = projection.analyzed_at
         self.session.add(message)
-        await self.session.commit()
-        await self.session.refresh(message)
+        if commit:
+            await self.session.commit()
+            await self.session.refresh(message)
+        else:
+            await self.session.flush()
         return message
 
     async def fail_agent_analysis(self, message_id: UUID, error: str) -> None:
         # Recover from provider or database exceptions before writing the durable failure state.
         await self.session.rollback()
-        message = await self.session.get(Message, message_id)
+        message = await self.session.get(Message, message_id, with_for_update=True)
         if not message:
+            return
+        active_device_run = await self.session.exec(
+            select(AnalysisRun.id).where(
+                AnalysisRun.message_id == message_id,
+                AnalysisRun.status.in_((AnalysisRunStatus.CLAIMED, AnalysisRunStatus.RUNNING)),
+            )
+        )
+        if active_device_run.first() is not None:
+            await self.session.rollback()
             return
         now = utc_now()
         safe_error = error[:1000]
@@ -874,6 +1582,39 @@ class MessageRepository:
         await self.session.refresh(message)
         return message
 
+    async def create_outgoing_idempotent(
+        self,
+        *,
+        channel: IMChannel,
+        conversation_id: str,
+        text: str,
+        source: MessageSource,
+        opportunity_id: UUID,
+        external_message_id: str,
+        raw_payload: dict,
+        owner_user_id: UUID | None = None,
+    ) -> Message:
+        existing = await self.get_by_external_id(channel, external_message_id)
+        if existing:
+            return existing
+        try:
+            return await self.create_outgoing(
+                channel=channel,
+                conversation_id=conversation_id,
+                text=text,
+                source=source,
+                opportunity_id=opportunity_id,
+                external_message_id=external_message_id,
+                raw_payload=raw_payload,
+                owner_user_id=owner_user_id,
+            )
+        except IntegrityError:
+            await self.session.rollback()
+            existing = await self.get_by_external_id(channel, external_message_id)
+            if not existing:
+                raise
+            return existing
+
     async def attach_opportunity(self, message_id: UUID, opportunity_id: UUID) -> None:
         message = await self.session.get(Message, message_id)
         if not message:
@@ -893,14 +1634,55 @@ class MessageRepository:
         self.session.add(message)
         await self.session.commit()
 
-    async def list_by_opportunity(self, opportunity_id: UUID) -> list[Message]:
+    async def list_by_opportunity(
+        self,
+        opportunity_id: UUID,
+        *,
+        limit: int = 500,
+        offset: int = 0,
+    ) -> list[Message]:
         statement = (
             select(Message)
             .where(Message.opportunity_id == opportunity_id)
-            .order_by(col(Message.sent_at).asc(), col(Message.created_at).asc())
+            .order_by(
+                col(Message.sent_at).asc(),
+                col(Message.created_at).asc(),
+                col(Message.id).asc(),
+            )
+            .limit(limit)
+            .offset(offset)
         )
         result = await self.session.exec(statement)
         return list(result.all())
+
+    async def list_recent_by_opportunity(
+        self,
+        opportunity_id: UUID,
+        *,
+        limit: int = 500,
+    ) -> list[Message]:
+        """Return the newest bounded window while preserving chronological display order."""
+        statement = (
+            select(Message)
+            .where(Message.opportunity_id == opportunity_id)
+            .order_by(
+                col(Message.sent_at).desc(),
+                col(Message.created_at).desc(),
+                col(Message.id).desc(),
+            )
+            .limit(limit)
+        )
+        result = await self.session.exec(statement)
+        return list(reversed(result.all()))
+
+    async def count_by_opportunity(self, opportunity_id: UUID) -> int:
+        statement = (
+            select(func.count())
+            .select_from(Message)
+            .where(Message.opportunity_id == opportunity_id)
+        )
+        result = await self.session.exec(statement)
+        return int(result.one())
 
     async def list_by_conversation(
         self,
@@ -921,6 +1703,154 @@ class MessageRepository:
         )
         result = await self.session.exec(statement)
         return list(reversed(result.all()))
+
+
+class ManualReplyDeliveryRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self.session = session
+
+    async def reserve(
+        self,
+        *,
+        owner_user_id: UUID,
+        opportunity_id: UUID,
+        idempotency_key: str,
+        content_hash: str,
+    ) -> ManualReplyDelivery:
+        delivery = ManualReplyDelivery(
+            owner_user_id=owner_user_id,
+            opportunity_id=opportunity_id,
+            idempotency_key=idempotency_key,
+            content_hash=content_hash,
+        )
+        self.session.add(delivery)
+        try:
+            await self.session.commit()
+            await self.session.refresh(delivery)
+            return delivery
+        except IntegrityError:
+            await self.session.rollback()
+        result = await self.session.exec(
+            select(ManualReplyDelivery).where(
+                ManualReplyDelivery.owner_user_id == owner_user_id,
+                ManualReplyDelivery.idempotency_key == idempotency_key,
+            )
+        )
+        existing = result.first()
+        if not existing:
+            raise RuntimeError("manual reply reservation conflict could not be recovered")
+        return existing
+
+    async def claim_send_attempt(
+        self,
+        delivery_id: UUID,
+        *,
+        expected_opportunity_version: int | None = None,
+        opportunity_id: UUID | None = None,
+        owner_user_id: UUID | None = None,
+        target_status: OpportunityStatus | None = None,
+    ) -> ManualReplyDelivery | None:
+        if expected_opportunity_version is not None:
+            if opportunity_id is None or owner_user_id is None or target_status is None:
+                raise ValueError("version-bound send claim requires opportunity context")
+            opportunity_result = await self.session.exec(
+                select(Opportunity)
+                .where(
+                    Opportunity.id == opportunity_id,
+                    Opportunity.owner_user_id == owner_user_id,
+                )
+                .with_for_update()
+            )
+            current = opportunity_result.first()
+            if not current or current.archived_at is not None:
+                await self.session.rollback()
+                raise LookupError("opportunity is unavailable")
+            if current.aggregate_version != expected_opportunity_version:
+                await self.session.rollback()
+                raise OpportunityVersionConflict("opportunity version changed before sending")
+            ensure_transition_allowed(current.status, target_status)
+        result = await self.session.exec(
+            select(ManualReplyDelivery)
+            .where(ManualReplyDelivery.id == delivery_id)
+            .with_for_update()
+        )
+        delivery = result.first()
+        if not delivery or delivery.status not in {
+            ManualReplyDeliveryStatus.PENDING,
+            ManualReplyDeliveryStatus.FAILED,
+        }:
+            await self.session.rollback()
+            return None
+        delivery.status = ManualReplyDeliveryStatus.SENDING
+        delivery.attempt_count += 1
+        delivery.error_class = None
+        delivery.updated_at = utc_now()
+        self.session.add(delivery)
+        await self.session.commit()
+        await self.session.refresh(delivery)
+        return delivery
+
+    async def mark_delivered(
+        self,
+        delivery: ManualReplyDelivery,
+        provider_message_id: str | None,
+    ) -> ManualReplyDelivery:
+        delivery.status = ManualReplyDeliveryStatus.DELIVERED
+        delivery.provider_message_id = provider_message_id
+        delivery.delivered_at = utc_now()
+        delivery.error_class = None
+        delivery.updated_at = utc_now()
+        self.session.add(delivery)
+        await self.session.commit()
+        await self.session.refresh(delivery)
+        return delivery
+
+    async def mark_completed(self, delivery_id: UUID) -> ManualReplyDelivery:
+        delivery = await self.session.get(ManualReplyDelivery, delivery_id)
+        if not delivery:
+            raise LookupError("manual reply delivery not found")
+        delivery.status = ManualReplyDeliveryStatus.COMPLETED
+        delivery.completed_at = utc_now()
+        delivery.error_class = None
+        delivery.updated_at = utc_now()
+        self.session.add(delivery)
+        await self.session.commit()
+        await self.session.refresh(delivery)
+        return delivery
+
+    async def mark_failed(
+        self,
+        delivery_id: UUID,
+        error_class: str,
+    ) -> ManualReplyDelivery:
+        await self.session.rollback()
+        delivery = await self.session.get(ManualReplyDelivery, delivery_id)
+        if not delivery:
+            raise LookupError("manual reply delivery not found")
+        delivery.status = ManualReplyDeliveryStatus.FAILED
+        delivery.error_class = error_class[:255]
+        delivery.updated_at = utc_now()
+        self.session.add(delivery)
+        await self.session.commit()
+        await self.session.refresh(delivery)
+        return delivery
+
+    async def mark_uncertain(
+        self,
+        delivery_id: UUID,
+        error_class: str,
+    ) -> ManualReplyDelivery:
+        await self.session.rollback()
+        delivery = await self.session.get(ManualReplyDelivery, delivery_id)
+        if not delivery:
+            raise LookupError("manual reply delivery not found")
+        delivery.status = ManualReplyDeliveryStatus.UNCERTAIN
+        delivery.error_class = error_class[:255]
+        delivery.updated_at = utc_now()
+        self.session.add(delivery)
+        await self.session.commit()
+        await self.session.refresh(delivery)
+        return delivery
 
 
 class OpportunityRepository:
@@ -947,6 +1877,7 @@ class OpportunityRepository:
         detection_reason: str | None,
         status: OpportunityStatus,
         last_message_preview: str,
+        commit: bool = True,
     ) -> Opportunity:
         opportunity = Opportunity(
             owner_user_id=owner_user_id,
@@ -970,8 +1901,11 @@ class OpportunityRepository:
             friend_request_status="not_sent" if source_type == "group" else "n/a",
         )
         self.session.add(opportunity)
-        await self.session.commit()
-        await self.session.refresh(opportunity)
+        if commit:
+            await self.session.commit()
+            await self.session.refresh(opportunity)
+        else:
+            await self.session.flush()
         return opportunity
 
     async def get(self, opportunity_id: UUID) -> Opportunity | None:
@@ -986,6 +1920,8 @@ class OpportunityRepository:
         self,
         opportunity: Opportunity,
         projection: AgentAnalysisProjection,
+        *,
+        commit: bool = True,
     ) -> Opportunity:
         priority_order = {
             Priority.LOW: 0,
@@ -1020,8 +1956,11 @@ class OpportunityRepository:
             opportunity.sop_stage = "verified"
         opportunity.updated_at = projection.analyzed_at
         self.session.add(opportunity)
-        await self.session.commit()
-        await self.session.refresh(opportunity)
+        if commit:
+            await self.session.commit()
+            await self.session.refresh(opportunity)
+        else:
+            await self.session.flush()
         return opportunity
 
     async def list(
@@ -1305,6 +2244,159 @@ class OpportunityRepository:
         await self.session.refresh(opportunity)
         return opportunity
 
+    async def transition_status(
+        self,
+        *,
+        opportunity_id: UUID,
+        owner_user_id: UUID,
+        status: OpportunityStatus,
+        expected_version: int | None = None,
+        idempotency_key: str | None = None,
+        payload_hash: str | None = None,
+    ) -> Opportunity:
+        result = await self.session.exec(
+            select(Opportunity)
+            .where(
+                Opportunity.id == opportunity_id,
+                Opportunity.owner_user_id == owner_user_id,
+            )
+            .with_for_update()
+        )
+        opportunity = result.first()
+        if not opportunity:
+            await self.session.rollback()
+            raise LookupError("opportunity not found")
+        if idempotency_key is not None:
+            await self.session.exec(
+                delete(InternalCommandReceipt).where(
+                    InternalCommandReceipt.owner_user_id == owner_user_id,
+                    InternalCommandReceipt.expires_at <= utc_now(),
+                )
+            )
+            receipt = (
+                await self.session.exec(
+                    select(InternalCommandReceipt).where(
+                        InternalCommandReceipt.owner_user_id == owner_user_id,
+                        InternalCommandReceipt.idempotency_key == idempotency_key,
+                    )
+                )
+            ).first()
+            if receipt:
+                if (
+                    receipt.opportunity_id != opportunity_id
+                    or receipt.expected_version != expected_version
+                    or receipt.payload_hash != payload_hash
+                ):
+                    await self.session.rollback()
+                    raise InternalCommandIdempotencyConflict(
+                        "idempotency key is bound to another internal command"
+                    )
+                await self.session.commit()
+                return opportunity
+        if opportunity.archived_at is not None:
+            await self.session.rollback()
+            raise LookupError("opportunity is archived")
+        if expected_version is not None and opportunity.aggregate_version != expected_version:
+            await self.session.rollback()
+            raise OpportunityVersionConflict("opportunity version conflict")
+        try:
+            ensure_transition_allowed(opportunity.status, status)
+        except InvalidOpportunityTransition:
+            await self.session.rollback()
+            raise
+        opportunity.status = status
+        if status == OpportunityStatus.CLOSED:
+            opportunity.sop_stage = "closed"
+        opportunity.updated_at = utc_now()
+        self.session.add(opportunity)
+        if idempotency_key is not None:
+            assert expected_version is not None
+            assert payload_hash is not None
+            self.session.add(
+                InternalCommandReceipt(
+                    owner_user_id=owner_user_id,
+                    opportunity_id=opportunity_id,
+                    idempotency_key=idempotency_key,
+                    expected_version=expected_version,
+                    payload_hash=payload_hash,
+                )
+            )
+        await self.session.commit()
+        await self.session.refresh(opportunity)
+        return opportunity
+
+    async def claim(
+        self,
+        *,
+        opportunity_id: UUID,
+        owner_user_id: UUID,
+        operator_id: str,
+    ) -> Opportunity:
+        result = await self.session.exec(
+            select(Opportunity)
+            .where(
+                Opportunity.id == opportunity_id,
+                Opportunity.owner_user_id == owner_user_id,
+            )
+            .with_for_update()
+        )
+        opportunity = result.first()
+        if not opportunity:
+            await self.session.rollback()
+            raise LookupError("opportunity not found")
+        if opportunity.archived_at is not None:
+            await self.session.rollback()
+            raise LookupError("opportunity is archived")
+        if opportunity.assigned_to and opportunity.assigned_to != operator_id:
+            await self.session.rollback()
+            raise OpportunityClaimConflict("opportunity is already claimed")
+        if opportunity.assigned_to == operator_id:
+            await self.session.commit()
+            return opportunity
+        opportunity.assigned_to = operator_id
+        opportunity.updated_at = utc_now()
+        self.session.add(opportunity)
+        await self.session.commit()
+        await self.session.refresh(opportunity)
+        return opportunity
+
+    async def finalize_manual_reply(
+        self,
+        *,
+        opportunity_id: UUID,
+        target_status: OpportunityStatus,
+        text: str,
+        operator_id: str,
+    ) -> Opportunity:
+        result = await self.session.exec(
+            select(Opportunity).where(Opportunity.id == opportunity_id).with_for_update()
+        )
+        opportunity = result.first()
+        if not opportunity:
+            await self.session.rollback()
+            raise LookupError("opportunity not found")
+
+        # The provider delivery is already durable at this point. Always record that
+        # truth, but never overwrite a concurrent archive or incompatible status.
+        opportunity.final_reply = text
+        opportunity.last_message_preview = text
+        opportunity.last_message_at = utc_now()
+        if opportunity.assigned_to is None:
+            opportunity.assigned_to = operator_id
+        if opportunity.archived_at is None:
+            try:
+                ensure_transition_allowed(opportunity.status, target_status)
+            except InvalidOpportunityTransition:
+                pass
+            else:
+                opportunity.status = target_status
+                opportunity.sop_stage = "chatting"
+        opportunity.updated_at = utc_now()
+        self.session.add(opportunity)
+        await self.session.commit()
+        await self.session.refresh(opportunity)
+        return opportunity
+
     async def save_ai_draft(self, opportunity: Opportunity, draft: str) -> Opportunity:
         opportunity.ai_reply_draft = draft
         opportunity.updated_at = utc_now()
@@ -1327,7 +2419,7 @@ class OpportunityRepository:
         return opportunity
 
     async def pending_human_older_than(self, minutes: int) -> list[Opportunity]:
-        cutoff = datetime.now(timezone.utc) - timedelta(minutes=minutes)
+        cutoff = datetime.now(UTC) - timedelta(minutes=minutes)
         statement = select(Opportunity).where(
             Opportunity.status == OpportunityStatus.PENDING_HUMAN,
             Opportunity.archived_at.is_(None),
@@ -2810,8 +3902,17 @@ class ReplyTemplateRepository:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
-    async def list(self, enabled_only: bool = True) -> list[ReplyTemplate]:
-        statement = select(ReplyTemplate).order_by(col(ReplyTemplate.created_at).desc())
+    async def list(
+        self,
+        enabled_only: bool = True,
+        *,
+        limit: int = 200,
+    ) -> list[ReplyTemplate]:
+        statement = (
+            select(ReplyTemplate)
+            .order_by(col(ReplyTemplate.created_at).desc())
+            .limit(min(max(limit, 1), 200))
+        )
         if enabled_only:
             statement = statement.where(ReplyTemplate.enabled.is_(True))
         result = await self.session.exec(statement)

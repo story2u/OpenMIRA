@@ -8,6 +8,7 @@ from app.core.config import Settings
 from app.core.security import require_secret
 from app.domain.enums import IMChannel
 from app.domain.ports import InboundMessage, SendReceipt
+from app.infrastructure.im.base import IMSendDisabledError
 
 
 class TelegramAdapter:
@@ -88,10 +89,7 @@ class TelegramAdapter:
     ) -> SendReceipt:
         del idempotency_key, opportunity_id, owner_user_id
         if not self.settings.im_send_enabled:
-            return SendReceipt(
-                provider_message_id=None,
-                raw_response={"dry_run": True, "channel": self.channel, "chat_id": conversation_id},
-            )
+            raise IMSendDisabledError("IM sending is disabled")
 
         async with httpx.AsyncClient(timeout=10.0) as client:
             response = await client.post(

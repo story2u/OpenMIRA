@@ -1,11 +1,12 @@
 from datetime import datetime
-from typing import Annotated, Any, Protocol
+from typing import Annotated, Any, Literal, Protocol
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.domain.enums import (
     AgentActionType,
+    AnalysisRunExecutor,
     IMChannel,
     LinkSafetyStatus,
     MessageDirection,
@@ -99,14 +100,18 @@ class AgentAnalysisRequest(BaseModel):
 
 
 class AgentContactExtraction(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     email: str | None = Field(default=None, max_length=320)
     phone: str | None = Field(default=None, max_length=64)
     telegram_handle: str | None = Field(default=None, max_length=128)
     wecom_id: str | None = Field(default=None, max_length=128)
-    extraction_source: str | None = Field(default=None, max_length=32)
+    extraction_source: Literal["message_text", "link_content"] | None = None
 
 
 class AgentActionRecommendation(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     action_type: AgentActionType
     reason: str = Field(min_length=1, max_length=1000)
     target: str | None = Field(default=None, max_length=320)
@@ -115,6 +120,8 @@ class AgentActionRecommendation(BaseModel):
 
 
 class AgentAnalysisResult(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     is_opportunity: bool
     confidence: float = Field(ge=0.0, le=1.0)
     title: str = Field(min_length=1, max_length=200)
@@ -128,6 +135,13 @@ class AgentAnalysisResult(BaseModel):
     contacts: AgentContactExtraction = Field(default_factory=AgentContactExtraction)
     actions: list[AgentActionRecommendation] = Field(default_factory=list, max_length=8)
 
+    @field_validator("link_status")
+    @classmethod
+    def link_status_must_be_final(cls, value: LinkSafetyStatus) -> LinkSafetyStatus:
+        if value == LinkSafetyStatus.VERIFYING:
+            raise ValueError("agent link_status cannot be verifying")
+        return value
+
 
 class AgentAnalysisProjection(BaseModel):
     result: AgentAnalysisResult
@@ -136,6 +150,20 @@ class AgentAnalysisProjection(BaseModel):
     actions: list[dict[str, Any]]
     attention_required: bool
     analyzed_at: datetime
+
+
+class AgentExecutionMetadata(BaseModel):
+    """Content-free provenance for the result that became server truth."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    executed_by: AnalysisRunExecutor
+    run_id: UUID
+    device_id: UUID | None = None
+    runtime_version: str = Field(min_length=1, max_length=64)
+    schema_version: int = Field(ge=1, le=100)
+    model_version: str = Field(min_length=1, max_length=128)
+    policy_version: str = Field(min_length=1, max_length=64)
 
 
 class IMAdapter(Protocol):
@@ -189,4 +217,12 @@ class TaskQueue(Protocol):
         *,
         force: bool = False,
         usage_ledger_id: UUID | None = None,
+        delay_seconds: int = 0,
     ) -> bool: ...
+
+
+class DeviceAnalysisRouting(Protocol):
+    @property
+    def primary_claim_window_seconds(self) -> int: ...
+
+    async def has_primary_device(self, owner_user_id: UUID) -> bool: ...

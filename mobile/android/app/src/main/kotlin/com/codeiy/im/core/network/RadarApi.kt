@@ -27,6 +27,7 @@ import com.codeiy.im.model.WorkSchedule
 import com.codeiy.im.model.WorkScheduleUpdate
 import retrofit2.http.Body
 import retrofit2.http.GET
+import retrofit2.http.Header
 import retrofit2.http.PATCH
 import retrofit2.http.POST
 import retrofit2.http.Path
@@ -58,7 +59,11 @@ interface RadarApi {
     suspend fun messages(@Query("opportunity_id") opportunityId: String): List<ChatMessage>
 
     @POST("opportunities/{id}/manual-reply")
-    suspend fun manualReply(@Path("id") id: String, @Body body: ManualReplyRequest): Opportunity
+    suspend fun manualReply(
+        @Path("id") id: String,
+        @Header("Idempotency-Key") idempotencyKey: String,
+        @Body body: ManualReplyRequest,
+    ): Opportunity
 
     @POST("opportunities/{id}/ai-draft")
     suspend fun aiDraft(@Path("id") id: String): AIDraft

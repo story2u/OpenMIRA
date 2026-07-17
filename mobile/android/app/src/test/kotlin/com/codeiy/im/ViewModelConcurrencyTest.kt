@@ -66,7 +66,11 @@ private class FakeRadarApi : RadarApi {
     override suspend fun me(): AuthUser = error("unused")
     override suspend fun opportunity(id: String): Opportunity = error("unused")
     override suspend fun messages(opportunityId: String): List<ChatMessage> = error("unused")
-    override suspend fun manualReply(id: String, body: ManualReplyRequest): Opportunity = error("unused")
+    override suspend fun manualReply(
+        id: String,
+        idempotencyKey: String,
+        body: ManualReplyRequest,
+    ): Opportunity = error("unused")
     override suspend fun aiDraft(id: String): AIDraft = error("unused")
     override suspend fun updateStatus(id: String, body: OpportunityStatusUpdate): Opportunity = error("unused")
     override suspend fun claim(id: String, operatorId: String): Opportunity = error("unused")

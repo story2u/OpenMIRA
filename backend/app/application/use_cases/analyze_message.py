@@ -4,7 +4,13 @@ import re
 from uuid import UUID
 
 from app.domain.enums import OpportunityStatus
-from app.domain.ports import AgentAnalysisRequest, LinkInspector, MessageAgent, TaskQueue
+from app.domain.ports import (
+    AgentAnalysisRequest,
+    AgentExecutionMetadata,
+    LinkInspector,
+    MessageAgent,
+    TaskQueue,
+)
 from app.domain.services.agent_policy import project_agent_result
 from app.infrastructure.db.models import Opportunity, utc_now
 from app.infrastructure.db.repositories import MessageRepository, OpportunityRepository
@@ -13,6 +19,8 @@ URL_PATTERN = re.compile(r"https?://[^\s<>()\[\]{}\"']+", re.IGNORECASE)
 
 
 def message_links(text: str, provided: list[str], *, limit: int) -> list[str]:
+    if limit <= 0:
+        return []
     links: list[str] = []
     for candidate in [*provided, *URL_PATTERN.findall(text)]:
         normalized = candidate.rstrip(".,;:!?，。；：！？")
@@ -32,6 +40,7 @@ class AnalyzeMessageUseCase:
         agent: MessageAgent,
         link_inspector: LinkInspector,
         task_queue: TaskQueue,
+        execution: AgentExecutionMetadata,
         min_opportunity_confidence: float,
         max_links: int,
     ) -> None:
@@ -40,6 +49,7 @@ class AnalyzeMessageUseCase:
         self.agent = agent
         self.link_inspector = link_inspector
         self.task_queue = task_queue
+        self.execution = execution
         self.min_opportunity_confidence = min_opportunity_confidence
         self.max_links = max_links
 
@@ -108,7 +118,11 @@ class AnalyzeMessageUseCase:
                     opportunity,
                     projection,
                 )
-            await self.message_repo.complete_agent_analysis(message, projection)
+            await self.message_repo.complete_agent_analysis(
+                message,
+                projection,
+                execution=self.execution,
+            )
             return opportunity
         except Exception as exc:
             await self.message_repo.fail_agent_analysis(message.id, str(exc))

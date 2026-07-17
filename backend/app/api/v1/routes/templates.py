@@ -2,7 +2,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from app.api.deps import get_template_repo, require_admin
+from app.api.deps import get_template_repo, require_admin, require_user
 from app.application.dto import ReplyTemplateCreate, ReplyTemplateRead, ReplyTemplateUpdate
 from app.application.mappers import to_reply_template_read
 from app.infrastructure.db.models import ReplyTemplate
@@ -13,9 +13,10 @@ router = APIRouter()
 
 @router.get("", response_model=list[ReplyTemplateRead])
 async def list_templates(
+    _: object = Depends(require_user),
     repo: ReplyTemplateRepository = Depends(get_template_repo),
 ) -> list[ReplyTemplateRead]:
-    templates = await repo.list()
+    templates = await repo.list(limit=200)
     return [to_reply_template_read(template) for template in templates]
 
 

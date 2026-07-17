@@ -67,6 +67,7 @@ import com.codeiy.im.model.ReplyTemplate
 import com.codeiy.im.model.displayText
 import com.codeiy.im.ui.shortDateTime
 import kotlin.coroutines.cancellation.CancellationException
+import java.util.UUID
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -96,6 +97,7 @@ class OpportunityDetailModel(
     val state: StateFlow<UiState> = _state
 
     private var loadJob: Job? = null
+    private var pendingReply: Pair<String, String>? = null
 
     private val operatorId: String
         get() = operatorName()?.ifBlank { null } ?: "operator"
@@ -131,11 +133,18 @@ class OpportunityDetailModel(
     fun sendReply() {
         val text = _state.value.replyText.trim()
         if (text.isEmpty()) return
+        val request = pendingReply?.takeIf { it.first == text }
+            ?: (text to UUID.randomUUID().toString())
+        pendingReply = request
         _state.value = _state.value.copy(isSending = true)
         viewModelScope.launch {
             try {
                 val updated = api {
-                    service.manualReply(opportunityId, ManualReplyRequest(text, operatorId))
+                    service.manualReply(
+                        opportunityId,
+                        request.second,
+                        ManualReplyRequest(text, operatorId),
+                    )
                 }
                 val messages = runCatching {
                     api { service.messages(opportunityId) }
@@ -146,6 +155,7 @@ class OpportunityDetailModel(
                     replyText = "",
                     isSending = false,
                 )
+                pendingReply = null
             } catch (e: Exception) {
                 _state.value = _state.value.copy(isSending = false, error = e.message)
             }
