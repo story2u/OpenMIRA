@@ -17,6 +17,14 @@
       "types": "./src/attention/fold.ts",
       "default": "./src/attention/fold.ts"
     },
+    "./attention/learning": {
+      "types": "./src/attention/learning.ts",
+      "default": "./src/attention/learning.ts"
+    },
+    "./attention/evaluator": {
+      "types": "./src/attention/evaluator.ts",
+      "default": "./src/attention/evaluator.ts"
+    },
     "./domain/opportunity": {
       "types": "./src/domain/opportunity.ts",
       "default": "./src/domain/opportunity.ts"

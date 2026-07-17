@@ -64,7 +64,7 @@
 ## 实施步骤
 
 - [x] S1：定义 core 模型/事件/fold，SQLite migration、repository、账号清理与真实文件测试。
-- [ ] S2：实现主动学习、L0/L1 决策、历史试跑、版本/rollback/shadow/临时关注纯逻辑。
+- [x] S2：实现主动学习、L0/L1 决策、历史试跑、版本/rollback/shadow/临时关注纯逻辑。
 - [ ] S3：增加偏好事件服务端持久化/同步契约、API client、owner/幂等/版本/迁移测试与 capability。
 - [ ] S4：扩展 Pi Agent tools、Host registry 与明确 apply 审批；补 faux provider/tool loop 测试。
 - [ ] S5：实现首次教学、卡片栈、左右滑 UI-thread 动效、haptic、原因、撤销和 Session 总结。
@@ -78,6 +78,9 @@
   从 `998bb54c` 创建功能分支。下一步先以失败测试锁定事件与 fold 不变量，再做 SQLite v6 纵向切片。
 - 2026-07-18：完成 S1。`radar-core` 增加类型化事件与纯 fold；RN SQLite v6 增加 append-only event log、
   七类物化投影和账号清理，repository 在同一排他事务中写事件与投影，重复 event id 不重复计数。
+- 2026-07-18：完成 S2 与 Pi 工具主体。主动学习限制来源/主题重复；L0/L1 离线边界不 suppress；教学可
+  连续撤销 10 条，候选版本需先模拟再确认，支持 shadow、临时关注、schedule 候选和版本回滚。交互 Agent
+  新增 v4 的 15 个严格工具，Host 对 apply 使用一次性内存确认；TS/Python 网关契约有跨运行时一致性测试。
 
 ## 发现日志
 
@@ -103,9 +106,13 @@
 | 命令/场景 | 结果 | 证据或备注 |
 | --- | --- | --- |
 | `make harness-check` | 待运行 | 所有切片完成后及文档更新后运行 |
-| `pnpm --dir packages/radar-core check` | 通过 | 2 files / 3 tests；typecheck 通过 |
+| `pnpm --dir packages/radar-core check` | 通过 | S2 后 4 files / 8 tests；typecheck 通过 |
 | `pnpm --dir mobile/radar test -- src/storage/migrations.test.ts src/attention/signalAppetiteStore.test.ts` | 通过 | Vitest 实际运行移动端全量：45 files / 152 tests |
 | `pnpm --dir mobile/radar typecheck` | 通过 | S1 类型检查通过 |
+| `pnpm --dir packages/radar-agent check` | 通过 | 8/8，覆盖 v1-v4 工具隔离与参数走私 |
+| `uv run --locked pytest -q tests/test_interactive_agent_domain.py tests/test_interactive_agent_gateway.py tests/test_interactive_agent_turn_route.py` | 通过 | 20 passed；含 TS/Python v4 契约一致性 |
+| `pnpm --dir mobile/radar test` | 通过 | S2 后 48 files / 161 tests |
+| `pnpm --dir mobile/radar typecheck` | 通过 | S2/v4 工具类型检查通过 |
 | `make backend-check` | 待运行 | 服务端同步切片后 |
 | 双平台 Hermes export / Release | 待运行 | 不能替代真机手势、haptic 和 FPS |
 | 真机 VoiceOver/TalkBack/haptic/FPS | 待运行 | 需要连接授权设备；未运行前不得声明验收 |

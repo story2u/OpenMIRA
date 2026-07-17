@@ -33,7 +33,7 @@ export function buildDeviceRegistration(
       'agent.schema': 1,
       'agent.submitAnalysis': true,
       'agent.interactive': true,
-      'agent.interactiveSchema': 3,
+      'agent.interactiveSchema': 4,
       ...(runtime.pushEnvironment === null
         ? {}
         : { 'push.environment': runtime.pushEnvironment }),

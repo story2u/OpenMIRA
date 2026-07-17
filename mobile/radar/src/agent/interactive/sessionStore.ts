@@ -17,6 +17,21 @@ const toolNames = new Set<InteractiveToolName>([
   'update_status',
   'claim_opportunity',
   'send_reply',
+  'inspect_signal_appetite',
+  'start_teaching_session',
+  'capture_preference_example',
+  'summarize_teaching_session',
+  'propose_appetite_change',
+  'simulate_appetite',
+  'apply_appetite_change',
+  'start_shadow_mode',
+  'explain_message_decision',
+  'list_suppressed_samples',
+  'correct_message_decision',
+  'create_temporary_focus',
+  'update_attention_schedule',
+  'undo_preference_change',
+  'compare_preference_versions',
 ]);
 
 type SqliteValue = string | number | null;

@@ -64,6 +64,35 @@ interface PreferenceExampleRow {
   reverted_at: string | null;
 }
 
+interface PreferenceRow {
+  id: string;
+  version: number;
+  title: string;
+  natural_language_summary: string;
+  scope: AttentionPreference['scope'];
+  status: AttentionPreference['status'];
+  confidence: number;
+  active_from: string | null;
+  active_until: string | null;
+  schedule_json: string;
+  created_at: string;
+  updated_at: string;
+}
+
+interface IntentRow {
+  id: string;
+  preference_id: string;
+  concept: string;
+  intent_type: AttentionIntent['intentType'];
+  weight: number;
+  delivery_mode: AttentionIntent['deliveryMode'];
+  confidence: number;
+  user_confirmed: number;
+  source: AttentionIntent['source'];
+  valid_from: string | null;
+  valid_until: string | null;
+}
+
 const uuidPattern = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 const eventTypes = new Set<SignalAppetiteEventType>([
   'TeachingSessionStarted',
@@ -419,6 +448,17 @@ async function projectEvent(
     case 'MessageDecisionCorrected':
       await upsertDecision(executor, ownerId, event.payload.correctedDecision);
       await insertExample(executor, ownerId, event.payload.example);
+      await executor.runAsync(
+        `UPDATE teaching_sessions SET
+          presented_count = presented_count + 1,
+          positive_count = positive_count + ?,
+          negative_count = negative_count + ?
+         WHERE owner_id = ? AND id = ?`,
+        event.payload.example.label === 'positive' ? 1 : 0,
+        event.payload.example.label === 'negative' ? 1 : 0,
+        ownerId,
+        event.payload.example.teachingSessionId,
+      );
       break;
     case 'IntentMapUpdated':
       await replaceIntents(
@@ -576,5 +616,123 @@ export async function readPreferenceExamples(
     capturedAt: row.captured_at,
     teachingSessionId: row.teaching_session_id,
     revertedAt: row.reverted_at,
+  }));
+}
+
+function preferenceFromRow(row: PreferenceRow): AttentionPreference {
+  return {
+    id: row.id,
+    version: row.version,
+    title: row.title,
+    naturalLanguageSummary: row.natural_language_summary,
+    scope: row.scope,
+    status: row.status,
+    confidence: row.confidence,
+    activeFrom: row.active_from,
+    activeUntil: row.active_until,
+    schedule: JSON.parse(row.schedule_json),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+export async function readPreferenceVersion(
+  database: SignalAppetiteStoreExecutor,
+  ownerId: string,
+  version: number,
+): Promise<AttentionPreference | null> {
+  const row = await database.getFirstAsync<PreferenceRow>(
+    `SELECT * FROM attention_preferences WHERE owner_id = ? AND version = ?`,
+    requireUuid(ownerId, 'owner_id'),
+    version,
+  );
+  return row ? preferenceFromRow(row) : null;
+}
+
+export async function readActivePreference(
+  database: SignalAppetiteStoreExecutor,
+  ownerId: string,
+): Promise<AttentionPreference | null> {
+  const row = await database.getFirstAsync<PreferenceRow>(
+    `SELECT * FROM attention_preferences WHERE owner_id = ? AND status = 'active'`,
+    requireUuid(ownerId, 'owner_id'),
+  );
+  return row ? preferenceFromRow(row) : null;
+}
+
+export async function readPreferenceIntents(
+  database: SignalAppetiteStoreExecutor,
+  ownerId: string,
+  preferenceId: string,
+  preferenceVersion: number,
+): Promise<AttentionIntent[]> {
+  const rows = await database.getAllAsync<IntentRow>(
+    `SELECT * FROM attention_intents
+     WHERE owner_id = ? AND preference_id = ? AND preference_version = ?
+     ORDER BY abs(weight) DESC, concept, id`,
+    requireUuid(ownerId, 'owner_id'),
+    requireUuid(preferenceId, 'preference_id'),
+    preferenceVersion,
+  );
+  return rows.map((row) => ({
+    id: row.id,
+    preferenceId: row.preference_id,
+    concept: row.concept,
+    intentType: row.intent_type,
+    weight: row.weight,
+    deliveryMode: row.delivery_mode,
+    confidence: row.confidence,
+    userConfirmed: row.user_confirmed === 1,
+    source: row.source,
+    validFrom: row.valid_from,
+    validUntil: row.valid_until,
+  }));
+}
+
+export async function readLatestPreferenceVersion(
+  database: SignalAppetiteStoreExecutor,
+  ownerId: string,
+) {
+  const row = await database.getFirstAsync<{ maximum: number | null }>(
+    'SELECT MAX(version) AS maximum FROM attention_preferences WHERE owner_id = ?',
+    requireUuid(ownerId, 'owner_id'),
+  );
+  return row?.maximum ?? 0;
+}
+
+export async function readMessageFilterDecisions(
+  database: SignalAppetiteStoreExecutor,
+  ownerId: string,
+  options: { decision?: MessageFilterDecision['decision']; limit?: number } = {},
+): Promise<MessageFilterDecision[]> {
+  const limit = Math.min(500, Math.max(1, options.limit ?? 100));
+  const rows = await database.getAllAsync<{
+    message_id: string;
+    preference_version: number;
+    decision: MessageFilterDecision['decision'];
+    confidence: number;
+    reason_summary: string;
+    evidence_json: string;
+    evaluator: MessageFilterDecision['evaluator'];
+    decided_at: string;
+    expires_at: string | null;
+  }>(
+    `SELECT * FROM message_filter_decisions WHERE owner_id = ?
+     ${options.decision ? 'AND decision = ?' : ''}
+     ORDER BY decided_at DESC, message_id LIMIT ?`,
+    requireUuid(ownerId, 'owner_id'),
+    ...(options.decision ? [options.decision] : []),
+    limit,
+  );
+  return rows.map((row) => ({
+    messageId: row.message_id,
+    preferenceVersion: row.preference_version,
+    decision: row.decision,
+    confidence: row.confidence,
+    reasonSummary: row.reason_summary,
+    evidence: JSON.parse(row.evidence_json),
+    evaluator: row.evaluator,
+    decidedAt: row.decided_at,
+    expiresAt: row.expires_at,
   }));
 }
