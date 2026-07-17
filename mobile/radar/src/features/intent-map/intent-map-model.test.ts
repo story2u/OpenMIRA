@@ -38,4 +38,26 @@ describe('intent map model', () => {
     expect(model.nodes.find((node) => node.kind === 'reduce')?.y).toBeGreaterThan(280);
     expect(model.edges.find((edge) => edge.to.endsWith('000000000001'))?.confirmed).toBe(false);
   });
+
+  it('holds the deterministic rendering budget below thirty-one nodes with temporary focuses', () => {
+    const model = buildIntentMapModel({
+      ...snapshot,
+      intents: [
+        ...Array.from({ length: 6 }, (_, index) => intent(index, 'include')),
+        ...Array.from({ length: 12 }, (_, index) => intent(index + 10, 'context')),
+        ...Array.from({ length: 8 }, (_, index) => intent(index + 30, 'reduce')),
+      ],
+      temporaryFocuses: Array.from({ length: 4 }, (_, index) => ({
+        id: `00000000-0000-4000-8000-${String(index + 100).padStart(12, '0')}`,
+        concept: `temporary-${index}`,
+        deliveryMode: 'immediate' as const,
+        createdAt: '2026-07-18T00:00:00.000Z',
+        expiresAt: '2026-07-19T00:00:00.000Z',
+        expiredAt: null,
+      })),
+    });
+    expect(model.nodes).toHaveLength(29);
+    expect(model.nodes.filter((node) => node.kind === 'temporary')).toHaveLength(4);
+    expect(model.nodes.length).toBeLessThanOrEqual(30);
+  });
 });

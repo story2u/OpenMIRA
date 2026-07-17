@@ -53,6 +53,11 @@
   PostgreSQL 覆盖独立 quota、claim 幂等、并发 reservation/provider stream 唯一、device revoke、lease/lock、
   consume/release 与内部命令 receipt；OpenAPI 生成必须证明内联消息联合无悬空 `$defs`。双平台 Hermes export
   仍不能替代真实 provider、系统 kill/reopen、键盘/窄屏/无障碍和 allowlist 灰度。
+- 信息胃口：纯 fold 覆盖 capture/apply 分离、版本/回滚、Shadow、临时关注到期、schedule 和云端失败不
+  suppress；真实文件 SQLite 覆盖事件/投影原子性、重复 event、账号清理与多设备 push/pull cursor。手势
+  状态机固定物理左 positive / 右 negative，并覆盖 fling、未达阈值、纵向、边缘、多点、RTL 不镜像和
+  100 次连续操作；地图断言确定性预布局和 ≤30 节点。Hermes export、宿主机单测和结构预算不能替代
+  真机 P90 55fps、haptic、低端 Android、热机/内存压力、VoiceOver/TalkBack 和 screenshot Golden。
 - 部署：完整 check + `docker compose config` + 健康/ready 检查和回滚思路。
 
 ## 测试编写规则

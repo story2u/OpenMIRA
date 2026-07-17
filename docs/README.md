@@ -30,6 +30,7 @@ OpenAPI/core/API/Agent 包和独立 bundle id 的 Expo/RN 开发包，但 RN 尚
 
 - [架构总览](architecture/overview.md)：系统上下文、模块职责、依赖方向与关键数据流。
 - [功能地图](product/feature-map.md)：产品能力、入口、成熟度和真实/演示边界。
+- [信息胃口](product/signal-appetite.md)：教学、意图地图、Pi、事件同步、验证证据与发版缺口。
 - [开发规范](development/standards.md)：后端、前端、契约、数据库和可观测性约束。
 - [开发工作流](development/workflow.md)：AI 执行功能、修 bug、更新知识的标准闭环。
 - [开发命令](development/commands.md)：可复制的本地与 CI 验证命令。

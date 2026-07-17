@@ -1,3 +1,5 @@
+from datetime import datetime
+from typing import Any, Protocol, Sequence
 from uuid import UUID
 
 from sqlalchemy import func
@@ -5,8 +7,30 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from app.application.dto import SignalAppetiteEventWrite
 from app.infrastructure.db.models import SignalAppetiteEvent
+
+
+class SignalAppetiteEventInput(Protocol):
+    @property
+    def eventId(self) -> UUID: ...
+
+    @property
+    def eventType(self) -> str: ...
+
+    @property
+    def aggregateId(self) -> UUID: ...
+
+    @property
+    def aggregateVersion(self) -> int: ...
+
+    @property
+    def schemaVersion(self) -> int: ...
+
+    @property
+    def payload(self) -> dict[str, Any]: ...
+
+    @property
+    def occurredAt(self) -> datetime: ...
 
 
 class SignalAppetiteEventConflictError(ValueError):
@@ -30,7 +54,7 @@ class SignalAppetiteRepository:
         *,
         owner_user_id: UUID,
         device_id: UUID,
-        events: list[SignalAppetiteEventWrite],
+        events: Sequence[SignalAppetiteEventInput],
     ) -> list[SignalAppetiteEvent]:
         stored: list[SignalAppetiteEvent] = []
         for event in events:
@@ -93,7 +117,7 @@ class SignalAppetiteRepository:
         row: SignalAppetiteEvent,
         *,
         device_id: UUID,
-        event: SignalAppetiteEventWrite,
+        event: SignalAppetiteEventInput,
     ) -> bool:
         return (
             row.device_id == device_id

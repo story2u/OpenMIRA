@@ -15,3 +15,4 @@
 - [2026-07-14：企业微信消息收发 P0](2026-07-14-wecom-message-integration.md)
 - [2026-07-18：P5 Agent 草稿与内部命令工具](2026-07-18-p5-agent-draft-internal-tools.md)
 - [2026-07-18：P5 Agent 明确批准后外发](2026-07-18-p5-agent-approved-send.md)
+- [2026-07-18：信息胃口 Agent-native 过滤体验](2026-07-18-signal-appetite.md)

@@ -52,4 +52,18 @@ describe('teaching state machine', () => {
     expect(state.phase).toBe('presenting');
     expect(state.completedActions.at(-1)?.label).toBe('skipped');
   });
+
+  it('processes one hundred continuous teaching decisions without losing order', () => {
+    let state = teachingReducer(initialTeachingMachineState, { type: 'READY' });
+    for (let index = 0; index < 100; index += 1) {
+      state = teachingReducer(state, {
+        type: 'COMMIT',
+        label: index % 2 === 0 ? 'positive' : 'negative',
+      });
+      state = teachingReducer(state, { type: 'ADVANCE', finished: index === 99 });
+    }
+    expect(state).toMatchObject({ cardIndex: 100, phase: 'completed' });
+    expect(state.completedActions).toHaveLength(100);
+    expect(state.completedActions[99]).toEqual({ cardIndex: 99, label: 'negative' });
+  });
 });

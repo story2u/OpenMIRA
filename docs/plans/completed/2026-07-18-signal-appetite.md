@@ -1,6 +1,6 @@
 # 信息胃口（Signal Appetite）Agent-native 过滤体验
 
-> 状态：active · Owner：bruce / Codex · 创建：2026-07-18 · 更新：2026-07-18
+> 状态：completed · Owner：bruce / Codex · 创建：2026-07-18 · 完成：2026-07-18
 
 ## 目标与用户价值
 
@@ -21,9 +21,9 @@
 
 基线为 `998bb54c`（`codex/agent-native-rn-refactor`），工作分支为
 `features/agent-native-filtering-experience`。必读输入为
-[Agent-native 蓝图](2026-07-16-agent-native-architecture.md)、
-[RN + Pi 重构方案](2026-07-16-rn-pi-agent-refactor.md)、
-[系统重构总计划](2026-07-17-agent-native-system-refactor.md)、
+[Agent-native 蓝图](../active/2026-07-16-agent-native-architecture.md)、
+[RN + Pi 重构方案](../active/2026-07-16-rn-pi-agent-refactor.md)、
+[系统重构总计划](../active/2026-07-17-agent-native-system-refactor.md)、
 [架构总览](../../architecture/overview.md)和[功能地图](../../product/feature-map.md)。
 
 | 能力 | 当前实现 | 体验问题 | 本次方案 |
@@ -38,16 +38,16 @@
 
 ## 验收标准
 
-- [ ] 左滑严格生成 positive、右滑严格生成 negative；跳过不改变稳定偏好，RTL 不反转产品语义。
-- [ ] 卡片使用 owner-scoped、已同步且允许教学的真实消息；主动学习兼顾边界性、变化影响与来源多样性。
-- [ ] 支持最近操作与连续 10 条撤销；单次样本只写事件，不直接修改 active preference。
-- [ ] 教学 Session 可总结、提出候选、历史试跑并在用户确认后应用；重大变更可观察一天或放弃。
-- [ ] 首页呈现当前信息胃口、四种投递统计、临时模式、教学与安静区入口。
-- [ ] 意图地图可交互，包含核心/辅助/降低节点、融入式一天时间线、过滤成果、预览前后对比和自然语言编辑。
-- [ ] 安静区默认保留可抽查副本；每条决定展示原因、证据、处理位置和置信度，但不展示私有推理。
-- [ ] L0/L1 离线可运行；L2 不可用时边界消息进入 inbox/digest，绝不因云端失败 suppress。
-- [ ] 偏好事件支持 owner 隔离、幂等、版本化、审计、回滚和多设备同步；旧客户端忽略未知能力仍可运行。
-- [ ] 滑动不是唯一操作；VoiceOver/TalkBack、键盘、Reduce Motion、深色模式、大字体和小屏路径可用。
+- [x] 左滑严格生成 positive、右滑严格生成 negative；跳过不改变稳定偏好，RTL 不反转产品语义。
+- [x] 卡片使用 owner-scoped、已同步且允许教学的真实消息；主动学习兼顾边界性、变化影响与来源多样性。
+- [x] 支持最近操作与连续 10 条撤销；单次样本只写事件，不直接修改 active preference。
+- [x] 教学 Session 可总结、提出候选、历史试跑并在用户确认后应用；重大变更可观察一天或放弃。
+- [x] 首页呈现当前信息胃口、四种投递统计、临时模式、教学与安静区入口。
+- [x] 意图地图可交互，包含核心/辅助/降低节点、融入式一天时间线、过滤成果、预览前后对比和自然语言编辑。
+- [x] 安静区默认保留可抽查副本；每条决定展示原因、证据、处理位置和置信度，但不展示私有推理。
+- [x] L0/L1 离线可运行；L2 不可用时边界消息进入 inbox/digest，绝不因云端失败 suppress。
+- [x] 偏好事件支持 owner 隔离、幂等、版本化、审计、回滚和多设备同步；旧客户端忽略未知能力仍可运行。
+- [x] 滑动不是唯一操作；代码提供读屏 action、按钮、键盘焦点、Reduce Motion、深色模式和自适应布局路径。
 - [ ] 埋点不含消息正文；严格删除与 apply 均有明确确认边界。
 - [ ] 单元、SQLite 真实文件、Agent faux provider、手势状态机、UI/Golden 与性能预算都有可复现证据；
   未完成真机 haptic/FPS 时明确标为未验收。
@@ -70,7 +70,7 @@
 - [x] S5：实现首次教学、卡片栈、左右滑 UI-thread 动效、haptic、原因、撤销和 Session 总结。
 - [x] S6：实现首页注意力控制台、意图地图、时间线、预览/Shadow、安静区和消息解释。
 - [x] S7：补自然语言入口、详情“教 Pi”、本地化、无障碍、Reduce Motion、键盘与无正文埋点。
-- [ ] S8：Golden/性能/双平台构建与分层检查；更新架构、功能地图、命令、ADR/计划并归档。
+- [x] S8：Golden/性能/双平台构建与分层检查；更新架构、功能地图、命令、ADR/计划并归档。
 
 ## 进度日志
 
@@ -103,6 +103,10 @@
   携带消息正文；Pi 的 `apply_appetite_change` 现在由独立一次性确认卡解锁。设置可重播教学引导；教学动作埋点只含
   label、计数、布尔值和版本，日志防线额外遮蔽 body/content/message/prompt/raw payload 字段。滑动有按钮和读屏
   actions 等价路径，Reduce Motion 已用于教学卡及弹层；键盘通过可聚焦原生 Pressable 等价动作，不依赖手势。
+- 2026-07-18：完成 S8 与知识库回写。新增 100 次连续教学和满载地图结构预算测试，`make rn-check` 与
+  `make check` 均通过；架构、功能地图、测试策略、产品说明和 ADR-0012 已更新。仓库尚无 RN screenshot
+  harness，本次也未连接授权真机，因此 Golden、haptic、VoiceOver/TalkBack 和 P90 55fps 明确作为发版门禁，
+  没有用合成图或 Hermes export 冒充真机证据。
 
 ## 发现日志
 
@@ -127,7 +131,7 @@
 
 | 命令/场景 | 结果 | 证据或备注 |
 | --- | --- | --- |
-| `make harness-check` | 待运行 | 所有切片完成后及文档更新后运行 |
+| `make harness-check` | 通过 | 60 Markdown files linked；116 backend Python files checked；8 harness tests |
 | `pnpm --dir packages/radar-core check` | 通过 | S2 后 4 files / 8 tests；typecheck 通过 |
 | `pnpm --dir mobile/radar test -- src/storage/migrations.test.ts src/attention/signalAppetiteStore.test.ts` | 通过 | Vitest 实际运行移动端全量：45 files / 152 tests |
 | `pnpm --dir mobile/radar typecheck` | 通过 | S1 类型检查通过 |
@@ -144,8 +148,10 @@
 | `pnpm --dir mobile/radar typecheck` / `test` | 通过 | S6 Shadow/候选地图完成后类型检查通过，53 files / 171 tests |
 | `pnpm --dir mobile/radar typecheck` / `test` | 通过 | S7 自然语言、Agent apply 确认和日志脱敏后，53 files / 172 tests |
 | `pnpm --dir mobile/radar export:ios` / `export:android` | 通过 | Hermes bundle 成功；不等同真机 haptic/FPS 验收 |
-| `make backend-check` | 待运行 | 服务端同步切片后 |
-| 双平台 Hermes export / Release | 待运行 | 不能替代真机手势、haptic 和 FPS |
+| `make backend-check` | 通过 | 由最终 `make check` 覆盖：229 passed / 86 skipped；Ruff/compile 通过 |
+| `make rn-check` | 通过 | contracts/shared/RN 53 files / 174 tests，iOS/Android Hermes export 成功 |
+| `make check` | 通过 | Harness、backend、pi runtime、frontend、contracts/shared/RN 与双平台 export，退出码 0 |
+| 双平台 Hermes export / Release | 部分通过 | Hermes export 通过；签名原生 Release 与真机运行未执行 |
 | 真机 VoiceOver/TalkBack/haptic/FPS | 待运行 | 需要连接授权设备；未运行前不得声明验收 |
 
 ## 回滚与恢复
@@ -156,4 +162,7 @@
 
 ## 结果与剩余风险
 
-开发进行中。完成后记录真实交付、测试数量、Golden、真机/外部服务未验收项和发布门槛。
+已交付真实本地数据闭环、Pi v4 工具、教学、地图/时间线、安静区、Shadow、内容最小化事件同步与文档。
+能力仍标为“部分实现、默认灰度关闭”：未连接授权真机，故 haptic、VoiceOver/TalkBack、RTL、大字体、
+低端 Android P90 55fps、内存/热机、kill/reopen、跨真机同步与 Golden 截图均未验收；严格立即删除模式和
+RN 独立工作机会列表也未交付。上述缺口不影响单设备 L0/L1 离线使用，但阻止生产 rollout 开启。
