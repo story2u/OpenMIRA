@@ -9,7 +9,7 @@ from app.core.config import Settings
 from app.core.security import require_secret
 from app.domain.enums import IMChannel
 from app.domain.ports import InboundMessage, SendReceipt
-from app.infrastructure.db.repositories import TelegramConnectionRepository
+from app.infrastructure.im.base import IMSendDisabledError
 
 
 class TelegramAdapter:
@@ -104,11 +104,7 @@ class TelegramAdapter:
     ) -> SendReceipt:
         del idempotency_key, opportunity_id
         if not self.settings.im_send_enabled:
-            return SendReceipt(
-                provider_message_id=None,
-                raw_response={"dry_run": True, "channel": self.channel, "chat_id": conversation_id},
-                delivered=False,
-            )
+            raise IMSendDisabledError("IM sending is disabled")
 
         payload: dict[str, str] = {"chat_id": conversation_id, "text": text}
         if owner_user_id and self.connection_repo:

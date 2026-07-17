@@ -1,0 +1,30 @@
+{
+  "name": "@story2u/radar-core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    "./domain/opportunity": {
+      "types": "./src/domain/opportunity.ts",
+      "default": "./src/domain/opportunity.ts"
+    },
+    "./sync/change-envelope": {
+      "types": "./src/sync/change-envelope.ts",
+      "default": "./src/sync/change-envelope.ts"
+    },
+    "./sync/change-projection": {
+      "types": "./src/sync/change-projection.ts",
+      "default": "./src/sync/change-projection.ts"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "check": "pnpm typecheck && pnpm test"
+  },
+  "devDependencies": {
+    "typescript": "5.7.3",
+    "vitest": "4.1.10"
+  }
+}

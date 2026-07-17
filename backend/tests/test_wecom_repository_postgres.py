@@ -1,3 +1,4 @@
+import asyncio
 import os
 from collections.abc import AsyncIterator
 
@@ -6,8 +7,15 @@ from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from app.domain.enums import IMChannel, WeComConnectionStatus, WeComDeliveryStatus
+from app.domain.enums import (
+    IMChannel,
+    ManualReplyDeliveryStatus,
+    WeComConnectionStatus,
+    WeComDeliveryStatus,
+)
+from app.domain.services.opportunity_state import OpportunityClaimConflict
 from app.infrastructure.db.models import (
+    ManualReplyDelivery,
     Opportunity,
     User,
     WeComConnection,
@@ -16,6 +24,8 @@ from app.infrastructure.db.models import (
     WeComWebhookEvent,
 )
 from app.infrastructure.db.repositories import (
+    ManualReplyDeliveryRepository,
+    OpportunityRepository,
     WeComConnectionRepository,
     WeComDeliveryRepository,
     WeComEventRepository,
@@ -62,6 +72,9 @@ async def wecom_subject() -> AsyncIterator[
     yield factory, user, connection, opportunity
 
     async with factory() as session:
+        await session.exec(
+            delete(ManualReplyDelivery).where(ManualReplyDelivery.owner_user_id == user.id)
+        )
         await session.exec(
             delete(WeComOutboundDelivery).where(WeComOutboundDelivery.owner_user_id == user.id)
         )
@@ -150,3 +163,54 @@ async def test_delivery_idempotency_is_scoped_to_owner(wecom_subject) -> None:
     assert repeated.id == first.id
     assert repeated.status == WeComDeliveryStatus.SENT
     assert should_send_again is False
+
+
+async def test_manual_reply_delivery_claim_is_atomic_and_reuses_completed_record(
+    wecom_subject,
+) -> None:
+    factory, user, _, opportunity = wecom_subject
+    async with factory() as session:
+        repo = ManualReplyDeliveryRepository(session)
+        first = await repo.reserve(
+            owner_user_id=user.id,
+            opportunity_id=opportunity.id,
+            idempotency_key="generic-manual-reply-001",
+            content_hash="c" * 64,
+        )
+        claimed = await repo.claim_send_attempt(first.id)
+        assert claimed is not None
+        assert claimed.status == ManualReplyDeliveryStatus.SENDING
+        assert await repo.claim_send_attempt(first.id) is None
+        delivered = await repo.mark_delivered(claimed, "provider-message-generic-001")
+        await repo.mark_completed(delivered.id)
+
+        repeated = await repo.reserve(
+            owner_user_id=user.id,
+            opportunity_id=opportunity.id,
+            idempotency_key="generic-manual-reply-001",
+            content_hash="c" * 64,
+        )
+
+    assert repeated.id == first.id
+    assert repeated.status == ManualReplyDeliveryStatus.COMPLETED
+
+
+async def test_opportunity_claim_allows_only_one_concurrent_operator(wecom_subject) -> None:
+    factory, user, _, opportunity = wecom_subject
+
+    async def attempt(operator_id: str):
+        async with factory() as session:
+            return await OpportunityRepository(session).claim(
+                opportunity_id=opportunity.id,
+                owner_user_id=user.id,
+                operator_id=operator_id,
+            )
+
+    results = await asyncio.gather(
+        attempt("operator-a"),
+        attempt("operator-b"),
+        return_exceptions=True,
+    )
+
+    assert sum(not isinstance(result, Exception) for result in results) == 1
+    assert sum(isinstance(result, OpportunityClaimConflict) for result in results) == 1

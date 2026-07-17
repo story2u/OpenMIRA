@@ -1,6 +1,6 @@
 # 架构总览
 
-> 状态：当前事实 · 最后核验：2026-07-11 · 代码真相源：`backend/app/`、`frontend/`
+> 状态：当前事实 · 最后核验：2026-07-17 · 代码真相源：`backend/app/`、`frontend/`、`packages/`、`mobile/radar/`
 
 ## 系统上下文
 
@@ -13,6 +13,7 @@ flowchart LR
     WC["企业微信自建应用"] --> API
     WCA["企业微信会话内容存档 / Finance SDK"] --> CELERY
     WEB["Next.js Web"] <--> API
+    MOBILE["SwiftUI / Compose / RN dev"] <--> API
     API --> PG[(PostgreSQL)]
     API --> REDIS[(Redis)]
     REDIS --> CELERY["Celery worker / beat"]
@@ -36,6 +37,8 @@ flowchart LR
 | Celery beat | 同上 | 周期调度待人工商机超时检查 |
 | WeCom archive worker | `backend/app/worker/tasks.py` + Finance SDK | 单并发拉取/解密企业级会话存档，按成员 binding 生成只读消息与商机 |
 | pi Agent runner | `backend/pi-agent-runtime/src/index.mjs` | 由 worker 按消息启动；只提交结构化分析，不持有业务动作权限 |
+| RN P0-P2 开发包 | `mobile/radar/app/` | 独立 dev bundle id 的认证、在线看板、详情/消息、人工回复、AI 草稿、模板、认领与状态流转，共享包接入及兼容性实验；尚未替代商店原生 App，默认不配置生产 API |
+| 共享 TypeScript | `packages/radar-*` | OpenAPI 类型、纯 core、跨平台 API client 与 Agent schema/prompt；使用直接子路径导出 |
 | Telegram listener | `backend/app/worker/telegram_listener.py` | 保持旧 MTProto session 的兼容监听 |
 | Telegram QR worker / listener | `backend/app/worker/telegram_mtproto_qr_worker.py`、`telegram_mtproto_listener.py` | 平台凭据二维码登录、加密 session 与普通账号来源的只读监听 |
 | PostgreSQL | SQLModel + Alembic | 用户、订阅/用量账本、消息、商机、规则、配置、模板、Telegram 配置 |
@@ -45,6 +48,75 @@ flowchart LR
 `backend/docker-compose.prod.yml`；GitHub Actions 构建和 VPS 部署见 `.github/workflows/`。
 后端 Python 版本与直接依赖声明在 `backend/pyproject.toml`，`backend/uv.lock` 是跨平台精确锁；
 本地、CI 和 Docker 均通过 uv 同步同一依赖图。
+
+Web、RN 与 `packages/*` 由根 `pnpm-workspace.yaml` 和唯一根 `pnpm-lock.yaml` 管理；Node runner 因
+Docker/子进程边界继续使用 `backend/pi-agent-runtime/package-lock.json`，通过受审查的 `file:` 依赖消费
+`packages/radar-agent`。FastAPI OpenAPI snapshot 是 TypeScript API 契约源，CI 同时检查 Python snapshot
+与生成文件漂移。
+
+RN 启动时并行恢复 SecureStore 会话和迁移本地 `radar.db`。当前 SQLite v5 建立按 `owner_id` 隔离的原始
+change inbox、商机/消息/三类设置 projection、可恢复 bootstrap 状态、幂等 command outbox、sync cursor
+与最后一次服务端 capability 决策，并为端上分析保存有界 input、lease/lock/version/phase/attempt 等最小
+恢复状态；另以应用自定义、版本化 entry 保存 30 天交互式 Agent 本地会话。分析 run token 可使用
+SecureStore 恢复；交互 turn token 与一次性外发 approval token 只驻留当前运行内存，token/password
+不进入 SQLite。
+只有明确 401 才清凭据，网络失败保留并 fail closed。登录后后台注册 installation，服务端只保存 HMAC；
+device ID/refresh bearer 先写入并回读验证，再原子替换 access token。启动时 access 失效会用单次 refresh
+轮换恢复，旧 bearer 复用撤销整个设备 family；登出先尽力撤销设备再清 legacy/current/device 凭据。
+
+P3 服务端已为 Message、Opportunity 和三类用户设置增加 `aggregate_version`。ORM `before_flush` 只对这些
+聚合捕获公开投影，在同一业务事务追加 owner-scoped upsert/tombstone；不会把现有多次 commit 合并成虚假
+领域事件，也不会把 IM provider raw payload 放进同步流。`GET /sync/bootstrap` 以 owner 绑定的签名 token
+分页当前快照，`GET /sync/changes` 返回按 cursor 严格递增的最多 500 条 change；默认 30 天窗口之外或客户端
+超前均显式要求 reset。`POST /sync/ack` 只接受带 `did` 的 active 设备 access token，并单调记录设备已应用
+cursor/错误码。外部回复依赖在线确认，因此全局回复模板不是首批离线快照的必要数据，仍从在线模板 API 读。
+
+RN 已在单个 SQLite 事务中写 change inbox、按 aggregate version 幂等更新 projection 并推进 cursor；支持
+分页 bootstrap 断点、过期 token 重启、cursor reset、逻辑投影损坏后强制重建和 best-effort ack。设备上报
+`client.reactNative=true`/`sqlite.schema=5`，并如实报告 `agent.submitAnalysis=true`、
+`agent.streaming=true`、`agent.runtime=pi-0.80.6`、`agent.schema=1`、`agent.interactive=true` 与
+`agent.interactiveSchema=3`（表示客户端最高支持版本，服务端仍可选择 v1/v2）；
+`GET /devices/current/capabilities` 仍要求 active `did` 会话和
+服务端 `RN_SYNC_ROLLOUT_ENABLED` 才返回 `syncAvailable=true`。启动、前台恢复、手动刷新，以及
+`expo-network` 确认的离线到在线转换都会触发同一个 single-flight 同步和 outbox drain；网络监听直接订阅
+原生事件，不把高频状态广播进 React Provider 树。看板、详情、消息与设置保持 online-first，只在
+capability 已授权且网络/5xx 失败时读取 ready 的本地投影。401、校验错误、严格契约错误和取消请求不回退。
+灰度开关默认关闭，真机飞行模式证据完成前生产仍返回 `syncAvailable=false`。
+
+离线 outbox 当前只接受不触发外部副作用的 `opportunity_status`。命令固定携带 owner、aggregate、SQLite
+projection base version、7 天过期时间和稳定幂等键；单 owner 最多 100 条 active、单次前台 drain 最多
+50 条、最多尝试 5 次。恢复联网时先同步服务端变更，再比较本地版本、提交命令，成功后再同步一次投影。
+服务端在商机行锁事务内检查 `expectedVersion`，并写 owner 级 `InternalCommandReceipt`；回执和状态变更/
+SyncChange 原子提交，30 天后可清理。响应不确定时客户端沿用同一键，409/过期/拒绝进入看板可打开、
+可忽略的用户可见队列。人工回复、好友申请、认领、AI 草稿等仍是显式在线动作，不进入 outbox。
+
+P3 推送采用“已提交 change feed 的 cursor 提示”，不是数据通道。RN 仅在用户显式授权后通过
+`expo-notifications` 取得原生 APNs/FCM token；服务端加密 token、以 SHA-256 hash 去重，并按设备、provider
+和环境管理轮换/撤销。Celery beat 扫描每个 active registration 尚未提示的 owner 最新 cursor，先写短租约再
+调用可替换的 APNs/FCM v1 adapter；成功推进 `last_notified_cursor`，平台报告未注册则永久失效，暂时故障指数
+退避。payload 只有版本化 cursor 和 APNs `content-available`/FCM data 元数据，没有标题、正文、商机 ID 或
+消息内容。前台 listener、点击冷启动和已注册 background task 都只触发同一个 single-flight sync；提示
+cursor 不领先于本地 durable cursor 时跳过重复拉取，本地落后、缺失或读取失败时仍走正常恢复。OS 丢弃
+推送时，App 启动、前台恢复、网络恢复和手动刷新仍补拉 change。设备注册同时上报签名实际对应的
+`push.environment`；服务端只在该环境的 provider/topic 可用时接受 token。`RN_SYNC_ROLLOUT_ENABLED`、
+`RN_PUSH_ROLLOUT_ENABLED`、provider 凭据、环境与客户端 schema 任一不满足时
+`pushAvailable=false`。
+
+RN 看板优先读取服务端 `GET /opportunities/dashboard`，服务端负责 owner 隔离、筛选、排序、分页和
+重大商机聚合；共享 `radar-api` 在客户端使用严格 runtime decoder，AbortController 与 request key 防止
+过期请求覆盖新筛选。服务端 capability 开启后，网络/5xx 失败可用相同查询语义读取 SQLite projection；
+在线 REST 响应本身不会被客户端伪写成同步真相。
+
+RN P2 详情按 UUID 深链独立并行读取 `GET /opportunities/{id}` 与第一页
+`GET /messages/page`，后续消息按 20 条继续分页；Web 详情也消费相同严格 API，并按 200 条分页。
+服务端分页硬上限为 200，未知或非 owner 的消息资源返回空页以隐藏存在性；旧 SwiftUI/Compose
+数组端点继续可用，但只返回最近 500 条并恢复为时间正序。详情与消息由 change feed 写入 SQLite；开启
+capability 后只读请求可离线回退，归档和回复等写操作仍必须在线，历史详情与消息仍可读取。
+
+RN/Web 的在线写操作共用 `packages/radar-api` 的严格子路径 API。人工回复由客户端生成稳定 UUID
+`Idempotency-Key`，失败重试不换键；响应直接携带服务端商机、outgoing Message 与精确消息总数，客户端
+不会合成临时时间戳 ID。认领和状态流转只使用服务端返回的行锁结果；AI 端点只返回可编辑草稿，模板
+列表为空或失败时不回退 mock。上述能力仍是在线 REST，P3 前不把写命令放进 SQLite outbox。
 
 ## 后端分层
 
@@ -86,17 +158,19 @@ ADR 和迁移计划，不要在单个功能中半途改造。
 
 | 模型 | 作用 | 关键关系/约束 |
 | --- | --- | --- |
-| `User` / `AuthAccount` | 本地用户与 OAuth 身份 | provider + subject 唯一；`auth_version` 吊销旧 JWT；资源按 `user_id` 隔离 |
-| `PasswordResetChallenge` | 一次性密码重置挑战 | 只存 token/code HMAC 摘要；用户、到期时间、失败次数和使用状态受约束 |
+| `User` / `AuthAccount` | 本地用户与 OAuth 身份 | provider + subject 唯一；资源按 `user_id` 隔离 |
+| `Device` / `DeviceCredential` | P3 可撤销移动安装与轮换凭据 | owner + installation HMAC 唯一；owner/device 复合外键；refresh bearer 仅存 SHA-256 hash；单设备最多一个 active credential；注册、列表、撤销和单次轮换 API 已开放，旧 bearer 复用会撤销设备 family |
+| `PushRegistration` | P3 APNs/FCM token 生命周期与 cursor 提示进度 | 平台必要 token 加密、hash 去重；单设备/provider/environment 最多一个 active；轮换/撤销/平台失效；短租约、失败退避和 `last_notified_cursor` 防止稳定重复投递 |
+| `SyncChange` | P3 owner-scoped aggregate upsert/tombstone feed | 全局 BIGINT identity 使每个 owner 子序列单调；aggregate version 唯一、payload/operation 受约束；Message/Opportunity/三类设置事务内 append 与 bounded bootstrap/changes/reset/ack API 已开放，RN 已实现事务化消费与 capability 门控的只读回退，生产灰度仍默认关闭 |
+| `InternalCommandReceipt` | P3 内部离线状态命令幂等回执 | owner + idempotency key 唯一；绑定商机、base version 和 payload hash；与商机状态/SyncChange 同事务，默认保留 30 天；不承载任何外部 IM 动作 |
 | `SubscriptionAccount` | 用户有效权益投影 | user 唯一；受限 API 的最终权限来源；旧 provider ID 字段仅兼容保留 |
 | `BillingSubscription` / `BillingEvent` / `BillingProduct` | RevenueCat 渠道事实、幂等事件与产品映射审计 | 多渠道订阅；provider external key 与 event ID 唯一；不长期保存 raw webhook |
 | `UsageLedger` | AI 功能额度的可审计账本 | user + feature + idempotency key 唯一；reserved/consumed/released |
-| `Message` | 收发消息审计记录 | channel + external_message_id 幂等；保存 pi 分析状态/结果；可关联 opportunity |
+| `AnalysisRun` / `AnalysisProviderRequest` | P4 设备分析租约、shadow 观察、唯一投影和无正文 provider 成本审计 | owner/device/message/ledger 复合约束；同消息最多一个 active run 和一个 shadow run、同 run 最多一个 active provider stream；run token 只存 nonce hash，provider request ID 只存 SHA-256；shadow 只记录 match/difference，不写业务投影 |
+| `Message` | 收发消息审计记录 | channel + external_message_id 幂等；保存 pi 分析状态/结果及无正文执行来源（server/device、run/device、runtime/schema/model/policy）；可关联 opportunity |
 | `Opportunity` / `OpportunityArchiveEvent` | 商机聚合根与归档审计 | 状态表达业务生命周期；nullable 归档字段独立控制看板可见性，恢复不改变状态；source_message 唯一 |
-| `JobOpportunityDetail` / `JobOpportunitySource` | 工作机会结构化投影与来源证据 | opportunity 一对一详情；所有重复来源保留，来源链接与投递链接分离 |
-| `SourceFunctionalProfile` / `JobMessageAudit` | 来源职能画像与消息分类审计 | owner + channel + source 唯一；人工覆盖优先；不保存完整 provider payload |
-| `JobSearchProfile` / `JobOpportunityMatch` | 用户求职偏好与确定性匹配结果 | 多档案按 owner 隔离；受保护属性不进入档案或评分 |
-| `AutoReplyDelivery` | AI 自动回复最小投递账本 | owner + idempotency key 唯一；记录门禁原因与发送状态，不复制正文或 provider raw response |
+| `ManualReplyDelivery` | 跨 IM 适配器的人工外发投递账本 | owner + idempotency key 唯一；绑定商机/正文哈希，记录 PENDING/SENDING/DELIVERED/COMPLETED/FAILED/UNCERTAIN 与 provider message ID；结果不确定时禁止自动重发 |
+| `InteractiveAgentActionApproval` | P5 单次交互 Agent 外发批准证明 | owner/device/turn/tool-call 唯一；只保存 canonical args SHA-256、资源版本、幂等键、nonce hash 与生命周期，不保存正文/token；GRANTED 只能 claim 一次，终态不可回退 |
 | `Rule` | 关键词/正则/AI hint 规则 | 启用、优先级、分数驱动检测策略 |
 | `AppConfig` | 运行期业务配置 | JSONB value；当前包含工作时间等配置 |
 | `ReplyTemplate` | 人工回复模板 | 可启用、分类 |
@@ -215,8 +289,10 @@ sequenceDiagram
   保持幂等，失败可重试。
 - Python `SafeLinkInspector` 只读取公网 HTTP(S) 文本，逐跳检查重定向并限制端口、数量、时间、
   响应字节和传给模型的文本长度。网页内容与消息文本都作为不可信数据。
-- Node runner 使用 `@earendil-works/pi-agent-core` 的无持久会话 Agent，不加载 coding-agent、
-  context、skills 或内置工具；唯一工具 `submit_analysis` 用 TypeBox 验证最终结构并终止 loop。
+- Node runner 与 RN 使用 `@earendil-works/pi-agent-core` 的无持久会话 Agent，不加载 coding-agent、
+  context、skills 或内置工具；唯一工具 `submit_analysis` 用 `packages/radar-agent` 的共享 TypeBox schema
+  验证最终结构并终止 loop。RN 的自定义 stream adapter 只把首次 system/user + 单工具请求发送到受限
+  网关，拒绝额外消息历史、工具、prose 或非结构化结束；provider key/真实 model 不进入 App。
 - Python 再用 Pydantic 校验并执行确定性投影：链接读取器的风险不能被模型降级；邮件、好友申请、
   私信建议强制需要人工批准；内部重大商机提醒可以直接展示。
 - Agent 高置信补判商机时只创建 `PENDING_HUMAN`，不能让模型把自己路由到自动回复。
@@ -224,6 +300,61 @@ sequenceDiagram
   `SubscriptionRepository` 预留额度。worker 成功结算，最终失败释放；Free 使用 UTC 自然月，付费
   用户也始终使用 UTC 自然月 usage period；monthly/annual billing period 只描述续费和到期。无 owner
   消息不运行 Agent，也不占用任何用户额度。
+- P4 已增加默认关闭的设备分析运行基础：active、owner-bound 且精确上报 RN/runtime/schema/streaming
+  capability 的设备可在 rollout 开启后 claim 一条消息；`AnalysisRun` 以 PostgreSQL 行锁、active 唯一
+  索引和短期 purpose JWT 管理 lease/heartbeat/complete/fail/expire。顶层运行复用一条
+  `usage_ledger`，complete 仍由服务端 Pydantic 与 `project_agent_result` 二次钳制后才 consume，失败或
+  过期 release。设备撤销会立即让尚未过期的 run token 失效。
+- 同一开关域内另有默认关闭的 `/api/v1/agent/gateway/v1/chat/completions`：只接受有效 run token、固定
+  model alias、两条受限消息和单一 `submit_analysis` 工具；服务端替换真实 provider model/key，强制
+  `store=false`、tool choice、输出 token、请求/响应字节、超时、并发和每 run 请求上限。SSE 只返回
+  alias 与网关生成 ID，不透传 provider model、request ID、fingerprint 或错误正文；取消会关闭上游流。
+  `AnalysisProviderRequest` 只记录 provider/model、哈希后的 request ID、token、估算成本和延迟，不保存
+  prompt/响应，且不新增用户 usage。
+- 链接证据由 run token 绑定的 `POST /agent/runs/{id}/links/inspect` 生成：URL 只从服务端当前 Message
+  派生，客户端请求体不能提交 URL；`SafeLinkInspector` 逐跳执行 SSRF/端口/DNS/重定向/类型/大小/超时
+  限制并把有界证据缓存到 run。带链接的 run 在证据缺失时拒绝 complete，确定性风险仍可覆盖模型判断。
+- RN SQLite v5 保存恢复所需的最小 run/input 元数据，短期 bearer 只进 device-only SecureStore；claim 后
+  先持久化再运行，模型流期间续租，complete/fail/expire 后清理。App 退后台会取消 fetch/Agent 并保留
+  run，回前台或网络恢复后重试；连续三次结构化执行失败才显式 fail，租约过期由服务端释放。恢复本地
+  run 后，客户端在同步/推送 cursor 收敛后先通过 `claim-next` 领取一条 primary 候选；没有候选时最多
+  领取一条服务端已完成结果的 shadow。shadow 可在 primary rollout 关闭时独立运行，复用既有 consumed ledger，只比较
+  服务端钳制后的投影并记录差异，不二次投影或扣额。primary run 失败/过期先 release 原 reservation，再以
+  稳定幂等键预留并入队既有 Celery runner；beat 周期回收失联 lease。
+- primary 调度默认关闭。开启后只选择最近活跃、精确 capability 匹配且进入 owner/device 稳定哈希百分比
+  cohort 或白名单的设备；全局门槛只统计当前 runtime/schema/model/policy 组合的近期 shadow 终态样本，
+  检查样本量、成功率、一致率和 P95。合格时同一条 Celery job 延迟领取窗口执行，否则即时执行；消息锁、
+  active run 检查、同消息 active reservation 唯一索引和 ledger 锁保证陈旧 worker 不能接管、标失败、
+  release 或二次投影。管理员 readiness API 只返回聚合计数、比例、时延和原因，不返回消息或模型正文。
+  当前仍只有 fake SSE 与双平台 Hermes
+  production export 证据；真实 provider、系统 kill 后的双真机运行态及按设备灰度门禁未完成，因此
+  production capability、shadow 和 fallback 开关仍为 false。
+- P5 已增加独立的内部交互 Agent。`interactive_agent_turn` 顶层 turn 使用独立 usage feature，和
+  `pi_agent_analysis` 不混扣；claim/heartbeat/complete/fail/expire 以 owner/device/本地 session/nonce/
+  lease/lock 约束，并由 beat 回收失联 reservation。provider request 只保存模型、token、成本、延迟与
+  终态审计，不保存对话、工具参数、工具结果或 provider 正文。
+- `/api/v1/agent/interactive/gateway/v1/chat/completions` 只接受 purpose turn token、固定 alias/system
+  prompt 与服务端为 turn 选择的精确 schema/policy 工具集。v1 只有共享的 `search_opportunities`、
+  `get_opportunity`、`get_messages`；v2 只再增加 `draft_reply`、`update_status`、`claim_opportunity`；v3
+  只再增加 `send_reply(opportunity_id,text)`。工具参数不接受 token、owner、版本、幂等键、channel 或
+  `mark_following`；未审核的版本组合、普通 JWT、任意模型/工具、owner 参数及 HTTP/文件/SQL 均被拒绝。
+- RN 只在用户提交时加载 pi host，owner 从认证 session 注入。`draft_reply` 重新校验本地 active projection，
+  只把模型生成的 1–4000 字草稿写入本地会话且明确 `sent=false`；`update_status` 复用版本绑定、7 天过期、
+  稳定幂等键的 SQLite command outbox 并只返回 `queued`；`claim_opportunity` 复用认证、owner-bound 的在线
+  行锁 API 并只返回最小确认结果。流式文本停留在局部组件状态，最终应用 entry 批量写 SQLite，真实本地
+  结果落盘后才确认服务端 turn 完成。server gateway 流经正文但不记录正文。
+- v3 `send_reply` 先在 `beforeToolCall` 暂停。RN 从 owner-scoped SQLite 重新读取 active 商机及版本，审批卡
+  展示目标、渠道、完整可编辑正文、外发风险和 2 分钟有效期。用户编辑值由 turn token 提交决定端点；服务端
+  只落无正文 hash 审计并为 GRANTED 返回独立 purpose approval token。token 仅保存在 tool-call closure，
+  首次执行尝试前即删除；执行 API 再检查 active device/turn、nonce、exact args hash、资源版本、状态、归档、
+  adapter、`INTERACTIVE_AGENT_EXTERNAL_ACTIONS_ENABLED` 与 `IM_SEND_ENABLED`，然后复用
+  `ManualReplyDelivery`。provider 结果不确定时批准和投递账本都冻结为不可自动重试状态。
+- `agentToolsAvailable` 默认 false，只有 beta/gateway、正数独立额度、active allowlisted device、SQLite v5、
+  精确 runtime/streaming 与“客户端最高 schema ≥ 服务端选择 schema”全部满足才显示 Agent Tab；schema 与
+  policy 必须是 `1:interactive-read-only-v1`、`2:interactive-internal-v2` 或
+  `3:interactive-approved-send-v3` 的成对配置。v3 还强制两个外发开关同时开启；关闭任一门禁会阻止批准和
+  执行。已有本地会话保留到用户删除、登出清理或 30 天过期。生产默认仍为 v1 且所有开关关闭；记忆与
+  跨设备会话尚未开放，真实 IM 沙箱和双真机外发仍是上线前证据。
 - Telegram 配置读取和 listener 每次刷新都重新解析有效套餐；套餐到期后，按用户保留优先级启动
   额度内 monitor，超额项标记 `quota_paused` 而不删除。用户可在设置页重新选择保留群；选择写入当前
   retention limit，升级后优先级仍保留，未来再次降级可复用。
@@ -241,38 +372,32 @@ sequenceDiagram
 
 ### 回复
 
-- 人工回复：API → `ManualReplyUseCase` → IM adapter 发送 → 创建 outgoing `Message` → 状态
-  进入 `FOLLOWING` 或 `REPLIED`。
+- 人工回复：API 先在 `ManualReplyDelivery` 预留 owner-scoped 幂等键并原子认领发送权，再调用 IM
+  adapter。provider 成功后标记 `DELIVERED`，随后以投递 UUID 作为稳定外部消息 ID 创建 outgoing
+  `Message` 并把状态推进到 `FOLLOWING` 或 `REPLIED`，最后标记 `COMPLETED`。同键同请求只恢复投影，
+  同键异文/商机返回 409；`SENDING` 并发请求返回 409；provider 结果不确定记为 `UNCERTAIN` 并返回
+  502，同一键不得自动重发。`IM_SEND_ENABLED=false` 记为可重试 `FAILED`、返回 503，不创建消息或状态。
+- 新客户端调用 `/manual-reply/result`，必须提供 8-128 字符幂等键，并接收服务端商机、outgoing
+  Message 和精确 `messageTotal`；旧 `/manual-reply` 响应仍兼容，未带键时仅为旧客户端生成一次性键。
 - AI 草稿：API → `AIDraftUseCase` → `LiteLLMReplyGenerator` → 保存 `ai_reply_draft`，不发送。
-- AI 自动回复：摄取只创建候选并先运行 pi Agent；分析成功后 Celery 才进入 `AIAutoReplyUseCase`。
-  纯 Python 策略重新检查服务端安全阀、用户日程、Telegram Business 私聊来源授权、风险、置信度、
-  冷却期和草稿内容，再通过 `AutoReplyDelivery` 执行 at-most-once 投递。
-- 群组、频道、MTProto 普通账号、企业微信和 Agent 补判商机不能进入自动发送。任何未知/失败条件
-  转为 `PENDING_HUMAN`；旧 SLA sweep 只触发审核提醒，不再升级为自动发送。
-- `IM_SEND_ENABLED` 与 `AI_AUTO_REPLY_ENABLED` 默认开启，但仍分别是总发送阀和自动回复功能阀；任一
-  显式关闭均不得自动发送。真实资格还需用户日程与来源双重授权。adapter 的 dry-run 回执不创建
-  outgoing Message，也不把商机标记为 `REPLIED`。
-
-### 密码修改与邮箱重置
-
-- 忘记密码 API 先按客户端与邮箱摘要在 Redis 限流，再始终投递同一种 Celery 任务；worker 才查询用户，
-  避免 HTTP 路径通过账户存在性分叉。
-- worker 为有效用户创建短时挑战并通过 SMTP 发送高熵链接 token 与移动端验证码；数据库只保存使用
-  `JWT_SECRET_KEY` HMAC 后的摘要。新挑战使旧挑战失效，成功后消费该用户全部未使用挑战。
-- 已有密码用户修改时必须验证当前 PBKDF2 hash；OAuth 无密码用户必须走邮箱验证。
-- 成功修改或重置递增 `users.auth_version`。JWT 携带签发时版本，`require_user` 每次与数据库对比，
-  因此 Web、iOS、Android 的旧会话都会收到 401 并回到登录页。
+  生成未启用、provider 异常或输出非法时显式 503，不返回固定假草稿。
+- AI 自动回复：Celery → `AIAutoReplyUseCase` → 生成/复用草稿 → IM adapter 发送 → 记录消息 →
+  状态进入 `REPLIED`。
+- `IM_SEND_ENABLED=false` 是本地安全阀；Telegram/企微适配器必须抛出显式禁用错误，不得返回
+  `dry_run` 成功或绕过它执行真实发送。
 
 ## 前端结构与状态边界
 
 - App Router 页面位于 `frontend/app/`，复用组件位于 `frontend/components/`，基础 UI 在
   `frontend/components/ui/`。
-- `AuthProvider` 负责 localStorage token 与 `/auth/me` 恢复；`AppStoreProvider` 当前混合后端
-  数据与演示态本地状态。
-- `frontend/lib/api.ts` 是 HTTP 访问边界，`frontend/lib/types.ts` 是前端契约。后端字段变化
-  必须从 DTO → API client → types → UI 连贯更新。
-- 生产功能不得继续扩大 `AppStoreProvider` 中的 timer/mock 状态；新增真实能力应先补 API client，
-  再把 UI action 接到后端并处理 loading/error/rollback。
+- `AuthProvider` 负责 localStorage token 与 `/auth/me` 恢复；`AppStoreProvider` 保存 Web 当前内存视图，
+  但回复、AI 草稿、认领、状态和 SOP 关闭均调用真实服务端动作并以返回值更新，不再用 timer 或合成消息
+  模拟成功。
+- `frontend/lib/api.ts` 是 Web 适配边界；auth、看板、详情、消息、人工回复、AI 草稿、状态、认领和模板
+  已迁移到 `packages/radar-api` 的直接子路径导出与严格 runtime decoder。`frontend/lib/types.ts` 仍保留 UI
+  适配类型。后端字段变化必须从 DTO → OpenAPI snapshot/generated types → shared API → UI 连贯更新。
+- 生产功能不得继续扩大 `AppStoreProvider` 中的 mock 状态；新增真实能力应先补共享 API client，再把 UI
+  action 接到后端并处理 loading/error/rollback。
 
 ## 主要不变量
 
@@ -280,8 +405,10 @@ sequenceDiagram
 - 用户查询与 Telegram 配置必须按当前认证用户隔离。
 - 商机状态只能走 `domain/services/opportunity_state.py` 允许的迁移。
 - 外部 payload 在传输/适配器边界解析；领域规则只接收规范化数据。
-- 发送成功后要记录 outgoing Message；失败不得伪造已回复状态。
-- Agent 外部动作只是建议；未经过独立审批用例不得调用 IM/邮件/好友适配器。
+- 人工外发必须先取得持久化幂等发送权；发送成功后记录 outgoing Message，失败或结果不确定不得伪造
+  已回复状态，也不得以新幂等键自动重试不确定投递。
+- Agent 外部动作默认只是建议；当前只有 v3 `send_reply` 可在本次明确用户批准、短期 purpose token 与
+  服务端 exact hash/version 二次复核后调用 IM。邮件、好友、批量动作与长期授权仍无执行权限。
 - URL 分析拒绝本机、私网、link-local 和保留地址；生产还应使用受控 egress 降低 DNS rebinding 风险。
 - 时间均使用带时区 datetime；业务工作时间默认 `Asia/Shanghai`，可由配置覆盖。
 - 秘密只来自环境或加密字段，日志和 API 响应不得暴露 token、session、api_hash。

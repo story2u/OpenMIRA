@@ -5,7 +5,13 @@ from app.application.use_cases.prepare_job_discovery import PrepareJobDiscoveryU
 from app.application.use_cases.schedule_agent_analysis import ScheduleAgentAnalysisUseCase
 from app.core.time_window import WorkScheduleConfig, WorkScheduleService, WorkTimeService
 from app.domain.enums import OpportunityStatus, RuleType
-from app.domain.ports import ConversationTurn, DetectionRule, InboundMessage, TaskQueue
+from app.domain.ports import (
+    ConversationTurn,
+    DetectionRule,
+    DeviceAnalysisRouting,
+    InboundMessage,
+    TaskQueue,
+)
 from app.domain.services.detection_policy import OpportunityDetector
 from app.infrastructure.db.models import Message, Opportunity
 from app.infrastructure.db.repositories import (
@@ -35,7 +41,7 @@ class IngestMessageUseCase:
         task_queue: TaskQueue,
         subscription_repo: SubscriptionRepository,
         user_settings_repo: UserSettingsRepository | None = None,
-        job_discovery: PrepareJobDiscoveryUseCase | None = None,
+        device_routing: DeviceAnalysisRouting | None = None,
     ) -> None:
         self.message_repo = message_repo
         self.opportunity_repo = opportunity_repo
@@ -49,6 +55,7 @@ class IngestMessageUseCase:
             message_repo=message_repo,
             subscription_repo=subscription_repo,
             task_queue=task_queue,
+            device_routing=device_routing,
         )
 
     async def execute(self, inbound: InboundMessage) -> Message | Opportunity:

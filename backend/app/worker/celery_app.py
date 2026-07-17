@@ -22,14 +22,15 @@ celery_app.conf.update(
     task_routes={
         "ai.generate_and_send_reply": {"queue": "ai"},
         "agent.analyze_message": {"queue": "agent"},
+        "agent.expire_device_analysis_runs": {"queue": "default"},
+        "agent.expire_interactive_turns": {"queue": "default"},
         "opportunity.sweep_pending_for_ai": {"queue": "default"},
         "billing.process_revenuecat_event": {"queue": "default"},
         "billing.sync_revenuecat_customer": {"queue": "default"},
         "billing.reconcile_revenuecat_subscriptions": {"queue": "default"},
         "auth.prepare_password_reset": {"queue": "default"},
         "wecom.process_webhook_event": {"queue": "im"},
-        "wecom.enqueue_archive_syncs": {"queue": "default"},
-        "wecom.sync_archive_connection": {"queue": "wecom_archive"},
+        "push.dispatch_cursor_hints": {"queue": "default"},
     },
     beat_schedule={
         "sweep-pending-human-every-5-minutes": {
@@ -40,9 +41,17 @@ celery_app.conf.update(
             "task": "billing.reconcile_revenuecat_subscriptions",
             "schedule": float(settings.revenuecat_reconcile_interval_hours * 3600),
         },
-        "poll-wecom-conversation-archives": {
-            "task": "wecom.enqueue_archive_syncs",
-            "schedule": float(settings.wecom_archive_poll_interval_seconds),
+        "dispatch-push-cursor-hints": {
+            "task": "push.dispatch_cursor_hints",
+            "schedule": float(settings.push_dispatch_interval_seconds),
+        },
+        "expire-device-analysis-runs": {
+            "task": "agent.expire_device_analysis_runs",
+            "schedule": float(settings.device_agent_expire_interval_seconds),
+        },
+        "expire-interactive-agent-turns": {
+            "task": "agent.expire_interactive_turns",
+            "schedule": float(settings.interactive_agent_expire_interval_seconds),
         },
     },
 )

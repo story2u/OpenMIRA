@@ -56,8 +56,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const completeOAuth = useCallback(
     async (accessToken: string) => {
-      setAuthToken(accessToken)
-      const currentUser = await fetchMe()
+      const currentUser = await fetchMe(accessToken)
       applyAuth(accessToken, currentUser)
     },
     [applyAuth],

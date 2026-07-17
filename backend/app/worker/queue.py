@@ -54,6 +54,7 @@ class CeleryTaskQueue:
         *,
         force: bool = False,
         usage_ledger_id: UUID | None = None,
+        delay_seconds: int = 0,
     ) -> bool:
         settings = get_settings()
         if not settings.pi_agent_enabled:
@@ -69,6 +70,7 @@ class CeleryTaskQueue:
             celery_app.send_task(
                 "agent.analyze_message",
                 args=[str(message_id), force, str(usage_ledger_id) if usage_ledger_id else None],
+                countdown=max(0, delay_seconds),
             )
         except Exception:
             logger.exception("agent.analysis_enqueue_failed", message_id=str(message_id))

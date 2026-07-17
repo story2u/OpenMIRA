@@ -1,15 +1,47 @@
+import type {
+  AuthToken as ContractAuthToken,
+  AuthUser as ContractAuthUser,
+} from '@story2u/radar-contracts/auth'
+
+export type {
+  DetectionSettings,
+  NotificationSettings,
+  SettingsBundle,
+  SettingsCapabilities,
+  WorkSchedule,
+  WorkScheduleSlot,
+} from '@story2u/radar-contracts/settings'
+export type {
+  TelegramConnection,
+  TelegramConnectionAttempt,
+  TelegramConnectionAttemptStatus,
+  TelegramConnectionHealth,
+  TelegramConnectionSource,
+  TelegramConnectionStatus,
+  TelegramConnectionType,
+  TelegramMtprotoDialog,
+  TelegramSourceType,
+} from '@story2u/radar-contracts/telegram'
+export type {
+  BillingInterval,
+  BillingStore,
+  PlanCode,
+  PlanEntitlements,
+  SubscriptionCatalogPlan,
+  SubscriptionManagement,
+  SubscriptionStatus,
+  SubscriptionUsage,
+} from '@story2u/radar-contracts/subscriptions'
+
 export type Platform = 'telegram' | 'wecom'
-export type JobWorkMode = 'remote' | 'hybrid' | 'on_site' | 'flexible' | 'unknown'
-export type JobEmploymentType = 'full_time' | 'part_time' | 'contract' | 'internship' | 'freelance' | 'temporary' | 'unknown'
-export type JobSeniority = 'intern' | 'junior' | 'mid' | 'senior' | 'lead' | 'manager' | 'director' | 'executive' | 'unknown'
-export type SalaryPeriod = 'hourly' | 'daily' | 'monthly' | 'annual' | 'project' | 'unknown'
-export type JobEligibility = 'eligible' | 'not_eligible' | 'unknown'
-export type JobFeedbackType = 'relevant' | 'not_relevant' | 'not_a_job' | 'duplicate' | 'expired' | 'scam' | 'wrong_extraction'
-export type PlanCode = 'free' | 'plus' | 'pro' | 'max'
-export type SubscriptionStatus = 'active' | 'trialing' | 'past_due' | 'canceled' | 'inactive'
-export type BillingStore = 'app_store' | 'play_store' | 'paddle' | 'test_store' | 'unknown'
-export type BillingInterval = 'monthly' | 'annual' | 'unknown'
 export type OpportunityStatus = 'pending' | 'replied' | 'ignored'
+export type InternalOpportunityStatus =
+  | 'pending_human'
+  | 'ai_auto_reply'
+  | 'replied'
+  | 'following'
+  | 'ignored'
+  | 'closed'
 export type Priority = 'low' | 'normal' | 'high' | 'urgent'
 export type MessageSource = 'human' | 'ai' | null
 export type AgentAnalysisStatus =
@@ -68,6 +100,7 @@ export interface Opportunity {
   matchedKeywords: string[]
   confidenceScore: number
   status: OpportunityStatus
+  internalStatus: InternalOpportunityStatus
   priority: Priority
   lastMessagePreview: string
   createdAt: string
@@ -88,6 +121,10 @@ export interface Opportunity {
   archivedAt: string | null
   archivedByUserId: string | null
   archiveReason: string | null
+  aiReplyDraft: string | null
+  finalReply: string | null
+  detectionReason: string | null
+  assignedTo: string | null
 }
 
 export interface JobSearchProfileInput {
@@ -236,20 +273,8 @@ export interface ReplyTemplate {
   category: string
 }
 
-export interface AuthUser {
-  id: string
-  email: string
-  displayName: string
-  avatarUrl: string
-  isAdmin: boolean
-  hasPassword: boolean
-}
-
-export interface AuthTokenResponse {
-  accessToken: string
-  tokenType: string
-  user: AuthUser
-}
+export type AuthUser = ContractAuthUser
+export type AuthTokenResponse = ContractAuthToken
 
 export interface PasswordActionResponse {
   message: string
@@ -303,72 +328,6 @@ export interface TelegramDialog {
   username: string | null
 }
 
-export type TelegramConnectionType = 'bot_chat' | 'business' | 'mtproto_qr'
-export type TelegramConnectionStatus = 'pending' | 'connected' | 'disabled' | 'error' | 'expired'
-export type TelegramConnectionAttemptStatus = 'pending' | 'completed' | 'cancelled' | 'expired' | 'failed'
-export type TelegramSourceType = 'group' | 'channel' | 'private'
-
-export interface TelegramConnectionHealth {
-  mode: 'mock' | 'live'
-  botConfigured: boolean
-  botUsername: string | null
-  businessAvailable: boolean
-  mtprotoQrAvailable: boolean
-  listenerMode: string
-  legacyMonitoringActive: boolean
-  legacyActiveSourceCount: number
-  message: string | null
-}
-
-export interface TelegramConnectionSource {
-  id: string
-  connectionId: string
-  sourceType: TelegramSourceType
-  externalChatId: string
-  displayName: string
-  username: string | null
-  enabled: boolean
-  autoReplyEnabled: boolean
-  autoReplyEligible: boolean
-  quotaPaused: boolean
-  quotaReason: string | null
-  lastError: string | null
-  updatedAt: string
-}
-
-export interface TelegramConnection {
-  id: string
-  connectionType: TelegramConnectionType
-  status: TelegramConnectionStatus
-  enabled: boolean
-  label: string
-  capabilities: Record<string, boolean>
-  lastError: string | null
-  lastCheckedAt: string | null
-  updatedAt: string
-  sources: TelegramConnectionSource[]
-}
-
-export interface TelegramConnectionAttempt {
-  id: string
-  connectionType: TelegramConnectionType
-  status: TelegramConnectionAttemptStatus
-  expiresAt: string
-  connectionId: string | null
-  error: string | null
-  telegramUrl: string | null
-  qrCodeUrl: string | null
-  instructions: string[]
-  localMock: boolean
-}
-
-export interface TelegramMtprotoDialog {
-  id: string
-  sourceType: Extract<TelegramSourceType, 'group' | 'channel'>
-  displayName: string
-  username: string | null
-}
-
 export type WeComConnectionStatus = 'pending' | 'active' | 'disabled' | 'error'
 export type WeComSourceType =
   | 'private'
@@ -415,126 +374,4 @@ export interface WeComConnectionCreate {
   secret: string
   token: string
   encodingAesKey: string
-}
-
-export interface WeComArchiveConnectionCreate {
-  displayName: string
-  corpId: string
-  archiveSecret: string
-  privateKeyPem: string
-  publicKeyVersion: number
-  wecomUserId: string
-  memberDisplayName: string
-}
-
-export interface WeComArchiveConnection {
-  id: string
-  status: WeComConnectionStatus
-  enabled: boolean
-  displayName: string
-  corpId: string
-  publicKeyVersion: number
-  credentialConfigured: boolean
-  sdkConfigured: boolean
-  lastSequence: number
-  lastVerifiedAt: string | null
-  lastPolledAt: string | null
-  lastError: string | null
-  updatedAt: string
-  member: {
-    id: string
-    wecomUserId: string
-    displayName: string
-    enabled: boolean
-    lastMatchedAt: string | null
-  }
-  sources: WeComSource[]
-}
-
-export interface PlanEntitlements {
-  planCode: PlanCode
-  telegramGroupLimit: number | null
-  wecomGroupLimit: number | null
-  combinedGroupLimit: number
-  piAgentAnalysisMonthlyLimit: number
-}
-
-export interface SubscriptionUsage {
-  planCode: PlanCode
-  subscriptionStatus: SubscriptionStatus
-  periodStart: string
-  periodEnd: string
-  cancelAtPeriodEnd: boolean
-  entitlements: PlanEntitlements
-  telegramGroupsUsed: number
-  wecomGroupsUsed: number
-  combinedGroupsUsed: number
-  aiAnalysesConsumed: number
-  aiAnalysesReserved: number
-  aiAnalysesRemaining: number
-  effectiveStore: BillingStore | null
-  billingInterval: BillingInterval | null
-  billingPeriodStart: string | null
-  billingPeriodEnd: string | null
-  usagePeriodStart: string
-  usagePeriodEnd: string
-  entitlementExpiresAt: string | null
-  willRenew: boolean
-  billingIssue: boolean
-  multipleActiveSubscriptions: boolean
-  managementUrl: string | null
-  lastSyncedAt: string | null
-}
-
-export interface SubscriptionCatalogPlan {
-  planCode: PlanCode
-  displayName: string
-  rank: number
-  entitlements: PlanEntitlements
-  availableIntervals: BillingInterval[]
-  revenuecatPackageIdentifiers: string[]
-}
-
-export interface SubscriptionManagement {
-  store: BillingStore | null
-  managementUrl: string | null
-  instruction: string
-  canOpenInCurrentClient: boolean
-}
-
-export interface DetectionSettings {
-  keywords: string[]
-  aiSemanticsEnabled: boolean
-}
-
-export interface WorkScheduleSlot {
-  weekday: number
-  start: string
-  end: string
-}
-
-export interface WorkSchedule {
-  timezone: string
-  slots: WorkScheduleSlot[]
-  autoReplyOutsideHours: boolean
-  isDefault: boolean
-}
-
-export interface NotificationSettings {
-  newOpportunityEnabled: boolean
-  aiRepliedEnabled: boolean
-  dailyDigestEnabled: boolean
-  urgentOnly: boolean
-}
-
-export interface SettingsCapabilities {
-  pushAvailable: boolean
-  wecomUserBindingAvailable: boolean
-}
-
-export interface SettingsBundle {
-  detection: DetectionSettings
-  workSchedule: WorkSchedule
-  notifications: NotificationSettings
-  capabilities: SettingsCapabilities
 }

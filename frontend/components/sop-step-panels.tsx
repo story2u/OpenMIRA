@@ -154,7 +154,21 @@ export function StepDiscovery({ opportunity }: { opportunity: Opportunity }) {
 export function StepLinkVerification({ opportunity, step }: { opportunity: Opportunity; step: SopStep }) {
   const { startLinkAnalysis, overrideRiskAndContinue, closeOpportunity } = useAppStore()
   const [confirmOpen, setConfirmOpen] = useState(false)
+  const [closePending, setClosePending] = useState(false)
+  const [closeError, setCloseError] = useState<string | null>(null)
   const lv = opportunity.linkVerification
+
+  const close = async () => {
+    setClosePending(true)
+    setCloseError(null)
+    try {
+      await closeOpportunity(opportunity.id)
+    } catch (error) {
+      setCloseError(error instanceof Error ? error.message : '关闭商机失败，请重试。')
+    } finally {
+      setClosePending(false)
+    }
+  }
 
   if (step.state === 'skipped') {
     return <SkippedNote text="该消息不包含任何链接，已自动跳过安全核验步骤。" />
@@ -165,6 +179,7 @@ export function StepLinkVerification({ opportunity, step }: { opportunity: Oppor
 
   return (
     <div className="flex flex-col gap-4">
+      {closeError && <p role="alert" className="text-sm text-destructive">{closeError}</p>}
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-xs text-muted-foreground">分析状态</span>
         <Badge variant="outline" className={cn('h-5 gap-1 px-1.5 text-[10px]', statusCfg.className)}>
@@ -247,7 +262,7 @@ export function StepLinkVerification({ opportunity, step }: { opportunity: Oppor
           </Button>
           {isRisk && (
             <>
-              <Button variant="outline" size="sm" onClick={() => closeOpportunity(opportunity.id)} className="bg-transparent">
+              <Button variant="outline" size="sm" disabled={closePending} onClick={() => void close()} className="bg-transparent">
                 忽略此商机
               </Button>
               <Button
@@ -414,6 +429,18 @@ export function StepFriendRequest({ opportunity, step }: { opportunity: Opportun
     }
   }
 
+  const close = async () => {
+    setIsSubmitting(true)
+    setActionError(null)
+    try {
+      await closeOpportunity(opportunity.id)
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : '关闭商机失败，请重试。')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
   if (step.state === 'skipped') {
     return <SkippedNote text="该商机来自私聊，双方已可直接对话，无需发送好友申请。" />
   }
@@ -535,7 +562,8 @@ export function StepFriendRequest({ opportunity, step }: { opportunity: Opportun
               variant="ghost"
               size="sm"
               className="text-muted-foreground"
-              onClick={() => closeOpportunity(opportunity.id)}
+              disabled={isSubmitting}
+              onClick={() => void close()}
             >
               标记为无法触达，关闭此商机
             </Button>
@@ -548,10 +576,26 @@ export function StepFriendRequest({ opportunity, step }: { opportunity: Opportun
 
 // ===== Step 5：聊天与回复 =====
 export function StepChat({ opportunity, step }: { opportunity: Opportunity; step: SopStep }) {
-  const { messagesByOpportunity } = useAppStore()
+  const { loadMoreMessages, messagesByOpportunity, messageTotalsByOpportunity } = useAppStore()
   const messages = messagesByOpportunity[opportunity.id] ?? []
+  const messageTotal = messageTotalsByOpportunity[opportunity.id] ?? messages.length
   const scrollRef = useRef<HTMLDivElement>(null)
+  const [messagePagePending, setMessagePagePending] = useState(false)
+  const [messagePageError, setMessagePageError] = useState<string | null>(null)
   const unlocked = step.state !== 'locked'
+
+  async function loadNextMessagePage() {
+    if (messagePagePending || messages.length >= messageTotal) return
+    setMessagePagePending(true)
+    setMessagePageError(null)
+    try {
+      await loadMoreMessages(opportunity.id, messages.length)
+    } catch {
+      setMessagePageError('暂时无法读取更多消息，请稍后重试。')
+    } finally {
+      setMessagePagePending(false)
+    }
+  }
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
@@ -577,9 +621,29 @@ export function StepChat({ opportunity, step }: { opportunity: Opportunity; step
         <p className="text-xs font-medium text-muted-foreground">聊天上下文</p>
       </div>
       <div ref={scrollRef} className="flex max-h-96 min-h-48 flex-col gap-4 overflow-y-auto p-4">
+        {messages.length === 0 && (
+          <p className="m-auto text-sm text-muted-foreground">暂无消息</p>
+        )}
         {messages.map((message) => (
           <ChatBubble key={message.id} message={message} />
         ))}
+        {messageTotal > messages.length && (
+          <div className="flex flex-col items-center gap-2">
+            <p className="text-center text-xs text-muted-foreground">
+              当前显示前 {messages.length} / {messageTotal} 条历史消息
+            </p>
+            {messagePageError && <p role="alert" className="text-xs text-destructive">{messagePageError}</p>}
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={messagePagePending}
+              onClick={() => void loadNextMessagePage()}
+            >
+              {messagePagePending && <Loader2 className="size-3.5 animate-spin" />}
+              {messagePagePending ? '正在加载…' : '加载更多消息'}
+            </Button>
+          </div>
+        )}
       </div>
       <ReplyComposer opportunity={opportunity} />
     </div>

@@ -1,0 +1,23 @@
+{
+  "name": "@story2u/radar-agent",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    "./analysis": {
+      "types": "./src/analysis.d.mts",
+      "default": "./src/analysis.mjs"
+    },
+    "./interactive": {
+      "types": "./src/interactive.d.mts",
+      "default": "./src/interactive.mjs"
+    }
+  },
+  "scripts": {
+    "check": "node --check src/analysis.mjs && node --check src/interactive.mjs && node --test"
+  },
+  "dependencies": {
+    "typebox": "1.1.38"
+  }
+}

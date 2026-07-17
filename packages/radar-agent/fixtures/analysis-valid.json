@@ -1,0 +1,28 @@
+{
+  "is_opportunity": true,
+  "confidence": 0.94,
+  "title": "企业采购需求",
+  "summary": "客户正在寻找供应商。",
+  "priority": "urgent",
+  "trust_score": 82,
+  "attention_required": true,
+  "link_status": "safe",
+  "link_summary": "公开采购页面与消息描述一致。",
+  "risk_flags": [],
+  "contacts": {
+    "email": "buyer@example.com",
+    "phone": null,
+    "telegram_handle": null,
+    "wecom_id": null,
+    "extraction_source": "link_content"
+  },
+  "actions": [
+    {
+      "action_type": "send_email",
+      "reason": "采购截止时间临近。",
+      "target": "buyer@example.com",
+      "draft": "您好，我们希望进一步了解采购需求。",
+      "requires_approval": true
+    }
+  ]
+}

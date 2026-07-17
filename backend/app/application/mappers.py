@@ -3,6 +3,7 @@ from app.application.dto import (
     AuthUserRead,
     ChatMessageRead,
     DetectionSettingsRead,
+    DeviceRead,
     NotificationSettingsRead,
     OpportunityDetailRead,
     OpportunityRead,
@@ -28,6 +29,7 @@ from app.domain.enums import (
 )
 from app.infrastructure.db.models import (
     Message,
+    Device,
     Opportunity,
     ReplyTemplate,
     TelegramConnection,
@@ -107,6 +109,7 @@ def to_opportunity_detail(opportunity: Opportunity) -> OpportunityDetailRead:
         aiReplyDraft=opportunity.ai_reply_draft,
         finalReply=opportunity.final_reply,
         detectionReason=opportunity.detection_reason,
+        assignedTo=opportunity.assigned_to,
     )
 
 
@@ -175,6 +178,26 @@ def to_auth_user_read(user: User) -> AuthUserRead:
         avatarUrl=user.avatar_url,
         isAdmin=user.is_admin,
         hasPassword=bool(user.password_hash),
+    )
+
+
+def to_device_read(device: Device) -> DeviceRead:
+    return DeviceRead(
+        id=device.id,
+        platform=device.platform,
+        status=device.status,
+        displayName=device.display_name,
+        appVariant=device.app_variant,
+        appVersion=device.app_version,
+        appBuild=device.app_build,
+        osVersion=device.os_version,
+        locale=device.locale,
+        timezone=device.timezone,
+        capabilities=device.capabilities,
+        lastSeenAt=device.last_seen_at,
+        revokedAt=device.revoked_at,
+        createdAt=device.created_at,
+        updatedAt=device.updated_at,
     )
 
 

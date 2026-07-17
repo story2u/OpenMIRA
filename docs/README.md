@@ -11,7 +11,8 @@
 商机雷达从 Telegram 与企业微信接收消息，用规则和可选 AI 分类器识别商机。工作时间内
 进入人工审核，非工作时间可进入 AI 自动回复队列；可选 pi Agent 会异步检查公开链接、补判商机、
 提取联系方式并给出需审批的后续动作建议。后端是 FastAPI + SQLModel/PostgreSQL + Celery/Redis，
-pi 使用镜像内受限 Node runner；前端是 Next.js 16 + React 19。当前前端仍包含明确的演示态好友
+pi 使用镜像内受限 Node runner；前端是 Next.js 16 + React 19。仓库已建立根 pnpm workspace、共享
+OpenAPI/core/API/Agent 包和独立 bundle id 的 Expo/RN 开发包，但 RN 尚未替代现有商店原生 App。当前前端仍包含明确的演示态好友
 申请等 SOP 流程，不能把所有可见交互都视作后端已交付能力。
 
 ## 任务路由

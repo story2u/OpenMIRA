@@ -1,13 +1,20 @@
 import asyncio
-from datetime import timedelta
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import structlog
 
-from app.application.use_cases.ai_reply import AIAutoReplyUseCase
+from app.application.use_cases.ai_reply import AIAutoReplyUseCase, transition_pending_to_ai
+from app.application.use_cases.analysis_run import (
+    AnalysisRunService,
+    DeviceAgentRoutingService,
+)
 from app.application.use_cases.analyze_message import AnalyzeMessageUseCase
+from app.application.use_cases.dispatch_push_hints import dispatch_pending_push_hints
 from app.application.use_cases.ingest_message import IngestMessageUseCase
-from app.application.use_cases.prepare_job_discovery import PrepareJobDiscoveryUseCase
+from app.application.use_cases.interactive_agent_turn import (
+    InteractiveAgentRoutingService,
+    InteractiveAgentTurnService,
+)
 from app.application.use_cases.sync_revenuecat_customer import SyncRevenueCatCustomer
 from app.application.use_cases.sync_wecom_archive import SyncWeComArchive
 from app.core.config import get_settings
@@ -18,12 +25,17 @@ from app.core.password_reset import (
 )
 from app.core.security import decrypt_secret
 from app.core.time_window import WorkTimeConfig, WorkTimeService
-from app.domain.ports import InboundMessage
+from app.domain.enums import AgentAnalysisStatus, AnalysisRunExecutor
+from app.domain.ports import AgentExecutionMetadata, InboundMessage
 from app.domain.services.detection_policy import OpportunityDetector
 from app.infrastructure.agent.link_inspector import SafeLinkInspector
 from app.infrastructure.agent.pi_client import PiAgentClient
 from app.infrastructure.ai.litellm_client import LiteLLMOpportunityClassifier, LiteLLMReplyGenerator
 from app.infrastructure.billing.revenuecat_client import RevenueCatClient
+from app.infrastructure.db.analysis_run_repository import AnalysisRunRepository
+from app.infrastructure.db.interactive_agent_repository import (
+    InteractiveAgentTurnRepository,
+)
 from app.infrastructure.db.repositories import (
     BillingEventRepository,
     AutoReplyDeliveryRepository,
@@ -34,7 +46,7 @@ from app.infrastructure.db.repositories import (
     JobSearchProfileRepository,
     MessageRepository,
     OpportunityRepository,
-    PasswordResetRepository,
+    PushRegistrationRepository,
     RuleRepository,
     SourceFunctionalProfileRepository,
     SubscriptionRepository,
@@ -141,6 +153,21 @@ def analyze_message(
 @celery_app.task(name="opportunity.sweep_pending_for_ai", queue="default")
 def sweep_pending_for_ai() -> None:
     asyncio.run(_sweep_pending_for_ai())
+
+
+@celery_app.task(name="agent.expire_device_analysis_runs", queue="default")
+def expire_device_analysis_runs() -> None:
+    asyncio.run(_expire_device_analysis_runs())
+
+
+@celery_app.task(name="agent.expire_interactive_turns", queue="default")
+def expire_interactive_turns() -> None:
+    asyncio.run(_expire_interactive_turns())
+
+
+@celery_app.task(name="push.dispatch_cursor_hints", queue="default")
+def dispatch_push_cursor_hints() -> None:
+    asyncio.run(_dispatch_push_cursor_hints())
 
 
 @celery_app.task(
@@ -288,10 +315,9 @@ async def _process_wecom_event(event_id: UUID) -> None:
             task_queue=CeleryTaskQueue(),
             subscription_repo=SubscriptionRepository(session),
             user_settings_repo=UserSettingsRepository(session),
-            job_discovery=PrepareJobDiscoveryUseCase(
-                message_repo=message_repo,
-                profile_repo=SourceFunctionalProfileRepository(session),
-                audit_repo=JobMessageAuditRepository(session),
+            device_routing=DeviceAgentRoutingService(
+                run_repo=AnalysisRunRepository(session),
+                settings=settings,
             ),
         ).execute(inbound)
         await event_repo.finish(event.id)
@@ -425,6 +451,14 @@ async def _analyze_message(
                 timeout_seconds=settings.pi_agent_link_timeout_seconds,
             ),
             task_queue=CeleryTaskQueue(),
+            execution=AgentExecutionMetadata(
+                executed_by=AnalysisRunExecutor.SERVER,
+                run_id=usage_ledger_id or uuid4(),
+                runtime_version=f"node-{settings.device_agent_runtime_version}",
+                schema_version=settings.device_agent_schema_version,
+                model_version=settings.pi_agent_model,
+                policy_version=settings.device_agent_policy_version,
+            ),
             min_opportunity_confidence=settings.pi_agent_min_opportunity_confidence,
             max_links=settings.pi_agent_max_links,
             job_audit_repo=JobMessageAuditRepository(session),
@@ -434,6 +468,22 @@ async def _analyze_message(
             job_match_repo=JobOpportunityMatchRepository(session),
         )
         opportunity = await use_case.execute(message_id, force=force)
+        final_message = await message_repo.get(message_id)
+        if final_message is None:
+            if usage_ledger_id:
+                await SubscriptionRepository(session).release_usage(
+                    usage_ledger_id,
+                    "source message no longer exists",
+                )
+            logger.info("agent.analysis_source_missing", message_id=str(message_id))
+            return
+        if final_message.agent_analysis_status != AgentAnalysisStatus.COMPLETED:
+            logger.info(
+                "agent.analysis_execution_deferred",
+                message_id=str(message_id),
+                status=final_message.agent_analysis_status.value,
+            )
+            return
         if usage_ledger_id:
             await SubscriptionRepository(session).consume_usage(usage_ledger_id)
         logger.info(
@@ -446,6 +496,34 @@ async def _analyze_message(
 async def _release_agent_usage(ledger_id: UUID, reason: str) -> None:
     async with AsyncSessionLocal() as session:
         await SubscriptionRepository(session).release_usage(ledger_id, reason)
+
+
+async def _expire_device_analysis_runs() -> None:
+    settings = get_settings()
+    async with AsyncSessionLocal() as session:
+        expired = await AnalysisRunService(
+            run_repo=AnalysisRunRepository(session),
+            subscription_repo=SubscriptionRepository(session),
+            message_repo=MessageRepository(session),
+            opportunity_repo=OpportunityRepository(session),
+            task_queue=CeleryTaskQueue(),
+            settings=settings,
+        ).expire_stale()
+    if expired:
+        logger.info("agent.device_runs_expired", count=expired)
+
+
+async def _expire_interactive_turns() -> None:
+    settings = get_settings()
+    async with AsyncSessionLocal() as session:
+        expired = await InteractiveAgentTurnService(
+            turn_repo=InteractiveAgentTurnRepository(session),
+            subscription_repo=SubscriptionRepository(session),
+            settings=settings,
+            routing_service=InteractiveAgentRoutingService(settings=settings),
+        ).expire_stale()
+    if expired:
+        logger.info("agent.interactive_turns_expired", count=expired)
 
 
 async def _sync_revenuecat_user(user_id: UUID) -> None:
@@ -538,4 +616,12 @@ async def _sweep_pending_for_ai() -> None:
         opportunity_repo = OpportunityRepository(session)
         stale = await opportunity_repo.pending_human_older_than(settings.pending_human_sla_minutes)
         for opportunity in stale:
-            CeleryTaskQueue().notify_reviewers(opportunity.id)
+            updated = await transition_pending_to_ai(opportunity_repo, opportunity.id)
+            if updated:
+                celery_app.send_task("ai.generate_and_send_reply", args=[str(updated.id)])
+
+
+async def _dispatch_push_cursor_hints() -> None:
+    settings = get_settings()
+    async with AsyncSessionLocal() as session:
+        await dispatch_pending_push_hints(PushRegistrationRepository(session), settings)

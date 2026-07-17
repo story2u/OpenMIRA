@@ -1,5 +1,4 @@
-from datetime import UTC, datetime
-from decimal import Decimal
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -8,6 +7,8 @@ from sqlalchemy import (
     CheckConstraint,
     Column,
     DateTime,
+    ForeignKeyConstraint,
+    Identity,
     Index,
     Numeric,
     Text,
@@ -20,20 +21,23 @@ from sqlmodel import Field, SQLModel
 
 from app.domain.enums import (
     AgentAnalysisStatus,
-    AutoReplyDecisionReason,
-    AutoReplyDeliveryStatus,
+    AnalysisProviderRequestStatus,
+    AnalysisRunExecutor,
+    AnalysisRunMode,
+    AnalysisRunStatus,
     BillingEventStatus,
     BillingInterval,
     BillingProvider,
     BillingStore,
     BillingSubscriptionStatus,
+    DeviceCredentialStatus,
+    DevicePlatform,
+    DeviceStatus,
     IMChannel,
-    JobEligibility,
-    JobEmploymentType,
-    JobFeedbackType,
-    JobMessageClassification,
-    JobSeniority,
-    JobWorkMode,
+    InteractiveAgentApprovalStatus,
+    InteractiveAgentProviderRequestStatus,
+    InteractiveAgentTurnStatus,
+    ManualReplyDeliveryStatus,
     MessageDirection,
     MessageSource,
     OpportunityArchiveAction,
@@ -41,10 +45,15 @@ from app.domain.enums import (
     OpportunityType,
     PlanCode,
     Priority,
+    PushEnvironment,
+    PushProvider,
+    PushRegistrationStatus,
     RuleType,
     SalaryPeriod,
     SourcePrimaryFunction,
     SubscriptionStatus,
+    SyncAggregateType,
+    SyncOperation,
     TelegramConnectionAttemptStatus,
     TelegramConnectionStatus,
     TelegramConnectionType,
@@ -127,6 +136,396 @@ class AuthAccount(TimestampMixin, table=True):
     provider: str = Field(index=True)
     provider_subject: str = Field(index=True)
     email: str | None = Field(default=None, index=True)
+
+
+class Device(TimestampMixin, table=True):
+    """A revocable, owner-bound mobile installation; never a bearer credential store."""
+
+    __tablename__ = "devices"
+    __table_args__ = (
+        UniqueConstraint(
+            "owner_user_id",
+            "installation_id_hash",
+            name="uq_devices_owner_installation_hash",
+        ),
+        UniqueConstraint("owner_user_id", "id", name="uq_devices_owner_id"),
+        CheckConstraint(
+            "installation_id_hash ~ '^[0-9a-f]{64}$'",
+            name="ck_devices_installation_hash_sha256",
+        ),
+        CheckConstraint(
+            "jsonb_typeof(capabilities) = 'object' AND octet_length(capabilities::text) <= 16384",
+            name="ck_devices_capabilities_bounded_object",
+        ),
+        CheckConstraint(
+            "(status = 'ACTIVE' AND revoked_at IS NULL) "
+            "OR (status = 'REVOKED' AND revoked_at IS NOT NULL)",
+            name="ck_devices_revocation_state",
+        ),
+        CheckConstraint(
+            "last_sync_cursor >= 0",
+            name="ck_devices_last_sync_cursor_nonnegative",
+        ),
+        Index(
+            "ix_devices_owner_status_last_seen",
+            "owner_user_id",
+            "status",
+            "last_seen_at",
+        ),
+    )
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    owner_user_id: UUID = Field(foreign_key="users.id", index=True)
+    installation_id_hash: str = Field(min_length=64, max_length=64)
+    platform: DevicePlatform = Field(
+        sa_column=Column(
+            SAEnum(
+                DevicePlatform,
+                name="deviceplatform",
+                native_enum=False,
+                create_constraint=True,
+            ),
+            nullable=False,
+            index=True,
+        )
+    )
+    status: DeviceStatus = Field(
+        default=DeviceStatus.ACTIVE,
+        sa_column=Column(
+            SAEnum(
+                DeviceStatus,
+                name="devicestatus",
+                native_enum=False,
+                create_constraint=True,
+            ),
+            nullable=False,
+            index=True,
+        ),
+    )
+    display_name: str = Field(default="", max_length=100)
+    app_variant: str = Field(default="production", min_length=1, max_length=32)
+    app_version: str = Field(min_length=1, max_length=32)
+    app_build: str = Field(min_length=1, max_length=32)
+    os_version: str | None = Field(default=None, max_length=64)
+    locale: str | None = Field(default=None, max_length=35)
+    timezone: str | None = Field(default=None, max_length=64)
+    capabilities: dict[str, Any] = Field(
+        default_factory=dict,
+        sa_column=Column(JSONB, nullable=False),
+    )
+    last_seen_at: datetime = Field(
+        default_factory=utc_now,
+        sa_column=Column(DateTime(timezone=True), nullable=False, index=True),
+    )
+    revoked_at: datetime | None = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+    )
+    revocation_reason: str | None = Field(default=None, max_length=255)
+    last_sync_cursor: int = Field(
+        default=0,
+        ge=0,
+        sa_column=Column(BigInteger, nullable=False, server_default="0"),
+    )
+    last_sync_at: datetime | None = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+    )
+    last_sync_error_code: str | None = Field(default=None, max_length=64)
+
+
+class DeviceCredential(TimestampMixin, table=True):
+    """Hashed rotating device bearer metadata; raw refresh tokens are never persisted."""
+
+    __tablename__ = "device_credentials"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["owner_user_id", "device_id"],
+            ["devices.owner_user_id", "devices.id"],
+            name="fk_device_credentials_owner_device",
+        ),
+        UniqueConstraint("token_hash", name="uq_device_credentials_token_hash"),
+        CheckConstraint(
+            "token_hash ~ '^[0-9a-f]{64}$'",
+            name="ck_device_credentials_token_hash_sha256",
+        ),
+        CheckConstraint(
+            "expires_at > created_at",
+            name="ck_device_credentials_expiry_after_creation",
+        ),
+        CheckConstraint(
+            "(status IN ('PENDING', 'ACTIVE') AND rotated_at IS NULL AND revoked_at IS NULL "
+            "AND reuse_detected_at IS NULL AND replaced_by_credential_id IS NULL) "
+            "OR (status = 'ROTATED' AND rotated_at IS NOT NULL "
+            "AND replaced_by_credential_id IS NOT NULL) "
+            "OR (status = 'REVOKED' AND revoked_at IS NOT NULL) "
+            "OR (status = 'REUSE_DETECTED' AND revoked_at IS NOT NULL "
+            "AND reuse_detected_at IS NOT NULL)",
+            name="ck_device_credentials_lifecycle_state",
+        ),
+        Index(
+            "uq_device_credentials_device_active",
+            "device_id",
+            unique=True,
+            postgresql_where=text("status = 'ACTIVE'"),
+        ),
+        Index(
+            "ix_device_credentials_owner_status_expires",
+            "owner_user_id",
+            "status",
+            "expires_at",
+        ),
+    )
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    owner_user_id: UUID = Field(foreign_key="users.id", index=True)
+    device_id: UUID = Field(index=True)
+    token_hash: str = Field(min_length=64, max_length=64)
+    token_family_id: UUID = Field(default_factory=uuid4, index=True)
+    status: DeviceCredentialStatus = Field(
+        default=DeviceCredentialStatus.ACTIVE,
+        sa_column=Column(
+            SAEnum(
+                DeviceCredentialStatus,
+                name="devicecredentialstatus",
+                native_enum=False,
+                create_constraint=True,
+            ),
+            nullable=False,
+            index=True,
+        ),
+    )
+    expires_at: datetime = Field(
+        sa_column=Column(DateTime(timezone=True), nullable=False, index=True)
+    )
+    last_used_at: datetime | None = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+    )
+    rotated_at: datetime | None = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+    )
+    revoked_at: datetime | None = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+    )
+    reuse_detected_at: datetime | None = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+    )
+    replaced_by_credential_id: UUID | None = Field(
+        default=None,
+        foreign_key="device_credentials.id",
+        index=True,
+    )
+
+
+class PushRegistration(TimestampMixin, table=True):
+    """Encrypted minimum platform token plus a non-secret hash for rotation and deduplication."""
+
+    __tablename__ = "push_registrations"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["owner_user_id", "device_id"],
+            ["devices.owner_user_id", "devices.id"],
+            name="fk_push_registrations_owner_device",
+        ),
+        UniqueConstraint("token_hash", name="uq_push_registrations_token_hash"),
+        CheckConstraint(
+            "token_hash ~ '^[0-9a-f]{64}$'",
+            name="ck_push_registrations_token_hash_sha256",
+        ),
+        CheckConstraint(
+            "length(token_encrypted) >= 32",
+            name="ck_push_registrations_encrypted_token_present",
+        ),
+        CheckConstraint(
+            "failure_count >= 0",
+            name="ck_push_registrations_failure_count_nonnegative",
+        ),
+        CheckConstraint(
+            "last_notified_cursor >= 0",
+            name="ck_push_registrations_last_notified_cursor_nonnegative",
+        ),
+        CheckConstraint(
+            "(status = 'ACTIVE' AND invalidated_at IS NULL AND revoked_at IS NULL) "
+            "OR (status = 'INVALIDATED' AND invalidated_at IS NOT NULL "
+            "AND revoked_at IS NULL) "
+            "OR (status = 'REVOKED' AND revoked_at IS NOT NULL)",
+            name="ck_push_registrations_lifecycle_state",
+        ),
+        Index(
+            "uq_push_registrations_device_provider_environment_active",
+            "device_id",
+            "provider",
+            "environment",
+            unique=True,
+            postgresql_where=text("status = 'ACTIVE'"),
+        ),
+        Index(
+            "ix_push_registrations_owner_status",
+            "owner_user_id",
+            "status",
+        ),
+    )
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    owner_user_id: UUID = Field(foreign_key="users.id", index=True)
+    device_id: UUID = Field(index=True)
+    provider: PushProvider = Field(
+        sa_column=Column(
+            SAEnum(
+                PushProvider,
+                name="pushprovider",
+                native_enum=False,
+                create_constraint=True,
+            ),
+            nullable=False,
+            index=True,
+        )
+    )
+    environment: PushEnvironment = Field(
+        sa_column=Column(
+            SAEnum(
+                PushEnvironment,
+                name="pushenvironment",
+                native_enum=False,
+                create_constraint=True,
+            ),
+            nullable=False,
+        )
+    )
+    token_hash: str = Field(min_length=64, max_length=64)
+    token_encrypted: str = Field(sa_column=Column(Text(), nullable=False))
+    status: PushRegistrationStatus = Field(
+        default=PushRegistrationStatus.ACTIVE,
+        sa_column=Column(
+            SAEnum(
+                PushRegistrationStatus,
+                name="pushregistrationstatus",
+                native_enum=False,
+                create_constraint=True,
+            ),
+            nullable=False,
+            index=True,
+        ),
+    )
+    last_registered_at: datetime = Field(
+        default_factory=utc_now,
+        sa_column=Column(DateTime(timezone=True), nullable=False),
+    )
+    last_attempt_at: datetime | None = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+    )
+    last_success_at: datetime | None = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+    )
+    last_notified_cursor: int = Field(
+        default=0,
+        ge=0,
+        sa_column=Column(BigInteger(), nullable=False),
+    )
+    next_attempt_at: datetime | None = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True, index=True),
+    )
+    invalidated_at: datetime | None = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+    )
+    revoked_at: datetime | None = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+    )
+    failure_count: int = Field(default=0, ge=0)
+    last_error_code: str | None = Field(default=None, max_length=64)
+
+
+class SyncChange(SQLModel, table=True):
+    """Immutable owner-scoped aggregate envelope ordered by a database-generated cursor."""
+
+    __tablename__ = "sync_changes"
+    __table_args__ = (
+        UniqueConstraint("cursor", name="uq_sync_changes_cursor"),
+        UniqueConstraint(
+            "owner_user_id",
+            "aggregate_type",
+            "aggregate_id",
+            "aggregate_version",
+            name="uq_sync_changes_owner_aggregate_version",
+        ),
+        CheckConstraint(
+            "aggregate_version > 0",
+            name="ck_sync_changes_aggregate_version_positive",
+        ),
+        CheckConstraint(
+            "schema_version > 0",
+            name="ck_sync_changes_schema_version_positive",
+        ),
+        CheckConstraint(
+            "(operation = 'UPSERT' AND payload IS NOT NULL) "
+            "OR (operation = 'DELETE' AND payload IS NULL)",
+            name="ck_sync_changes_payload_matches_operation",
+        ),
+        Index("ix_sync_changes_owner_cursor", "owner_user_id", "cursor"),
+        Index(
+            "ix_sync_changes_owner_aggregate_version",
+            "owner_user_id",
+            "aggregate_type",
+            "aggregate_id",
+            "aggregate_version",
+        ),
+        Index("ix_sync_changes_created_at", "created_at"),
+    )
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    cursor: int | None = Field(
+        default=None,
+        sa_column=Column(BigInteger, Identity(start=1), nullable=False),
+    )
+    owner_user_id: UUID = Field(
+        foreign_key="users.id",
+        ondelete="CASCADE",
+        index=True,
+    )
+    aggregate_type: SyncAggregateType = Field(
+        sa_column=Column(
+            SAEnum(
+                SyncAggregateType,
+                name="syncaggregatetype",
+                native_enum=False,
+                create_constraint=True,
+            ),
+            nullable=False,
+            index=True,
+        )
+    )
+    aggregate_id: UUID = Field(index=True)
+    aggregate_version: int = Field(sa_column=Column(BigInteger, nullable=False))
+    operation: SyncOperation = Field(
+        sa_column=Column(
+            SAEnum(
+                SyncOperation,
+                name="syncoperation",
+                native_enum=False,
+                create_constraint=True,
+            ),
+            nullable=False,
+            index=True,
+        )
+    )
+    schema_version: int = Field(default=1, ge=1)
+    payload: dict[str, Any] | None = Field(
+        default=None,
+        sa_column=Column(JSONB(none_as_null=True), nullable=True),
+    )
+    created_at: datetime = Field(
+        default_factory=utc_now,
+        sa_column=Column(DateTime(timezone=True), nullable=False),
+    )
 
 
 class SubscriptionAccount(TimestampMixin, table=True):
@@ -324,6 +723,10 @@ class Opportunity(TimestampMixin, table=True):
     __table_args__ = (
         Index("ix_opportunities_channel_conversation", "channel", "conversation_id"),
         Index("ix_opportunities_status_created", "status", "created_at"),
+        CheckConstraint(
+            "aggregate_version > 0",
+            name="ck_opportunities_aggregate_version_positive",
+        ),
         Index(
             "ix_opportunities_owner_archived_last_message",
             "owner_user_id",
@@ -333,9 +736,10 @@ class Opportunity(TimestampMixin, table=True):
     )
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
-    opportunity_type: OpportunityType = Field(
-        default=OpportunityType.BUSINESS,
-        sa_column=Column(SAEnum(OpportunityType, native_enum=False), nullable=False, index=True),
+    aggregate_version: int = Field(
+        default=1,
+        ge=1,
+        sa_column=Column(BigInteger, nullable=False, server_default="1"),
     )
     owner_user_id: UUID | None = Field(default=None, foreign_key="users.id", index=True)
     channel: IMChannel = Field(
@@ -768,64 +1172,117 @@ class OpportunityArchiveEvent(TimestampMixin, table=True):
     reason: str | None = Field(default=None, max_length=500)
 
 
-class AutoReplyDelivery(TimestampMixin, table=True):
-    __tablename__ = "auto_reply_deliveries"
+class InternalCommandReceipt(TimestampMixin, table=True):
+    __tablename__ = "internal_command_receipts"
     __table_args__ = (
         UniqueConstraint(
-            "owner_user_id", "idempotency_key", name="uq_auto_reply_deliveries_owner_key"
+            "owner_user_id",
+            "idempotency_key",
+            name="uq_internal_command_receipts_owner_idempotency",
+        ),
+        CheckConstraint(
+            "command_type = 'opportunity_status'",
+            name="ck_internal_command_receipts_supported_type",
+        ),
+        CheckConstraint(
+            "expected_version > 0",
+            name="ck_internal_command_receipts_expected_version_positive",
+        ),
+        CheckConstraint(
+            "char_length(payload_hash) = 64",
+            name="ck_internal_command_receipts_payload_hash_length",
         ),
         Index(
-            "ix_auto_reply_deliveries_conversation_status_created",
+            "ix_internal_command_receipts_owner_created",
             "owner_user_id",
-            "channel",
-            "conversation_id",
-            "status",
             "created_at",
         ),
     )
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
+    owner_user_id: UUID = Field(
+        foreign_key="users.id",
+        ondelete="CASCADE",
+        index=True,
+    )
+    opportunity_id: UUID = Field(
+        foreign_key="opportunities.id",
+        ondelete="CASCADE",
+        index=True,
+    )
+    idempotency_key: str = Field(min_length=8, max_length=128)
+    command_type: str = Field(default="opportunity_status", max_length=64)
+    expected_version: int = Field(
+        ge=1,
+        sa_column=Column(BigInteger, nullable=False),
+    )
+    payload_hash: str = Field(min_length=64, max_length=64)
+    expires_at: datetime = Field(
+        default_factory=lambda: utc_now() + timedelta(days=30),
+        sa_column=Column(DateTime(timezone=True), nullable=False, index=True),
+    )
+
+
+class ManualReplyDelivery(TimestampMixin, table=True):
+    __tablename__ = "manual_reply_deliveries"
+    __table_args__ = (
+        UniqueConstraint(
+            "owner_user_id",
+            "idempotency_key",
+            name="uq_manual_reply_deliveries_owner_idempotency",
+        ),
+        Index("ix_manual_reply_deliveries_status_created", "status", "created_at"),
+    )
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
     owner_user_id: UUID = Field(foreign_key="users.id", index=True)
     opportunity_id: UUID = Field(foreign_key="opportunities.id", index=True)
-    source_message_id: UUID = Field(foreign_key="messages.id", index=True)
-    channel: IMChannel = Field(
-        sa_column=Column(SAEnum(IMChannel, native_enum=False), nullable=False, index=True)
-    )
-    conversation_id: str = Field(max_length=255, index=True)
-    idempotency_key: str = Field(max_length=255)
-    status: AutoReplyDeliveryStatus = Field(
-        default=AutoReplyDeliveryStatus.CANDIDATE,
+    idempotency_key: str = Field(max_length=128)
+    content_hash: str = Field(min_length=64, max_length=64)
+    status: ManualReplyDeliveryStatus = Field(
+        default=ManualReplyDeliveryStatus.PENDING,
         sa_column=Column(
-            SAEnum(AutoReplyDeliveryStatus, native_enum=False), nullable=False, index=True
+            SAEnum(ManualReplyDeliveryStatus, native_enum=False),
+            nullable=False,
+            index=True,
         ),
     )
-    decision_reason: AutoReplyDecisionReason | None = Field(
-        default=None,
-        sa_column=Column(SAEnum(AutoReplyDecisionReason, native_enum=False), nullable=True),
-    )
-    content_hash: str | None = Field(default=None, max_length=64)
     provider_message_id: str | None = Field(default=None, max_length=255)
     attempt_count: int = Field(default=0, ge=0)
-    ready_at: datetime | None = Field(
-        default=None, sa_column=Column(DateTime(timezone=True), nullable=True)
+    delivered_at: datetime | None = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
     )
-    sending_at: datetime | None = Field(
-        default=None, sa_column=Column(DateTime(timezone=True), nullable=True)
+    completed_at: datetime | None = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
     )
-    sent_at: datetime | None = Field(
-        default=None, sa_column=Column(DateTime(timezone=True), nullable=True)
-    )
-    error: str | None = Field(default=None, max_length=500)
+    error_class: str | None = Field(default=None, max_length=255)
 
 
 class Message(TimestampMixin, table=True):
     __tablename__ = "messages"
     __table_args__ = (
         UniqueConstraint("channel", "external_message_id", name="uq_message_channel_external"),
+        UniqueConstraint("owner_user_id", "id", name="uq_messages_owner_id"),
         Index("ix_messages_conversation_created", "conversation_id", "created_at"),
+        CheckConstraint(
+            "aggregate_version > 0",
+            name="ck_messages_aggregate_version_positive",
+        ),
+        CheckConstraint(
+            "agent_execution IS NULL OR (jsonb_typeof(agent_execution) = 'object' "
+            "AND octet_length(agent_execution::text) <= 4096)",
+            name="ck_messages_agent_execution_bounded_object",
+        ),
     )
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
+    aggregate_version: int = Field(
+        default=1,
+        ge=1,
+        sa_column=Column(BigInteger, nullable=False, server_default="1"),
+    )
     owner_user_id: UUID | None = Field(default=None, foreign_key="users.id", index=True)
     channel: IMChannel = Field(
         sa_column=Column(SAEnum(IMChannel, native_enum=False), nullable=False, index=True)
@@ -860,6 +1317,10 @@ class Message(TimestampMixin, table=True):
     agent_result: dict[str, Any] = Field(
         default_factory=dict, sa_column=Column(JSONB, nullable=False)
     )
+    agent_execution: dict[str, Any] | None = Field(
+        default=None,
+        sa_column=Column(JSONB(none_as_null=True), nullable=True),
+    )
     agent_error: str | None = None
     agent_started_at: datetime | None = Field(
         default=None,
@@ -888,6 +1349,7 @@ class UsageLedger(TimestampMixin, table=True):
             "idempotency_key",
             name="uq_usage_ledger_user_feature_idempotency",
         ),
+        UniqueConstraint("user_id", "id", name="uq_usage_ledger_user_id"),
         CheckConstraint("quantity > 0", name="ck_usage_ledger_quantity_positive"),
         Index(
             "ix_usage_ledger_user_feature_period_status",
@@ -896,6 +1358,15 @@ class UsageLedger(TimestampMixin, table=True):
             "period_start",
             "period_end",
             "status",
+        ),
+        Index(
+            "uq_usage_ledger_message_reserved_agent",
+            "source_message_id",
+            unique=True,
+            postgresql_where=text(
+                "feature = 'PI_AGENT_ANALYSIS' AND status = 'RESERVED' "
+                "AND source_message_id IS NOT NULL"
+            ),
         ),
     )
 
@@ -922,6 +1393,642 @@ class UsageLedger(TimestampMixin, table=True):
         sa_column=Column(DateTime(timezone=True), nullable=True),
     )
     failure_reason: str | None = Field(default=None, max_length=500)
+
+
+class AnalysisRun(TimestampMixin, table=True):
+    """Owner- and device-bound lease for one top-level message analysis."""
+
+    __tablename__ = "analysis_runs"
+    __table_args__ = (
+        UniqueConstraint("owner_user_id", "id", name="uq_analysis_runs_owner_id"),
+        UniqueConstraint("usage_ledger_id", name="uq_analysis_runs_usage_ledger"),
+        ForeignKeyConstraint(
+            ["owner_user_id", "device_id"],
+            ["devices.owner_user_id", "devices.id"],
+            name="fk_analysis_runs_owner_device",
+        ),
+        ForeignKeyConstraint(
+            ["owner_user_id", "message_id"],
+            ["messages.owner_user_id", "messages.id"],
+            name="fk_analysis_runs_owner_message",
+        ),
+        ForeignKeyConstraint(
+            ["owner_user_id", "usage_ledger_id"],
+            ["usage_ledger.user_id", "usage_ledger.id"],
+            name="fk_analysis_runs_owner_usage_ledger",
+        ),
+        CheckConstraint(
+            "source_message_version > 0 AND schema_version > 0 AND lock_version > 0",
+            name="ck_analysis_runs_positive_versions",
+        ),
+        CheckConstraint(
+            "token_nonce_hash ~ '^[0-9a-f]{64}$'",
+            name="ck_analysis_runs_nonce_hash_sha256",
+        ),
+        CheckConstraint(
+            "lease_expires_at > claimed_at",
+            name="ck_analysis_runs_lease_after_claim",
+        ),
+        CheckConstraint(
+            "result IS NULL OR (jsonb_typeof(result) = 'object' "
+            "AND octet_length(result::text) <= 65536)",
+            name="ck_analysis_runs_result_bounded_object",
+        ),
+        CheckConstraint(
+            "(link_evidence IS NULL AND link_evidence_fetched_at IS NULL) OR "
+            "(jsonb_typeof(link_evidence) = 'array' "
+            "AND octet_length(link_evidence::text) <= 262144 "
+            "AND link_evidence_fetched_at IS NOT NULL)",
+            name="ck_analysis_runs_link_evidence_bounded_array",
+        ),
+        CheckConstraint(
+            "(mode = 'PRIMARY' AND shadow_match IS NULL "
+            "AND shadow_difference_count IS NULL) OR "
+            "(mode = 'SHADOW' AND status != 'COMPLETED' "
+            "AND shadow_match IS NULL AND shadow_difference_count IS NULL) OR "
+            "(mode = 'SHADOW' AND status = 'COMPLETED' "
+            "AND shadow_match IS NOT NULL AND shadow_difference_count IS NOT NULL "
+            "AND shadow_difference_count >= 0)",
+            name="ck_analysis_runs_shadow_observation",
+        ),
+        CheckConstraint(
+            "(status IN ('CLAIMED', 'RUNNING') AND completed_at IS NULL "
+            "AND failed_at IS NULL AND expired_at IS NULL AND failure_code IS NULL "
+            "AND result IS NULL) "
+            "OR (status = 'COMPLETED' AND completed_at IS NOT NULL "
+            "AND failed_at IS NULL AND expired_at IS NULL AND failure_code IS NULL "
+            "AND result IS NOT NULL) "
+            "OR (status = 'FAILED' AND failed_at IS NOT NULL "
+            "AND completed_at IS NULL AND expired_at IS NULL AND failure_code IS NOT NULL "
+            "AND result IS NULL) "
+            "OR (status = 'EXPIRED' AND expired_at IS NOT NULL "
+            "AND completed_at IS NULL AND failed_at IS NULL AND failure_code IS NULL "
+            "AND result IS NULL)",
+            name="ck_analysis_runs_lifecycle_state",
+        ),
+        Index(
+            "ix_analysis_runs_owner_status_lease",
+            "owner_user_id",
+            "status",
+            "lease_expires_at",
+        ),
+        Index(
+            "ix_analysis_runs_mode_status_claimed",
+            "mode",
+            "status",
+            "claimed_at",
+        ),
+        Index(
+            "uq_analysis_runs_message_active",
+            "message_id",
+            unique=True,
+            postgresql_where=text("status IN ('CLAIMED', 'RUNNING')"),
+        ),
+        Index(
+            "uq_analysis_runs_message_shadow",
+            "message_id",
+            unique=True,
+            postgresql_where=text("mode = 'SHADOW'"),
+        ),
+    )
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    owner_user_id: UUID = Field(foreign_key="users.id", index=True)
+    message_id: UUID = Field(index=True)
+    device_id: UUID = Field(index=True)
+    usage_ledger_id: UUID = Field(index=True)
+    status: AnalysisRunStatus = Field(
+        default=AnalysisRunStatus.CLAIMED,
+        sa_column=Column(
+            SAEnum(
+                AnalysisRunStatus,
+                name="analysisrunstatus",
+                native_enum=False,
+                create_constraint=True,
+            ),
+            nullable=False,
+            index=True,
+        ),
+    )
+    executor: AnalysisRunExecutor = Field(
+        default=AnalysisRunExecutor.DEVICE,
+        sa_column=Column(
+            SAEnum(
+                AnalysisRunExecutor,
+                name="analysisrunexecutor",
+                native_enum=False,
+                create_constraint=True,
+            ),
+            nullable=False,
+        ),
+    )
+    mode: AnalysisRunMode = Field(
+        default=AnalysisRunMode.PRIMARY,
+        sa_column=Column(
+            SAEnum(
+                AnalysisRunMode,
+                name="analysisrunmode",
+                native_enum=False,
+                create_constraint=True,
+            ),
+            nullable=False,
+        ),
+    )
+    runtime_version: str = Field(min_length=1, max_length=64)
+    schema_version: int = Field(default=1, ge=1)
+    model_alias: str = Field(min_length=1, max_length=64)
+    policy_version: str = Field(min_length=1, max_length=64)
+    source_message_version: int = Field(
+        ge=1,
+        sa_column=Column(BigInteger, nullable=False),
+    )
+    lock_version: int = Field(default=1, ge=1)
+    token_nonce_hash: str = Field(min_length=64, max_length=64)
+    lease_expires_at: datetime = Field(
+        sa_column=Column(DateTime(timezone=True), nullable=False, index=True)
+    )
+    claimed_at: datetime = Field(
+        default_factory=utc_now,
+        sa_column=Column(DateTime(timezone=True), nullable=False),
+    )
+    heartbeat_at: datetime | None = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+    )
+    completed_at: datetime | None = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+    )
+    failed_at: datetime | None = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+    )
+    expired_at: datetime | None = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+    )
+    failure_code: str | None = Field(default=None, max_length=64)
+    result: dict[str, Any] | None = Field(
+        default=None,
+        sa_column=Column(JSONB(none_as_null=True), nullable=True),
+    )
+    link_evidence: list[dict[str, Any]] | None = Field(
+        default=None,
+        sa_column=Column(JSONB(none_as_null=True), nullable=True),
+    )
+    link_evidence_fetched_at: datetime | None = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+    )
+    shadow_match: bool | None = None
+    shadow_difference_count: int | None = Field(default=None, ge=0)
+
+
+class AnalysisProviderRequest(TimestampMixin, table=True):
+    """Content-free audit record for one run-bound provider request."""
+
+    __tablename__ = "analysis_provider_requests"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["owner_user_id", "run_id"],
+            ["analysis_runs.owner_user_id", "analysis_runs.id"],
+            name="fk_analysis_provider_requests_owner_run",
+        ),
+        ForeignKeyConstraint(
+            ["owner_user_id", "device_id"],
+            ["devices.owner_user_id", "devices.id"],
+            name="fk_analysis_provider_requests_owner_device",
+        ),
+        CheckConstraint(
+            "prompt_tokens IS NULL OR prompt_tokens >= 0",
+            name="ck_analysis_provider_requests_prompt_tokens_nonnegative",
+        ),
+        CheckConstraint(
+            "completion_tokens IS NULL OR completion_tokens >= 0",
+            name="ck_analysis_provider_requests_completion_tokens_nonnegative",
+        ),
+        CheckConstraint(
+            "total_tokens IS NULL OR total_tokens >= 0",
+            name="ck_analysis_provider_requests_total_tokens_nonnegative",
+        ),
+        CheckConstraint(
+            "estimated_cost_micros IS NULL OR estimated_cost_micros >= 0",
+            name="ck_analysis_provider_requests_cost_nonnegative",
+        ),
+        CheckConstraint(
+            "latency_ms IS NULL OR latency_ms >= 0",
+            name="ck_analysis_provider_requests_latency_nonnegative",
+        ),
+        CheckConstraint(
+            "provider_request_id_hash IS NULL OR provider_request_id_hash ~ '^[0-9a-f]{64}$'",
+            name="ck_analysis_provider_requests_id_hash_sha256",
+        ),
+        CheckConstraint(
+            "(status = 'STARTED' AND finished_at IS NULL AND failure_code IS NULL) "
+            "OR (status = 'COMPLETED' AND finished_at IS NOT NULL "
+            "AND failure_code IS NULL) "
+            "OR (status IN ('FAILED', 'CANCELLED') AND finished_at IS NOT NULL "
+            "AND failure_code IS NOT NULL)",
+            name="ck_analysis_provider_requests_lifecycle_state",
+        ),
+        Index(
+            "ix_analysis_provider_requests_owner_created",
+            "owner_user_id",
+            "created_at",
+        ),
+        Index(
+            "uq_analysis_provider_requests_run_active",
+            "run_id",
+            unique=True,
+            postgresql_where=text("status = 'STARTED'"),
+        ),
+    )
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    owner_user_id: UUID = Field(foreign_key="users.id", index=True)
+    run_id: UUID = Field(index=True)
+    device_id: UUID = Field(index=True)
+    status: AnalysisProviderRequestStatus = Field(
+        default=AnalysisProviderRequestStatus.STARTED,
+        sa_column=Column(
+            SAEnum(
+                AnalysisProviderRequestStatus,
+                name="analysisproviderrequeststatus",
+                native_enum=False,
+                create_constraint=True,
+            ),
+            nullable=False,
+            index=True,
+        ),
+    )
+    provider: str = Field(min_length=1, max_length=32)
+    provider_model: str = Field(min_length=1, max_length=128)
+    model_alias: str = Field(min_length=1, max_length=64)
+    provider_request_id_hash: str | None = Field(default=None, max_length=64)
+    prompt_tokens: int | None = Field(default=None, ge=0)
+    completion_tokens: int | None = Field(default=None, ge=0)
+    total_tokens: int | None = Field(default=None, ge=0)
+    estimated_cost_micros: int | None = Field(
+        default=None,
+        ge=0,
+        sa_column=Column(BigInteger, nullable=True),
+    )
+    latency_ms: int | None = Field(
+        default=None,
+        ge=0,
+        sa_column=Column(BigInteger, nullable=True),
+    )
+    failure_code: str | None = Field(default=None, max_length=64)
+    started_at: datetime = Field(
+        default_factory=utc_now,
+        sa_column=Column(DateTime(timezone=True), nullable=False),
+    )
+    finished_at: datetime | None = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+    )
+
+
+class InteractiveAgentTurn(TimestampMixin, table=True):
+    """Content-free server lease for one local interactive Agent user turn."""
+
+    __tablename__ = "interactive_agent_turns"
+    __table_args__ = (
+        UniqueConstraint(
+            "owner_user_id",
+            "id",
+            name="uq_interactive_agent_turns_owner_id",
+        ),
+        UniqueConstraint(
+            "owner_user_id",
+            "idempotency_key",
+            name="uq_interactive_agent_turns_owner_idempotency",
+        ),
+        UniqueConstraint(
+            "usage_ledger_id",
+            name="uq_interactive_agent_turns_usage_ledger",
+        ),
+        ForeignKeyConstraint(
+            ["owner_user_id", "device_id"],
+            ["devices.owner_user_id", "devices.id"],
+            name="fk_interactive_agent_turns_owner_device",
+        ),
+        ForeignKeyConstraint(
+            ["owner_user_id", "usage_ledger_id"],
+            ["usage_ledger.user_id", "usage_ledger.id"],
+            name="fk_interactive_agent_turns_owner_usage_ledger",
+        ),
+        CheckConstraint(
+            "schema_version > 0 AND lock_version > 0 AND request_count >= 0",
+            name="ck_interactive_agent_turns_versions_and_count",
+        ),
+        CheckConstraint(
+            "token_nonce_hash ~ '^[0-9a-f]{64}$'",
+            name="ck_interactive_agent_turns_nonce_hash_sha256",
+        ),
+        CheckConstraint(
+            "lease_expires_at > claimed_at",
+            name="ck_interactive_agent_turns_lease_after_claim",
+        ),
+        CheckConstraint(
+            "(status IN ('CLAIMED', 'RUNNING') AND completed_at IS NULL "
+            "AND failed_at IS NULL AND expired_at IS NULL AND failure_code IS NULL) "
+            "OR (status = 'COMPLETED' AND completed_at IS NOT NULL "
+            "AND failed_at IS NULL AND expired_at IS NULL AND failure_code IS NULL) "
+            "OR (status = 'FAILED' AND failed_at IS NOT NULL "
+            "AND completed_at IS NULL AND expired_at IS NULL AND failure_code IS NOT NULL) "
+            "OR (status = 'EXPIRED' AND expired_at IS NOT NULL "
+            "AND completed_at IS NULL AND failed_at IS NULL AND failure_code IS NULL)",
+            name="ck_interactive_agent_turns_lifecycle_state",
+        ),
+        Index(
+            "ix_interactive_agent_turns_owner_status_lease",
+            "owner_user_id",
+            "status",
+            "lease_expires_at",
+        ),
+        Index(
+            "uq_interactive_agent_turns_session_active",
+            "owner_user_id",
+            "local_session_id",
+            unique=True,
+            postgresql_where=text("status IN ('CLAIMED', 'RUNNING')"),
+        ),
+    )
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    owner_user_id: UUID = Field(foreign_key="users.id", index=True)
+    device_id: UUID = Field(index=True)
+    local_session_id: UUID = Field(index=True)
+    idempotency_key: str = Field(min_length=1, max_length=128)
+    usage_ledger_id: UUID = Field(index=True)
+    status: InteractiveAgentTurnStatus = Field(
+        default=InteractiveAgentTurnStatus.CLAIMED,
+        sa_column=Column(
+            SAEnum(
+                InteractiveAgentTurnStatus,
+                name="interactiveagentturnstatus",
+                native_enum=False,
+                create_constraint=True,
+            ),
+            nullable=False,
+            index=True,
+        ),
+    )
+    runtime_version: str = Field(min_length=1, max_length=64)
+    schema_version: int = Field(default=1, ge=1)
+    model_alias: str = Field(min_length=1, max_length=64)
+    policy_version: str = Field(min_length=1, max_length=64)
+    lock_version: int = Field(default=1, ge=1)
+    request_count: int = Field(default=0, ge=0)
+    token_nonce_hash: str = Field(min_length=64, max_length=64)
+    lease_expires_at: datetime = Field(
+        sa_column=Column(DateTime(timezone=True), nullable=False, index=True)
+    )
+    claimed_at: datetime = Field(
+        default_factory=utc_now,
+        sa_column=Column(DateTime(timezone=True), nullable=False),
+    )
+    heartbeat_at: datetime | None = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+    )
+    completed_at: datetime | None = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+    )
+    failed_at: datetime | None = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+    )
+    expired_at: datetime | None = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+    )
+    failure_code: str | None = Field(default=None, max_length=64)
+
+
+class InteractiveAgentActionApproval(TimestampMixin, table=True):
+    """Content-free proof of one explicit decision for one proposed external action."""
+
+    __tablename__ = "interactive_agent_action_approvals"
+    __table_args__ = (
+        UniqueConstraint(
+            "owner_user_id",
+            "turn_id",
+            "tool_call_id",
+            name="uq_iaaa_owner_turn_tool_call",
+        ),
+        ForeignKeyConstraint(
+            ["owner_user_id", "device_id"],
+            ["devices.owner_user_id", "devices.id"],
+            name="fk_iaaa_owner_device",
+        ),
+        ForeignKeyConstraint(
+            ["owner_user_id", "turn_id"],
+            ["interactive_agent_turns.owner_user_id", "interactive_agent_turns.id"],
+            name="fk_iaaa_owner_turn",
+        ),
+        CheckConstraint(
+            "expected_version > 0",
+            name="ck_iaaa_expected_version_positive",
+        ),
+        CheckConstraint(
+            "arguments_hash ~ '^[0-9a-f]{64}$'",
+            name="ck_iaaa_arguments_hash_sha256",
+        ),
+        CheckConstraint(
+            "token_nonce_hash IS NULL OR token_nonce_hash ~ '^[0-9a-f]{64}$'",
+            name="ck_iaaa_nonce_hash_sha256",
+        ),
+        CheckConstraint(
+            "(status = 'DENIED' AND token_nonce_hash IS NULL AND expires_at IS NULL "
+            "AND execution_started_at IS NULL AND finished_at IS NULL AND failure_code IS NULL) "
+            "OR (status = 'GRANTED' AND token_nonce_hash IS NOT NULL "
+            "AND expires_at > decided_at AND execution_started_at IS NULL "
+            "AND finished_at IS NULL AND failure_code IS NULL) "
+            "OR (status = 'EXECUTING' AND token_nonce_hash IS NOT NULL "
+            "AND expires_at > decided_at AND execution_started_at IS NOT NULL "
+            "AND finished_at IS NULL AND failure_code IS NULL) "
+            "OR (status = 'CONSUMED' AND token_nonce_hash IS NOT NULL "
+            "AND execution_started_at IS NOT NULL AND finished_at IS NOT NULL "
+            "AND failure_code IS NULL) "
+            "OR (status IN ('FAILED', 'UNCERTAIN') AND token_nonce_hash IS NOT NULL "
+            "AND execution_started_at IS NOT NULL AND finished_at IS NOT NULL "
+            "AND failure_code IS NOT NULL) "
+            "OR (status = 'EXPIRED' AND token_nonce_hash IS NOT NULL "
+            "AND expires_at > decided_at AND execution_started_at IS NULL "
+            "AND finished_at IS NOT NULL AND failure_code IS NULL)",
+            name="ck_iaaa_lifecycle_state",
+        ),
+        Index(
+            "ix_iaaa_owner_status_expires",
+            "owner_user_id",
+            "status",
+            "expires_at",
+        ),
+    )
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    owner_user_id: UUID = Field(foreign_key="users.id", index=True)
+    device_id: UUID = Field(index=True)
+    turn_id: UUID = Field(index=True)
+    tool_call_id: str = Field(min_length=1, max_length=128)
+    tool_name: str = Field(default="send_reply", min_length=1, max_length=64)
+    opportunity_id: UUID = Field(foreign_key="opportunities.id", index=True)
+    expected_version: int = Field(ge=1, sa_column=Column(BigInteger, nullable=False))
+    idempotency_key: str = Field(min_length=8, max_length=128)
+    arguments_hash: str = Field(min_length=64, max_length=64)
+    status: InteractiveAgentApprovalStatus = Field(
+        sa_column=Column(
+            SAEnum(
+                InteractiveAgentApprovalStatus,
+                name="interactiveagentapprovalstatus",
+                native_enum=False,
+                create_constraint=True,
+            ),
+            nullable=False,
+            index=True,
+        )
+    )
+    token_nonce_hash: str | None = Field(default=None, min_length=64, max_length=64)
+    decided_at: datetime = Field(
+        default_factory=utc_now,
+        sa_column=Column(DateTime(timezone=True), nullable=False),
+    )
+    expires_at: datetime | None = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True, index=True),
+    )
+    execution_started_at: datetime | None = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+    )
+    finished_at: datetime | None = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+    )
+    failure_code: str | None = Field(default=None, max_length=64)
+    manual_reply_delivery_id: UUID | None = Field(
+        default=None,
+        foreign_key="manual_reply_deliveries.id",
+        index=True,
+    )
+
+
+class InteractiveAgentProviderRequest(TimestampMixin, table=True):
+    """Content-free provider billing and reliability audit for an interactive turn."""
+
+    __tablename__ = "interactive_agent_provider_requests"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["owner_user_id", "turn_id"],
+            ["interactive_agent_turns.owner_user_id", "interactive_agent_turns.id"],
+            name="fk_interactive_agent_provider_requests_owner_turn",
+        ),
+        ForeignKeyConstraint(
+            ["owner_user_id", "device_id"],
+            ["devices.owner_user_id", "devices.id"],
+            name="fk_interactive_agent_provider_requests_owner_device",
+        ),
+        UniqueConstraint(
+            "turn_id",
+            "request_sequence",
+            name="uq_interactive_agent_provider_requests_turn_sequence",
+        ),
+        CheckConstraint(
+            "request_sequence > 0",
+            name="ck_iapr_sequence_positive",
+        ),
+        CheckConstraint(
+            "prompt_tokens IS NULL OR prompt_tokens >= 0",
+            name="ck_iapr_prompt_tokens_nonnegative",
+        ),
+        CheckConstraint(
+            "completion_tokens IS NULL OR completion_tokens >= 0",
+            name="ck_iapr_completion_tokens_nonnegative",
+        ),
+        CheckConstraint(
+            "total_tokens IS NULL OR total_tokens >= 0",
+            name="ck_iapr_total_tokens_nonnegative",
+        ),
+        CheckConstraint(
+            "estimated_cost_micros IS NULL OR estimated_cost_micros >= 0",
+            name="ck_iapr_cost_nonnegative",
+        ),
+        CheckConstraint(
+            "latency_ms IS NULL OR latency_ms >= 0",
+            name="ck_iapr_latency_nonnegative",
+        ),
+        CheckConstraint(
+            "provider_request_id_hash IS NULL OR provider_request_id_hash ~ '^[0-9a-f]{64}$'",
+            name="ck_iapr_id_hash_sha256",
+        ),
+        CheckConstraint(
+            "(status = 'STARTED' AND finished_at IS NULL AND failure_code IS NULL) "
+            "OR (status = 'COMPLETED' AND finished_at IS NOT NULL "
+            "AND failure_code IS NULL) "
+            "OR (status IN ('FAILED', 'CANCELLED') AND finished_at IS NOT NULL "
+            "AND failure_code IS NOT NULL)",
+            name="ck_iapr_lifecycle_state",
+        ),
+        Index(
+            "ix_interactive_agent_provider_requests_owner_created",
+            "owner_user_id",
+            "created_at",
+        ),
+        Index(
+            "uq_interactive_agent_provider_requests_turn_active",
+            "turn_id",
+            unique=True,
+            postgresql_where=text("status = 'STARTED'"),
+        ),
+    )
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    owner_user_id: UUID = Field(foreign_key="users.id", index=True)
+    turn_id: UUID = Field(index=True)
+    device_id: UUID = Field(index=True)
+    request_sequence: int = Field(ge=1)
+    status: InteractiveAgentProviderRequestStatus = Field(
+        default=InteractiveAgentProviderRequestStatus.STARTED,
+        sa_column=Column(
+            SAEnum(
+                InteractiveAgentProviderRequestStatus,
+                name="interactiveagentproviderrequeststatus",
+                native_enum=False,
+                create_constraint=True,
+            ),
+            nullable=False,
+            index=True,
+        ),
+    )
+    provider: str = Field(min_length=1, max_length=32)
+    provider_model: str = Field(min_length=1, max_length=128)
+    model_alias: str = Field(min_length=1, max_length=64)
+    provider_request_id_hash: str | None = Field(default=None, max_length=64)
+    prompt_tokens: int | None = Field(default=None, ge=0)
+    completion_tokens: int | None = Field(default=None, ge=0)
+    total_tokens: int | None = Field(default=None, ge=0)
+    estimated_cost_micros: int | None = Field(
+        default=None,
+        ge=0,
+        sa_column=Column(BigInteger, nullable=True),
+    )
+    latency_ms: int | None = Field(
+        default=None,
+        ge=0,
+        sa_column=Column(BigInteger, nullable=True),
+    )
+    failure_code: str | None = Field(default=None, max_length=64)
+    started_at: datetime = Field(
+        default_factory=utc_now,
+        sa_column=Column(DateTime(timezone=True), nullable=False),
+    )
+    finished_at: datetime | None = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+    )
 
 
 class Rule(TimestampMixin, table=True):
@@ -957,9 +2064,20 @@ class UserDetectionPreference(TimestampMixin, table=True):
     """用户级商机识别偏好：自定义关键词 + AI 语义识别开关（叠加在全局规则之上）。"""
 
     __tablename__ = "user_detection_preferences"
-    __table_args__ = (UniqueConstraint("user_id", name="uq_user_detection_preferences_user_id"),)
+    __table_args__ = (
+        UniqueConstraint("user_id", name="uq_user_detection_preferences_user_id"),
+        CheckConstraint(
+            "aggregate_version > 0",
+            name="ck_user_detection_preferences_aggregate_version_positive",
+        ),
+    )
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
+    aggregate_version: int = Field(
+        default=1,
+        ge=1,
+        sa_column=Column(BigInteger, nullable=False, server_default="1"),
+    )
     user_id: UUID = Field(foreign_key="users.id", index=True)
     keywords: list[str] = Field(default_factory=list, sa_column=Column(JSONB, nullable=False))
     ai_semantics_enabled: bool = Field(default=True)
@@ -969,9 +2087,20 @@ class UserWorkSchedule(TimestampMixin, table=True):
     """用户级工作时间：选中时段为人工审核，其余时段可 AI 自动回复；时区为 IANA 标识。"""
 
     __tablename__ = "user_work_schedules"
-    __table_args__ = (UniqueConstraint("user_id", name="uq_user_work_schedules_user_id"),)
+    __table_args__ = (
+        UniqueConstraint("user_id", name="uq_user_work_schedules_user_id"),
+        CheckConstraint(
+            "aggregate_version > 0",
+            name="ck_user_work_schedules_aggregate_version_positive",
+        ),
+    )
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
+    aggregate_version: int = Field(
+        default=1,
+        ge=1,
+        sa_column=Column(BigInteger, nullable=False, server_default="1"),
+    )
     user_id: UUID = Field(foreign_key="users.id", index=True)
     timezone: str = Field(default="Asia/Shanghai", max_length=64)
     # 每个元素 {"weekday": 1-7, "start": "HH:MM", "end": "HH:MM"}
@@ -985,9 +2114,20 @@ class UserNotificationPreference(TimestampMixin, table=True):
     """用户级通知偏好；推送通道落地前仅持久化，不代表已生效。"""
 
     __tablename__ = "user_notification_preferences"
-    __table_args__ = (UniqueConstraint("user_id", name="uq_user_notification_preferences_user_id"),)
+    __table_args__ = (
+        UniqueConstraint("user_id", name="uq_user_notification_preferences_user_id"),
+        CheckConstraint(
+            "aggregate_version > 0",
+            name="ck_user_notification_preferences_aggregate_version_positive",
+        ),
+    )
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
+    aggregate_version: int = Field(
+        default=1,
+        ge=1,
+        sa_column=Column(BigInteger, nullable=False, server_default="1"),
+    )
     user_id: UUID = Field(foreign_key="users.id", index=True)
     new_opportunity_enabled: bool = Field(default=True)
     ai_replied_enabled: bool = Field(default=True)

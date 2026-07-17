@@ -16,6 +16,73 @@ class MessageSource(StrEnum):
     AI = "ai"
 
 
+class ManualReplyDeliveryStatus(StrEnum):
+    PENDING = "pending"
+    SENDING = "sending"
+    DELIVERED = "delivered"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    UNCERTAIN = "uncertain"
+
+
+class InteractiveAgentApprovalStatus(StrEnum):
+    DENIED = "denied"
+    GRANTED = "granted"
+    EXECUTING = "executing"
+    CONSUMED = "consumed"
+    FAILED = "failed"
+    UNCERTAIN = "uncertain"
+    EXPIRED = "expired"
+
+
+class DevicePlatform(StrEnum):
+    IOS = "ios"
+    ANDROID = "android"
+
+
+class DeviceStatus(StrEnum):
+    ACTIVE = "active"
+    REVOKED = "revoked"
+
+
+class DeviceCredentialStatus(StrEnum):
+    PENDING = "pending"
+    ACTIVE = "active"
+    ROTATED = "rotated"
+    REVOKED = "revoked"
+    REUSE_DETECTED = "reuse_detected"
+
+
+class PushProvider(StrEnum):
+    APNS = "apns"
+    FCM = "fcm"
+
+
+class PushEnvironment(StrEnum):
+    SANDBOX = "sandbox"
+    PRODUCTION = "production"
+
+
+class PushRegistrationStatus(StrEnum):
+    ACTIVE = "active"
+    INVALIDATED = "invalidated"
+    REVOKED = "revoked"
+
+
+class SyncAggregateType(StrEnum):
+    OPPORTUNITY = "opportunity"
+    MESSAGE = "message"
+    USER_DETECTION_PREFERENCE = "user_detection_preference"
+    USER_WORK_SCHEDULE = "user_work_schedule"
+    USER_NOTIFICATION_PREFERENCE = "user_notification_preference"
+    REPLY_TEMPLATE = "reply_template"
+
+
+class SyncOperation(StrEnum):
+    UPSERT = "upsert"
+    DELETE = "delete"
+
+
 class OpportunityStatus(StrEnum):
     PENDING_HUMAN = "pending_human"
     AI_AUTO_REPLY = "ai_auto_reply"
@@ -192,6 +259,46 @@ class AgentAnalysisStatus(StrEnum):
     FAILED = "failed"
 
 
+class AnalysisRunStatus(StrEnum):
+    CLAIMED = "claimed"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    EXPIRED = "expired"
+
+
+class AnalysisRunExecutor(StrEnum):
+    DEVICE = "device"
+    SERVER = "server"
+
+
+class AnalysisRunMode(StrEnum):
+    PRIMARY = "primary"
+    SHADOW = "shadow"
+
+
+class AnalysisProviderRequestStatus(StrEnum):
+    STARTED = "started"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
+
+class InteractiveAgentTurnStatus(StrEnum):
+    CLAIMED = "claimed"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    EXPIRED = "expired"
+
+
+class InteractiveAgentProviderRequestStatus(StrEnum):
+    STARTED = "started"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
+
 class AgentActionType(StrEnum):
     SEND_EMAIL = "send_email"
     ADD_FRIEND = "add_friend"
@@ -266,6 +373,7 @@ class BillingEventStatus(StrEnum):
 
 class UsageFeature(StrEnum):
     PI_AGENT_ANALYSIS = "pi_agent_analysis"
+    INTERACTIVE_AGENT_TURN = "interactive_agent_turn"
 
 
 class UsageStatus(StrEnum):

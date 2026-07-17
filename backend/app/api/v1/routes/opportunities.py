@@ -1,10 +1,14 @@
+import hashlib
 from datetime import datetime
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
+import structlog
 
 from app.api.deps import (
     get_adapter_registry,
+    get_device_agent_routing_service,
+    get_manual_reply_delivery_repo,
     get_message_repo,
     get_opportunity_or_404,
     get_opportunity_repo,
@@ -19,6 +23,7 @@ from app.application.dto import (
     DashboardRead,
     FriendRequestUpdate,
     ManualReplyRequest,
+    ManualReplyResponse,
     OpportunityArchiveRequest,
     OpportunityBulkArchiveRead,
     OpportunityBulkArchiveRequest,
@@ -26,9 +31,22 @@ from app.application.dto import (
     OpportunityRead,
     OpportunityStatusUpdate,
 )
-from app.application.mappers import to_opportunity_detail, to_opportunity_read
+from app.application.mappers import (
+    to_chat_message_read,
+    to_opportunity_detail,
+    to_opportunity_read,
+)
 from app.application.use_cases.ai_reply import AIDraftUseCase
-from app.application.use_cases.manual_reply import ManualReplyUseCase, MessageDeliveryError
+from app.application.use_cases.analysis_run import DeviceAgentRoutingService
+from app.application.use_cases.manual_reply import (
+    ManualReplyDeliveryError,
+    ManualReplyIdempotencyConflict,
+    ManualReplyInProgress,
+    ManualReplyOutcomeUncertain,
+    ManualReplyProjectionError,
+    ManualReplyResult,
+    ManualReplyUseCase,
+)
 from app.application.use_cases.schedule_agent_analysis import ScheduleAgentAnalysisUseCase
 from app.domain.enums import (
     AgentAnalysisStatus,
@@ -37,21 +55,28 @@ from app.domain.enums import (
     OpportunityArchiveScope,
 )
 from app.domain.services.opportunity_state import (
+    InternalCommandIdempotencyConflict,
     InvalidOpportunityTransition,
-    ensure_transition_allowed,
+    OpportunityClaimConflict,
+    OpportunityVersionConflict,
 )
-from app.infrastructure.ai.litellm_client import LiteLLMReplyGenerator
+from app.infrastructure.ai.litellm_client import (
+    AIReplyGenerationError,
+    AIReplyUnavailableError,
+    LiteLLMReplyGenerator,
+)
 from app.infrastructure.db.models import Opportunity, User
 from app.infrastructure.db.repositories import (
     MessageRepository,
+    ManualReplyDeliveryRepository,
     OpportunityRepository,
     SubscriptionRepository,
 )
 from app.infrastructure.im.base import AdapterRegistry
-from app.infrastructure.im.wecom import WeComProviderError
 from app.worker.queue import CeleryTaskQueue
 
 router = APIRouter()
+logger = structlog.get_logger(__name__)
 
 
 # 与 Web frontend/lib/sop.ts 的 trustLevel 边界严格一致。
@@ -88,7 +113,7 @@ async def dashboard(
     """
     if sort not in DASHBOARD_SORTS:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=f"sort must be one of {sorted(DASHBOARD_SORTS)}",
         )
     if source_type is not None and source_type not in SOURCE_TYPES:
@@ -226,39 +251,26 @@ def ensure_opportunity_is_active(opportunity: Opportunity) -> None:
         )
 
 
-@router.post("/{opportunity_id}/manual-reply", response_model=OpportunityDetailRead)
-async def manual_reply(
+async def _execute_manual_reply(
+    *,
     payload: ManualReplyRequest,
-    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
-    current_user: User = Depends(require_user),
-    opportunity: Opportunity = Depends(get_opportunity_or_404),
-    opportunity_repo: OpportunityRepository = Depends(get_opportunity_repo),
-    message_repo: MessageRepository = Depends(get_message_repo),
-    adapters: AdapterRegistry = Depends(get_adapter_registry),
-) -> OpportunityDetailRead:
+    idempotency_key: str,
+    current_user: User,
+    opportunity: Opportunity,
+    opportunity_repo: OpportunityRepository,
+    message_repo: MessageRepository,
+    delivery_repo: ManualReplyDeliveryRepository,
+    adapters: AdapterRegistry,
+) -> ManualReplyResult:
     ensure_opportunity_is_active(opportunity)
-    if opportunity.channel == IMChannel.WECOM and opportunity.conversation_id.startswith(
-        "wecom-archive:"
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="WeCom archive conversations are read-only; reply in WeCom",
-        )
-    is_dynamic_wecom = (
-        opportunity.channel == IMChannel.WECOM and opportunity.conversation_id.startswith("wecom:")
-    )
-    if is_dynamic_wecom and (not idempotency_key or not 8 <= len(idempotency_key) <= 128):
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Idempotency-Key must contain 8 to 128 characters",
-        )
     use_case = ManualReplyUseCase(
         opportunity_repo=opportunity_repo,
         message_repo=message_repo,
+        delivery_repo=delivery_repo,
         adapters=adapters,
     )
     try:
-        updated = await use_case.execute(
+        return await use_case.execute(
             opportunity=opportunity,
             text=payload.text,
             operator_id=str(current_user.id),
@@ -267,11 +279,95 @@ async def manual_reply(
         )
     except InvalidOpportunityTransition as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
-    except MessageDeliveryError as exc:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
-    except WeComProviderError as exc:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
-    return to_opportunity_detail(updated)
+    except ManualReplyIdempotencyConflict as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Idempotency-Key is bound to another manual reply",
+        ) from exc
+    except ManualReplyInProgress as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="manual reply delivery is already in progress",
+        ) from exc
+    except ManualReplyOutcomeUncertain as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="manual reply delivery outcome is uncertain; review before retrying",
+        ) from exc
+    except ManualReplyDeliveryError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="manual reply delivery is unavailable",
+        ) from exc
+    except ManualReplyProjectionError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="manual reply was delivered; retry the same request to refresh local state",
+        ) from exc
+
+
+def _validated_idempotency_key(value: str | None, *, legacy_fallback: bool) -> str:
+    if value is None and legacy_fallback:
+        return f"legacy-{uuid4()}"
+    normalized = (value or "").strip()
+    if not 8 <= len(normalized) <= 128:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Idempotency-Key must contain 8 to 128 characters",
+        )
+    return normalized
+
+
+@router.post("/{opportunity_id}/manual-reply", response_model=OpportunityDetailRead)
+async def manual_reply(
+    payload: ManualReplyRequest,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    current_user: User = Depends(require_user),
+    opportunity: Opportunity = Depends(get_opportunity_or_404),
+    opportunity_repo: OpportunityRepository = Depends(get_opportunity_repo),
+    message_repo: MessageRepository = Depends(get_message_repo),
+    delivery_repo: ManualReplyDeliveryRepository = Depends(get_manual_reply_delivery_repo),
+    adapters: AdapterRegistry = Depends(get_adapter_registry),
+) -> OpportunityDetailRead:
+    result = await _execute_manual_reply(
+        payload=payload,
+        idempotency_key=_validated_idempotency_key(idempotency_key, legacy_fallback=True),
+        current_user=current_user,
+        opportunity=opportunity,
+        opportunity_repo=opportunity_repo,
+        message_repo=message_repo,
+        delivery_repo=delivery_repo,
+        adapters=adapters,
+    )
+    return to_opportunity_detail(result.opportunity)
+
+
+@router.post("/{opportunity_id}/manual-reply/result", response_model=ManualReplyResponse)
+async def manual_reply_result(
+    payload: ManualReplyRequest,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    current_user: User = Depends(require_user),
+    opportunity: Opportunity = Depends(get_opportunity_or_404),
+    opportunity_repo: OpportunityRepository = Depends(get_opportunity_repo),
+    message_repo: MessageRepository = Depends(get_message_repo),
+    delivery_repo: ManualReplyDeliveryRepository = Depends(get_manual_reply_delivery_repo),
+    adapters: AdapterRegistry = Depends(get_adapter_registry),
+) -> ManualReplyResponse:
+    result = await _execute_manual_reply(
+        payload=payload,
+        idempotency_key=_validated_idempotency_key(idempotency_key, legacy_fallback=False),
+        current_user=current_user,
+        opportunity=opportunity,
+        opportunity_repo=opportunity_repo,
+        message_repo=message_repo,
+        delivery_repo=delivery_repo,
+        adapters=adapters,
+    )
+    return ManualReplyResponse(
+        opportunity=to_opportunity_detail(result.opportunity),
+        message=to_chat_message_read(result.message),
+        messageTotal=await message_repo.count_by_opportunity(opportunity.id),
+    )
 
 
 @router.post("/{opportunity_id}/ai-draft", response_model=AIDraftResponse)
@@ -286,7 +382,23 @@ async def generate_ai_draft(
         opportunity_repo=opportunity_repo,
         reply_generator=reply_generator,
     )
-    draft = await use_case.execute(opportunity)
+    try:
+        draft = await use_case.execute(opportunity)
+    except AIReplyUnavailableError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="AI reply generation is disabled",
+        ) from exc
+    except AIReplyGenerationError as exc:
+        logger.warning(
+            "ai_draft.generation_failed",
+            opportunity_id=str(opportunity.id),
+            error_class=exc.__class__.__name__,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="AI reply generation is temporarily unavailable",
+        ) from exc
     return AIDraftResponse(opportunity_id=opportunity.id, draft=draft)
 
 
@@ -301,6 +413,7 @@ async def enqueue_agent_analysis(
     message_repo: MessageRepository = Depends(get_message_repo),
     subscription_repo: SubscriptionRepository = Depends(get_subscription_repo),
     task_queue: CeleryTaskQueue = Depends(get_task_queue),
+    device_routing: DeviceAgentRoutingService = Depends(get_device_agent_routing_service),
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ) -> AgentAnalysisEnqueueRead:
     ensure_opportunity_is_active(opportunity)
@@ -329,6 +442,7 @@ async def enqueue_agent_analysis(
         message_repo=message_repo,
         subscription_repo=subscription_repo,
         task_queue=task_queue,
+        device_routing=device_routing,
     ).execute(
         source_message,
         idempotency_key=f"manual:{request_key}",
@@ -390,29 +504,78 @@ async def update_friend_request(
 @router.patch("/{opportunity_id}/status", response_model=OpportunityDetailRead)
 async def update_status(
     payload: OpportunityStatusUpdate,
-    _: User = Depends(require_user),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    current_user: User = Depends(require_user),
     opportunity: Opportunity = Depends(get_opportunity_or_404),
     repo: OpportunityRepository = Depends(get_opportunity_repo),
 ) -> OpportunityDetailRead:
-    ensure_opportunity_is_active(opportunity)
+    if (payload.expectedVersion is None) != (idempotency_key is None):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="expectedVersion and Idempotency-Key must be provided together",
+        )
+    command_key = None
+    payload_hash = None
+    if idempotency_key is not None:
+        command_key = _validated_idempotency_key(idempotency_key, legacy_fallback=False)
+        payload_hash = hashlib.sha256(payload.status.value.encode("utf-8")).hexdigest()
+    else:
+        ensure_opportunity_is_active(opportunity)
     try:
-        ensure_transition_allowed(opportunity.status, payload.status)
+        updated = await repo.transition_status(
+            opportunity_id=opportunity.id,
+            owner_user_id=current_user.id,
+            status=payload.status,
+            expected_version=payload.expectedVersion,
+            idempotency_key=command_key,
+            payload_hash=payload_hash,
+        )
+    except OpportunityVersionConflict as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="opportunity version conflict",
+        ) from exc
+    except InternalCommandIdempotencyConflict as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Idempotency-Key is bound to another internal command",
+        ) from exc
     except InvalidOpportunityTransition as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
-    updated = await repo.update_status(opportunity, payload.status)
+    except LookupError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="opportunity is no longer available for status changes",
+        ) from exc
     return to_opportunity_detail(updated)
 
 
 @router.post("/{opportunity_id}/claim", response_model=OpportunityDetailRead)
 async def claim_opportunity(
     opportunity_id: UUID,
-    operator_id: str = Query(min_length=1, max_length=128),
-    _: User = Depends(require_user),
+    operator_id: str | None = Query(default=None, min_length=1, max_length=128),
+    current_user: User = Depends(require_user),
     opportunity: Opportunity = Depends(get_opportunity_or_404),
     repo: OpportunityRepository = Depends(get_opportunity_repo),
 ) -> OpportunityDetailRead:
     ensure_opportunity_is_active(opportunity)
     if opportunity.id != opportunity_id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="id mismatch")
-    updated = await repo.update_status(opportunity, opportunity.status, assigned_to=operator_id)
+    del operator_id  # Kept as a compatibility query parameter; identity comes from auth.
+    try:
+        updated = await repo.claim(
+            opportunity_id=opportunity.id,
+            owner_user_id=current_user.id,
+            operator_id=str(current_user.id),
+        )
+    except OpportunityClaimConflict as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="opportunity is already claimed",
+        ) from exc
+    except LookupError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="opportunity is no longer available for claiming",
+        ) from exc
     return to_opportunity_detail(updated)

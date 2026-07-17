@@ -74,6 +74,9 @@ jobs:
       - name: Run backend lint
         run: uv run --locked ruff check app tests scripts alembic --select E,F,ASYNC --ignore E501
 
+      - name: Check OpenAPI snapshot
+        run: uv run --locked python scripts/export_openapi.py ../packages/radar-contracts/openapi.json --check
+
       - name: Apply database migrations
         run: uv run --locked alembic upgrade head
 
@@ -116,12 +119,9 @@ jobs:
         run: npm test
 
   frontend:
-    name: Frontend Typecheck And Build
+    name: Web Shared Packages And RN JS
     runs-on: ubuntu-latest
     timeout-minutes: 25
-    defaults:
-      run:
-        working-directory: frontend
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -137,22 +137,109 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
-          cache-dependency-path: frontend/pnpm-lock.yaml
+          cache-dependency-path: pnpm-lock.yaml
 
-      - name: Install frontend dependencies
+      - name: Install JS workspace dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Check generated TypeScript contracts
+        run: pnpm --dir packages/radar-contracts check
+
+      - name: Check shared runtime packages
+        run: |
+          pnpm --dir packages/radar-core check
+          pnpm --dir packages/radar-api check
+          pnpm --dir packages/radar-agent check
+
+      - name: Check RN JavaScript and Hermes bundles
+        run: |
+          pnpm check:radar
+          pnpm --dir mobile/radar export:ios
+          pnpm --dir mobile/radar export:android
+
       - name: Run frontend lint
-        run: pnpm lint
+        run: pnpm --dir frontend lint
 
       - name: Run frontend typecheck
-        run: pnpm typecheck
+        run: pnpm --dir frontend typecheck
 
       - name: Run frontend tests
-        run: pnpm test
+        run: pnpm --dir frontend test
 
       - name: Build frontend
-        run: pnpm build
+        run: pnpm --dir frontend build
+
+  rn-ios:
+    name: RN iOS Release Build
+    runs-on: macos-15
+    timeout-minutes: 40
+    env:
+      RADAR_APP_VARIANT: production
+      RADAR_APP_VERSION: 0.2.0
+      RADAR_BUILD_NUMBER: 2
+      EXPO_PUBLIC_API_BASE_URL: https://api.example.test
+      EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID: 1234567890-ci-server.apps.googleusercontent.com
+      EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID: 1234567890-ci-ios.apps.googleusercontent.com
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10
+          run_install: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - name: Generate RN iOS project
+        run: pnpm --dir mobile/radar exec expo prebuild --clean --platform ios
+      - name: Build RN iOS release
+        run: |
+          xcodebuild -quiet \
+            -workspace mobile/radar/ios/app.xcworkspace \
+            -scheme app \
+            -configuration Release \
+            -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath mobile/radar/.build/DerivedData \
+            CODE_SIGNING_ALLOWED=NO build
+
+  rn-android:
+    name: RN Android Release Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      RADAR_APP_VARIANT: production
+      RADAR_APP_VERSION: 0.2.0
+      RADAR_BUILD_NUMBER: 2
+      EXPO_PUBLIC_API_BASE_URL: https://api.example.test
+      EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID: 1234567890-ci-server.apps.googleusercontent.com
+      EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID: 1234567890-ci-ios.apps.googleusercontent.com
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10
+          run_install: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+      - run: pnpm install --frozen-lockfile
+      - name: Generate RN Android project
+        run: pnpm --dir mobile/radar exec expo prebuild --clean --platform android
+      - name: Build RN Android release
+        working-directory: mobile/radar/android
+        env:
+          NODE_ENV: production
+        run: ./gradlew :app:assembleRelease
 
   ios:
     name: iOS Build And Test

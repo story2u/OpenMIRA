@@ -24,6 +24,7 @@ from app.domain.enums import (
 from app.domain.ports import InboundMessage, SendReceipt
 from app.infrastructure.db.models import WeComConnection
 from app.infrastructure.db.repositories import WeComConnectionRepository, WeComDeliveryRepository
+from app.infrastructure.im.base import IMSendDisabledError
 
 
 class WeComCryptoError(ValueError):
@@ -308,11 +309,7 @@ class WeComAdapter:
         text: str,
     ) -> SendReceipt:
         if not self.settings.im_send_enabled:
-            return SendReceipt(
-                provider_message_id=None,
-                raw_response={"dry_run": True, "channel": self.channel, "target": target_user_id},
-                delivered=False,
-            )
+            raise IMSendDisabledError("IM sending is disabled")
         token = await self._access_token(credentials, cache_scope=cache_scope)
         try:
             async with httpx.AsyncClient(timeout=httpx.Timeout(10.0, connect=5.0)) as client:

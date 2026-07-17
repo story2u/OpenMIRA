@@ -16,6 +16,7 @@ final class OpportunityDetailModel {
     var isDrafting = false
     var errorMessage: String?
     var templates: [ReplyTemplate] = []
+    private var pendingReply: (text: String, key: String)?
 
     init(api: APIClient, opportunityID: UUID, operatorID: String) {
         self.api = api
@@ -43,12 +44,18 @@ final class OpportunityDetailModel {
         guard !text.isEmpty else { return }
         isSending = true
         defer { isSending = false }
+        let request = pendingReply?.text == text
+            ? pendingReply!
+            : (text: text, key: UUID().uuidString)
+        pendingReply = request
         do {
             detail = try await api.sendManualReply(
                 opportunityID: opportunityID,
                 text: text,
-                operatorID: operatorID
+                operatorID: operatorID,
+                idempotencyKey: request.key
             )
+            pendingReply = nil
             replyText = ""
             messages = (try? await api.messages(opportunityID: opportunityID)) ?? messages
         } catch {

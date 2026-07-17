@@ -1,0 +1,12 @@
+{
+  "name": "@story2u/im-workspace",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@10.25.0",
+  "scripts": {
+    "check:frontend": "pnpm --dir frontend lint && pnpm --dir frontend typecheck && pnpm --dir frontend test && pnpm --dir frontend build",
+    "check:radar": "pnpm --dir mobile/radar typecheck && pnpm --dir mobile/radar test && pnpm --dir mobile/radar exec expo install --check",
+    "contracts:generate": "cd backend && uv run --locked python scripts/export_openapi.py ../packages/radar-contracts/openapi.json && cd .. && pnpm --dir packages/radar-contracts generate",
+    "contracts:check": "cd backend && uv run --locked python scripts/export_openapi.py ../packages/radar-contracts/openapi.json --check && cd .. && pnpm --dir packages/radar-contracts check"
+  }
+}

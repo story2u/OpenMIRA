@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, Request
 from app.api.deps import (
     get_adapter_registry,
     get_detector,
-    get_job_message_audit_repo,
+    get_device_agent_routing_service,
     get_message_repo,
     get_opportunity_repo,
     get_rule_repo,
@@ -18,6 +18,7 @@ from app.api.deps import (
     get_user_settings_repo,
     get_work_time_service,
 )
+from app.application.use_cases.analysis_run import DeviceAgentRoutingService
 from app.application.mappers import to_opportunity_read
 from app.application.use_cases.telegram_connection_workflow import (
     TelegramConnectionWorkflow,
@@ -84,10 +85,7 @@ async def telegram_webhook(
     connection_repo: TelegramConnectionRepository = Depends(get_telegram_connection_repo),
     legacy_repo: TelegramUserConfigRepository = Depends(get_telegram_user_config_repo),
     user_settings_repo: UserSettingsRepository = Depends(get_user_settings_repo),
-    job_audit_repo: JobMessageAuditRepository = Depends(get_job_message_audit_repo),
-    source_profile_repo: SourceFunctionalProfileRepository = Depends(
-        get_source_functional_profile_repo
-    ),
+    device_routing: DeviceAgentRoutingService = Depends(get_device_agent_routing_service),
 ) -> dict:
     # Reject unauthenticated requests before parsing or persisting their JSON body.
     require_secret(
@@ -140,11 +138,7 @@ async def telegram_webhook(
         task_queue=task_queue,
         subscription_repo=subscription_repo,
         user_settings_repo=user_settings_repo,
-        job_discovery=PrepareJobDiscoveryUseCase(
-            message_repo=message_repo,
-            profile_repo=source_profile_repo,
-            audit_repo=job_audit_repo,
-        ),
+        device_routing=device_routing,
     )
     business_message = payload.get("business_message") or payload.get("edited_business_message")
     if isinstance(business_message, dict):

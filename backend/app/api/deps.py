@@ -1,4 +1,5 @@
 from collections.abc import AsyncGenerator
+from dataclasses import dataclass
 from uuid import UUID
 
 from fastapi import Depends, HTTPException, status
@@ -6,23 +7,68 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from redis.asyncio import Redis
 from sqlmodel.ext.asyncio.session import AsyncSession
 
+from app.application.use_cases.analysis_gateway import AnalysisGatewayService
+from app.application.use_cases.analysis_run import (
+    AnalysisRunService,
+    AnalysisRunTokenPrincipal,
+    DeviceAgentRoutingService,
+)
+from app.application.use_cases.interactive_agent_action import (
+    InteractiveAgentActionService,
+    InteractiveAgentApprovalTokenPrincipal,
+)
+from app.application.use_cases.device_session import DeviceSessionService
+from app.application.use_cases.interactive_agent_gateway import (
+    InteractiveAgentGatewayService,
+)
+from app.application.use_cases.interactive_agent_turn import (
+    InteractiveAgentRoutingService,
+    InteractiveAgentTurnService,
+    InteractiveAgentTurnTokenPrincipal,
+)
+from app.application.use_cases.push_registration import PushRegistrationService
+from app.application.use_cases.manual_reply import ManualReplyUseCase
+from app.application.use_cases.sync_feed import SyncFeedService
 from app.core.config import Settings, get_settings
-from app.core.security import constant_time_equals, decode_access_token
+from app.core.security import (
+    constant_time_equals,
+    decode_access_token,
+    decode_analysis_run_token,
+    decode_interactive_agent_turn_token,
+    decode_interactive_agent_approval_token,
+    hash_analysis_run_nonce,
+    hash_interactive_agent_turn_nonce,
+    hash_interactive_agent_approval_nonce,
+)
 from app.core.time_window import WorkTimeConfig, WorkTimeService
 from app.domain.services.detection_policy import OpportunityDetector
+from app.infrastructure.agent.link_inspector import SafeLinkInspector
+from app.infrastructure.ai.analysis_gateway import OpenAICompatibleGatewayClient
 from app.infrastructure.ai.litellm_client import LiteLLMOpportunityClassifier, LiteLLMReplyGenerator
-from app.infrastructure.agent.pi_client import PiAgentClient
-from app.infrastructure.db.models import Opportunity, User
+from app.infrastructure.db.analysis_gateway_repository import AnalysisGatewayRepository
+from app.infrastructure.db.analysis_run_repository import AnalysisRunRepository
+from app.infrastructure.db.interactive_agent_gateway_repository import (
+    InteractiveAgentGatewayRepository,
+)
+from app.infrastructure.db.interactive_agent_action_repository import (
+    InteractiveAgentActionRepository,
+)
+from app.infrastructure.db.interactive_agent_repository import (
+    InteractiveAgentTurnRepository,
+)
+from app.infrastructure.db.models import Device, Opportunity, User
 from app.infrastructure.db.repositories import (
     BillingEventRepository,
     ConfigRepository,
+    DeviceRepository,
+    ManualReplyDeliveryRepository,
     MessageRepository,
     JobMessageAuditRepository,
     JobOpportunityMatchRepository,
     JobOpportunityRepository,
     JobSearchProfileRepository,
     OpportunityRepository,
-    PasswordResetRepository,
+    PushRegistrationRepository,
     ReplyTemplateRepository,
     RuleRepository,
     SourceFunctionalProfileRepository,
@@ -37,12 +83,99 @@ from app.infrastructure.db.repositories import (
     WeComEventRepository,
 )
 from app.infrastructure.db.session import get_session
+from app.infrastructure.db.sync_repository import SyncFeedRepository
 from app.infrastructure.im.base import AdapterRegistry
 from app.infrastructure.im.telegram import TelegramAdapter
 from app.infrastructure.im.wecom import WeComAdapter
 from app.worker.queue import CeleryTaskQueue
 
 bearer = HTTPBearer(auto_error=False)
+
+
+@dataclass(frozen=True)
+class DevicePrincipal:
+    user: User
+    device: Device | None
+
+
+async def require_analysis_run_principal(
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer),
+    settings: Settings = Depends(get_settings),
+) -> AnalysisRunTokenPrincipal:
+    if not credentials or credentials.scheme.lower() != "bearer":
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="missing token")
+    payload = decode_analysis_run_token(credentials.credentials, settings)
+    try:
+        owner_user_id = UUID(str(payload["sub"]))
+        device_id = UUID(str(payload["did"]))
+        run_id = UUID(str(payload["rid"]))
+        nonce = str(payload["nonce"])
+        hash_analysis_run_nonce(nonce)
+    except (KeyError, TypeError, ValueError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="invalid token",
+        ) from exc
+    return AnalysisRunTokenPrincipal(
+        run_id=run_id,
+        owner_user_id=owner_user_id,
+        device_id=device_id,
+        nonce=nonce,
+    )
+
+
+async def require_interactive_agent_turn_principal(
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer),
+    settings: Settings = Depends(get_settings),
+) -> InteractiveAgentTurnTokenPrincipal:
+    if not credentials or credentials.scheme.lower() != "bearer":
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="missing token")
+    payload = decode_interactive_agent_turn_token(credentials.credentials, settings)
+    try:
+        owner_user_id = UUID(str(payload["sub"]))
+        device_id = UUID(str(payload["did"]))
+        turn_id = UUID(str(payload["tid"]))
+        nonce = str(payload["nonce"])
+        hash_interactive_agent_turn_nonce(nonce)
+    except (KeyError, TypeError, ValueError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="invalid token",
+        ) from exc
+    return InteractiveAgentTurnTokenPrincipal(
+        turn_id=turn_id,
+        owner_user_id=owner_user_id,
+        device_id=device_id,
+        nonce=nonce,
+    )
+
+
+async def require_interactive_agent_approval_principal(
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer),
+    settings: Settings = Depends(get_settings),
+) -> InteractiveAgentApprovalTokenPrincipal:
+    if not credentials or credentials.scheme.lower() != "bearer":
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="missing token")
+    payload = decode_interactive_agent_approval_token(credentials.credentials, settings)
+    try:
+        owner_user_id = UUID(str(payload["sub"]))
+        device_id = UUID(str(payload["did"]))
+        turn_id = UUID(str(payload["tid"]))
+        approval_id = UUID(str(payload["aid"]))
+        nonce = str(payload["nonce"])
+        hash_interactive_agent_approval_nonce(nonce)
+    except (KeyError, TypeError, ValueError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="invalid token",
+        ) from exc
+    return InteractiveAgentApprovalTokenPrincipal(
+        approval_id=approval_id,
+        turn_id=turn_id,
+        owner_user_id=owner_user_id,
+        device_id=device_id,
+        nonce=nonce,
+    )
 
 
 async def require_admin(
@@ -60,7 +193,11 @@ async def require_admin(
     return None
 
 
-async def _user_from_token(token: str, settings: Settings, session: AsyncSession) -> User:
+async def _principal_from_token(
+    token: str,
+    settings: Settings,
+    session: AsyncSession,
+) -> DevicePrincipal:
     payload = decode_access_token(token, settings)
     try:
         user_id = UUID(str(payload["sub"]))
@@ -72,15 +209,27 @@ async def _user_from_token(token: str, settings: Settings, session: AsyncSession
     user = await UserRepository(session).get(user_id)
     if not user or not user.is_active:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="inactive user")
-    try:
-        token_version = int(payload.get("ver", 0))
-    except (TypeError, ValueError) as exc:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid token"
-        ) from exc
-    if token_version != user.auth_version:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid token")
-    return user
+    device = None
+    device_id_value = payload.get("did")
+    if device_id_value is not None:
+        try:
+            device_id = UUID(str(device_id_value))
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="invalid token",
+            ) from exc
+        device = await DeviceRepository(session).get_active_owned(user.id, device_id)
+        if not device:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="inactive device",
+            )
+    return DevicePrincipal(user=user, device=device)
+
+
+async def _user_from_token(token: str, settings: Settings, session: AsyncSession) -> User:
+    return (await _principal_from_token(token, settings, session)).user
 
 
 async def require_user(
@@ -91,6 +240,22 @@ async def require_user(
     if not credentials or credentials.scheme.lower() != "bearer":
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="missing token")
     return await _user_from_token(credentials.credentials, settings, session)
+
+
+async def require_device_principal(
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer),
+    settings: Settings = Depends(get_settings),
+    session: AsyncSession = Depends(get_session),
+) -> DevicePrincipal:
+    if not credentials or credentials.scheme.lower() != "bearer":
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="missing token")
+    principal = await _principal_from_token(credentials.credentials, settings, session)
+    if principal.device is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="device session required",
+        )
+    return principal
 
 
 async def get_redis_client(
@@ -107,45 +272,10 @@ def get_message_repo(session: AsyncSession = Depends(get_session)) -> MessageRep
     return MessageRepository(session)
 
 
-def get_job_message_audit_repo(
+def get_manual_reply_delivery_repo(
     session: AsyncSession = Depends(get_session),
-) -> JobMessageAuditRepository:
-    return JobMessageAuditRepository(session)
-
-
-def get_source_functional_profile_repo(
-    session: AsyncSession = Depends(get_session),
-) -> SourceFunctionalProfileRepository:
-    return SourceFunctionalProfileRepository(session)
-
-
-def get_job_opportunity_repo(
-    session: AsyncSession = Depends(get_session),
-) -> JobOpportunityRepository:
-    return JobOpportunityRepository(session)
-
-
-def get_job_search_profile_repo(
-    session: AsyncSession = Depends(get_session),
-) -> JobSearchProfileRepository:
-    return JobSearchProfileRepository(session)
-
-
-def get_job_opportunity_match_repo(
-    session: AsyncSession = Depends(get_session),
-) -> JobOpportunityMatchRepository:
-    return JobOpportunityMatchRepository(session)
-
-
-def get_pi_agent_client(settings: Settings = Depends(get_settings)) -> PiAgentClient:
-    return PiAgentClient(
-        node_binary=settings.pi_agent_node_binary,
-        runner_path=settings.pi_agent_runner_path,
-        provider=settings.pi_agent_provider,
-        model=settings.pi_agent_model,
-        api_key=settings.effective_pi_agent_api_key,
-        timeout_seconds=settings.pi_agent_timeout_seconds,
-    )
+) -> ManualReplyDeliveryRepository:
+    return ManualReplyDeliveryRepository(session)
 
 
 def get_opportunity_repo(session: AsyncSession = Depends(get_session)) -> OpportunityRepository:
@@ -164,10 +294,25 @@ def get_user_repo(session: AsyncSession = Depends(get_session)) -> UserRepositor
     return UserRepository(session)
 
 
-def get_password_reset_repo(
+def get_device_session_service(
     session: AsyncSession = Depends(get_session),
-) -> PasswordResetRepository:
-    return PasswordResetRepository(session)
+    settings: Settings = Depends(get_settings),
+) -> DeviceSessionService:
+    return DeviceSessionService(DeviceRepository(session), settings)
+
+
+def get_sync_feed_service(
+    session: AsyncSession = Depends(get_session),
+    settings: Settings = Depends(get_settings),
+) -> SyncFeedService:
+    return SyncFeedService(SyncFeedRepository(session), settings)
+
+
+def get_push_registration_service(
+    session: AsyncSession = Depends(get_session),
+    settings: Settings = Depends(get_settings),
+) -> PushRegistrationService:
+    return PushRegistrationService(PushRegistrationRepository(session), settings)
 
 
 def get_subscription_repo(session: AsyncSession = Depends(get_session)) -> SubscriptionRepository:
@@ -257,8 +402,107 @@ def get_adapter_registry(
     )
 
 
+def get_interactive_agent_action_service(
+    session: AsyncSession = Depends(get_session),
+    settings: Settings = Depends(get_settings),
+    adapters: AdapterRegistry = Depends(get_adapter_registry),
+) -> InteractiveAgentActionService:
+    return InteractiveAgentActionService(
+        repository=InteractiveAgentActionRepository(session),
+        manual_reply=ManualReplyUseCase(
+            opportunity_repo=OpportunityRepository(session),
+            message_repo=MessageRepository(session),
+            delivery_repo=ManualReplyDeliveryRepository(session),
+            adapters=adapters,
+        ),
+        adapters=adapters,
+        settings=settings,
+        routing_service=InteractiveAgentRoutingService(settings=settings),
+    )
+
+
 def get_task_queue() -> CeleryTaskQueue:
     return CeleryTaskQueue()
+
+
+def get_analysis_run_service(
+    session: AsyncSession = Depends(get_session),
+    settings: Settings = Depends(get_settings),
+    task_queue: CeleryTaskQueue = Depends(get_task_queue),
+) -> AnalysisRunService:
+    run_repo = AnalysisRunRepository(session)
+    return AnalysisRunService(
+        run_repo=run_repo,
+        subscription_repo=SubscriptionRepository(session),
+        message_repo=MessageRepository(session),
+        opportunity_repo=OpportunityRepository(session),
+        task_queue=task_queue,
+        settings=settings,
+        routing_service=DeviceAgentRoutingService(run_repo=run_repo, settings=settings),
+    )
+
+
+def get_device_agent_routing_service(
+    session: AsyncSession = Depends(get_session),
+    settings: Settings = Depends(get_settings),
+) -> DeviceAgentRoutingService:
+    return DeviceAgentRoutingService(
+        run_repo=AnalysisRunRepository(session),
+        settings=settings,
+    )
+
+
+def get_interactive_agent_routing_service(
+    settings: Settings = Depends(get_settings),
+) -> InteractiveAgentRoutingService:
+    return InteractiveAgentRoutingService(settings=settings)
+
+
+def get_interactive_agent_turn_service(
+    session: AsyncSession = Depends(get_session),
+    settings: Settings = Depends(get_settings),
+) -> InteractiveAgentTurnService:
+    routing = InteractiveAgentRoutingService(settings=settings)
+    return InteractiveAgentTurnService(
+        turn_repo=InteractiveAgentTurnRepository(session),
+        subscription_repo=SubscriptionRepository(session),
+        settings=settings,
+        routing_service=routing,
+    )
+
+
+def get_interactive_agent_gateway_service(
+    session: AsyncSession = Depends(get_session),
+    settings: Settings = Depends(get_settings),
+) -> InteractiveAgentGatewayService:
+    return InteractiveAgentGatewayService(
+        repository=InteractiveAgentGatewayRepository(session),
+        provider_client=OpenAICompatibleGatewayClient(settings),
+        settings=settings,
+        routing_service=InteractiveAgentRoutingService(settings=settings),
+    )
+
+
+def get_analysis_gateway_service(
+    session: AsyncSession = Depends(get_session),
+    settings: Settings = Depends(get_settings),
+) -> AnalysisGatewayService:
+    return AnalysisGatewayService(
+        repository=AnalysisGatewayRepository(session),
+        provider_client=OpenAICompatibleGatewayClient(settings),
+        settings=settings,
+    )
+
+
+def get_analysis_link_inspector(
+    settings: Settings = Depends(get_settings),
+) -> SafeLinkInspector:
+    return SafeLinkInspector(
+        max_links=settings.pi_agent_max_links,
+        max_content_bytes=settings.pi_agent_max_content_bytes,
+        max_text_chars=settings.pi_agent_max_link_text_chars,
+        timeout_seconds=settings.pi_agent_link_timeout_seconds,
+    )
 
 
 def get_reply_generator(

@@ -1,0 +1,14 @@
+packages:
+  - frontend
+  - mobile/radar
+  - packages/*
+
+# Keep backend/pi-agent-runtime on its reviewed npm lock and Docker path.
+onlyBuiltDependencies:
+  - sharp
+
+overrides:
+  hono: 4.12.25
+
+patchedDependencies:
+  expo-modules-jsi@57.0.3: mobile/radar/patches/expo-modules-jsi@57.0.3.patch

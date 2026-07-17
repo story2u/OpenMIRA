@@ -1,13 +1,25 @@
+import { createAuthApi } from '@story2u/radar-api/auth'
+import { createRadarApiClient } from '@story2u/radar-api/client'
+import { createMessagesApi } from '@story2u/radar-api/messages'
+import { createOpportunityActionsApi } from '@story2u/radar-api/opportunity-actions'
+import { createOpportunitiesApi } from '@story2u/radar-api/opportunities'
+import { createSettingsApi } from '@story2u/radar-api/settings'
+import { createSubscriptionsApi } from '@story2u/radar-api/subscriptions'
+import { createTemplatesApi } from '@story2u/radar-api/templates'
+import { createTelegramApi } from '@story2u/radar-api/telegram'
+import type { MessagePage } from '@story2u/radar-contracts/messages'
+import type { Opportunity as ContractOpportunity } from '@story2u/radar-contracts/opportunities'
 import type {
   AuthUser,
   AuthTokenResponse,
   AgentAction,
   AgentAnalysisStatus,
+  ChatMessage,
   ExtractedContacts,
   LinkVerification,
-  OAuthAuthorizeResponse,
   OAuthProvider,
   Opportunity,
+  InternalOpportunityStatus,
   ReplyTemplate,
   PlanEntitlements,
   SubscriptionUsage,
@@ -49,6 +61,7 @@ interface ApiOpportunity {
   matchedKeywords: string[]
   confidenceScore: number
   status: Opportunity['status']
+  internalStatus?: Opportunity['internalStatus']
   priority: Opportunity['priority']
   lastMessagePreview: string
   createdAt: string
@@ -69,6 +82,10 @@ interface ApiOpportunity {
   archivedAt?: string | null
   archivedByUserId?: string | null
   archiveReason?: string | null
+  aiReplyDraft?: string | null
+  finalReply?: string | null
+  detectionReason?: string | null
+  assignedTo?: string | null
 }
 
 const defaultLinkVerification: LinkVerification = {
@@ -85,6 +102,42 @@ const defaultContacts: ExtractedContacts = {
   wecomId: null,
   extractionSource: null,
 }
+
+const friendRequestStatuses = new Set<Opportunity['friendRequestStatus']>([
+  'not_sent',
+  'pending',
+  'accepted',
+  'rejected',
+  'n/a',
+])
+const sopStages = new Set<Opportunity['sopStage']>([
+  'detected',
+  'analyzing',
+  'verified',
+  'contact_extracted',
+  'friend_requested',
+  'ready_to_chat',
+  'chatting',
+  'closed',
+])
+const linkVerificationStatuses = new Set<LinkVerification['status']>([
+  'unverified',
+  'verifying',
+  'safe',
+  'suspicious',
+  'malicious',
+])
+const contactExtractionSources = new Set<NonNullable<ExtractedContacts['extractionSource']>>([
+  'message_text',
+  'link_content',
+  'sop_manual',
+])
+const agentActionTypes = new Set<AgentAction['actionType']>([
+  'send_email',
+  'add_friend',
+  'private_message',
+  'notify_user',
+])
 
 function apiUrl(path: string) {
   return `${API_BASE_URL}${path}`
@@ -103,6 +156,20 @@ export function setAuthToken(token: string | null) {
     window.localStorage.removeItem(AUTH_TOKEN_KEY)
   }
 }
+
+const sharedApiClient = createRadarApiClient({
+  baseUrl: API_BASE_URL,
+  fetch: (input, init) => fetch(input, init),
+  getAccessToken: getAuthToken,
+})
+const sharedAuthApi = createAuthApi(sharedApiClient)
+const sharedMessagesApi = createMessagesApi(sharedApiClient)
+const sharedOpportunityActionsApi = createOpportunityActionsApi(sharedApiClient)
+const sharedOpportunitiesApi = createOpportunitiesApi(sharedApiClient)
+const sharedSettingsApi = createSettingsApi(sharedApiClient)
+const sharedSubscriptionsApi = createSubscriptionsApi(sharedApiClient)
+const sharedTemplatesApi = createTemplatesApi(sharedApiClient)
+const sharedTelegramApi = createTelegramApi(sharedApiClient)
 
 async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
   const token = getAuthToken()
@@ -137,7 +204,77 @@ async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
   return response.json() as Promise<T>
 }
 
-export function toOpportunity(item: ApiOpportunity): Opportunity {
+function normalizeSourceType(value: string | undefined): Opportunity['sourceType'] {
+  return value === 'group' ? 'group' : 'private'
+}
+
+function normalizeGroupMemberRole(value: string | undefined): Opportunity['groupMemberRole'] {
+  return value === 'unknown' ? 'unknown' : 'member'
+}
+
+function normalizeFriendRequestStatus(value: string | undefined, sourceType: Opportunity['sourceType']) {
+  if (value && friendRequestStatuses.has(value as Opportunity['friendRequestStatus'])) {
+    return value as Opportunity['friendRequestStatus']
+  }
+  return sourceType === 'group' ? 'not_sent' : 'n/a'
+}
+
+function normalizeSopStage(value: string | undefined): Opportunity['sopStage'] {
+  return value && sopStages.has(value as Opportunity['sopStage'])
+    ? value as Opportunity['sopStage']
+    : 'detected'
+}
+
+function normalizeLinkVerification(value: unknown): LinkVerification {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return defaultLinkVerification
+  const candidate = value as Partial<LinkVerification>
+  return {
+    status: candidate.status && linkVerificationStatuses.has(candidate.status) ? candidate.status : 'unverified',
+    verifiedAt: typeof candidate.verifiedAt === 'string' ? candidate.verifiedAt : null,
+    riskReasons: Array.isArray(candidate.riskReasons)
+      ? candidate.riskReasons.filter((reason): reason is string => typeof reason === 'string')
+      : [],
+    resolvedInfo: typeof candidate.resolvedInfo === 'string' ? candidate.resolvedInfo : null,
+  }
+}
+
+function normalizeExtractedContacts(value: unknown): ExtractedContacts {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return defaultContacts
+  const candidate = value as Partial<ExtractedContacts>
+  const textOrNull = (entry: unknown) => typeof entry === 'string' ? entry : null
+  return {
+    phone: textOrNull(candidate.phone),
+    email: textOrNull(candidate.email),
+    telegramHandle: textOrNull(candidate.telegramHandle),
+    wecomId: textOrNull(candidate.wecomId),
+    extractionSource:
+      candidate.extractionSource && contactExtractionSources.has(candidate.extractionSource)
+        ? candidate.extractionSource
+        : null,
+  }
+}
+
+function normalizeAgentActions(value: unknown): AgentAction[] {
+  if (!Array.isArray(value)) return []
+  return value.flatMap((entry) => {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return []
+    const candidate = entry as Partial<AgentAction>
+    if (!candidate.actionType || !agentActionTypes.has(candidate.actionType) || typeof candidate.reason !== 'string') {
+      return []
+    }
+    return [{
+      actionType: candidate.actionType,
+      reason: candidate.reason,
+      target: typeof candidate.target === 'string' ? candidate.target : null,
+      draft: typeof candidate.draft === 'string' ? candidate.draft : null,
+      requiresApproval: candidate.requiresApproval !== false,
+    }]
+  })
+}
+
+export function toOpportunity(item: ApiOpportunity | ContractOpportunity): Opportunity {
+  const sourceType = normalizeSourceType(item.sourceType)
+  const detail = item as ApiOpportunity
   return {
     id: item.id,
     platform: item.platform,
@@ -147,19 +284,20 @@ export function toOpportunity(item: ApiOpportunity): Opportunity {
     matchedKeywords: item.matchedKeywords ?? [],
     confidenceScore: item.confidenceScore,
     status: item.status,
+    internalStatus: item.internalStatus ?? 'pending_human',
     priority: item.priority,
     lastMessagePreview: item.lastMessagePreview,
     createdAt: item.createdAt,
-    sourceType: item.sourceType ?? 'private',
+    sourceType,
     groupName: item.groupName ?? null,
-    groupMemberRole: item.groupMemberRole ?? 'member',
+    groupMemberRole: normalizeGroupMemberRole(item.groupMemberRole),
     rawMessageLinks: item.rawMessageLinks ?? [],
-    linkVerification: item.linkVerification ?? defaultLinkVerification,
-    extractedContacts: item.extractedContacts ?? defaultContacts,
-    friendRequestStatus: item.friendRequestStatus ?? (item.sourceType === 'group' ? 'not_sent' : 'n/a'),
-    sopStage: item.sopStage ?? 'detected',
+    linkVerification: normalizeLinkVerification(item.linkVerification),
+    extractedContacts: normalizeExtractedContacts(item.extractedContacts),
+    friendRequestStatus: normalizeFriendRequestStatus(item.friendRequestStatus, sourceType),
+    sopStage: normalizeSopStage(item.sopStage),
     trustScore: item.trustScore ?? 70,
-    agentActions: item.agentActions ?? [],
+    agentActions: normalizeAgentActions(item.agentActions),
     agentAnalysisStatus: item.agentAnalysisStatus ?? 'not_requested',
     agentAnalysisError: item.agentAnalysisError ?? null,
     agentAnalyzedAt: item.agentAnalyzedAt ?? null,
@@ -167,16 +305,34 @@ export function toOpportunity(item: ApiOpportunity): Opportunity {
     archivedAt: item.archivedAt ?? null,
     archivedByUserId: item.archivedByUserId ?? null,
     archiveReason: item.archiveReason ?? null,
+    aiReplyDraft: detail.aiReplyDraft ?? null,
+    finalReply: detail.finalReply ?? null,
+    detectionReason: detail.detectionReason ?? null,
+    assignedTo: detail.assignedTo ?? null,
   }
 }
 
 export async function fetchOpportunities(archive: 'active' | 'archived' | 'all' = 'active'): Promise<Opportunity[]> {
-  const items = await fetchJson<ApiOpportunity[]>(`/api/v1/opportunities?limit=200&archive=${archive}`)
+  const items = await sharedOpportunitiesApi.list({ archive, limit: 200 })
   return items.map(toOpportunity)
 }
 
-export async function fetchOpportunity(opportunityId: string): Promise<Opportunity> {
-  return toOpportunity(await fetchJson<ApiOpportunity>(`/api/v1/opportunities/${opportunityId}`))
+export async function fetchOpportunity(
+  opportunityId: string,
+  signal?: AbortSignal,
+): Promise<Opportunity> {
+  return toOpportunity(await sharedOpportunitiesApi.getById(opportunityId, { signal }))
+}
+
+export function fetchMessagePage(
+  opportunityId: string,
+  options: { limit?: number; offset?: number; signal?: AbortSignal } = {},
+): Promise<MessagePage> {
+  return sharedMessagesApi.page({
+    opportunity_id: opportunityId,
+    limit: options.limit ?? 200,
+    offset: options.offset ?? 0,
+  }, { signal: options.signal })
 }
 
 export interface JobFilters {
@@ -261,16 +417,33 @@ export async function parseJobSearchProfile(text: string): Promise<JobSearchProf
 export async function sendManualReply(
   opportunityId: string,
   text: string,
-): Promise<Opportunity> {
-  const item = await fetchJson<ApiOpportunity>(
-    `/api/v1/opportunities/${opportunityId}/manual-reply`,
-    {
-      method: 'POST',
-      headers: { 'Idempotency-Key': crypto.randomUUID() },
-      body: JSON.stringify({ text, mark_following: true }),
-    },
+  idempotencyKey: string,
+): Promise<{ opportunity: Opportunity; message: ChatMessage; messageTotal: number }> {
+  const result = await sharedOpportunityActionsApi.manualReply(
+    opportunityId,
+    { text, mark_following: true },
+    idempotencyKey,
   )
-  return toOpportunity(item)
+  return {
+    opportunity: toOpportunity(result.opportunity),
+    message: result.message,
+    messageTotal: result.messageTotal,
+  }
+}
+
+export async function generateAIDraft(opportunityId: string): Promise<string> {
+  return (await sharedOpportunityActionsApi.generateAIDraft(opportunityId)).draft
+}
+
+export async function updateOpportunityStatus(
+  opportunityId: string,
+  nextStatus: InternalOpportunityStatus,
+): Promise<Opportunity> {
+  return toOpportunity(await sharedOpportunityActionsApi.updateStatus(opportunityId, nextStatus))
+}
+
+export async function claimOpportunity(opportunityId: string): Promise<Opportunity> {
+  return toOpportunity(await sharedOpportunityActionsApi.claim(opportunityId))
 }
 
 /** 好友申请状态流转（发送/确认通过/确认被拒/重试）；非法流转后端返回 409。 */
@@ -322,36 +495,35 @@ export async function enqueueAgentAnalysis(opportunityId: string): Promise<{
 }
 
 export async function fetchSubscriptionPlans(): Promise<PlanEntitlements[]> {
-  return fetchJson<PlanEntitlements[]>('/api/v1/subscriptions/plans')
+  return sharedSubscriptionsApi.plans()
 }
 
 export async function fetchMySubscription(): Promise<SubscriptionUsage> {
-  return fetchJson<SubscriptionUsage>('/api/v1/subscriptions/me')
+  return sharedSubscriptionsApi.usage()
 }
 
 export async function fetchSubscriptionCatalog(): Promise<SubscriptionCatalogPlan[]> {
-  return fetchJson<SubscriptionCatalogPlan[]>('/api/v1/subscriptions/catalog')
+  return sharedSubscriptionsApi.catalog()
 }
 
 export async function syncMySubscription(): Promise<SubscriptionUsage> {
-  return fetchJson<SubscriptionUsage>('/api/v1/subscriptions/sync', { method: 'POST' })
+  return sharedSubscriptionsApi.sync()
 }
 
 export async function fetchSubscriptionManagement(): Promise<SubscriptionManagement> {
-  return fetchJson<SubscriptionManagement>('/api/v1/subscriptions/management?client=web')
+  return sharedSubscriptionsApi.management('web')
 }
 
 export async function fetchReplyTemplates(): Promise<ReplyTemplate[]> {
-  return fetchJson<ReplyTemplate[]>('/api/v1/templates')
+  return sharedTemplatesApi.list()
 }
 
 export async function fetchOAuthAuthorizeUrl(provider: OAuthProvider): Promise<string> {
-  const result = await fetchJson<OAuthAuthorizeResponse>(`/api/v1/auth/oauth/${provider}/authorize`)
-  return result.authorizationUrl
+  return sharedAuthApi.getOAuthAuthorizeUrl(provider)
 }
 
-export async function fetchMe(): Promise<AuthUser> {
-  return fetchJson<AuthUser>('/api/v1/auth/me')
+export async function fetchMe(accessToken?: string): Promise<AuthUser> {
+  return sharedAuthApi.getCurrentUser(accessToken)
 }
 
 export async function passwordLogin(email: string, password: string): Promise<AuthTokenResponse> {
@@ -432,49 +604,38 @@ export async function fetchTelegramDialogs(): Promise<TelegramDialog[]> {
 }
 
 export async function fetchTelegramConnectionHealth(): Promise<TelegramConnectionHealth> {
-  return fetchJson<TelegramConnectionHealth>('/api/v1/integrations/telegram/health')
+  return sharedTelegramApi.health()
 }
 
 export async function fetchTelegramConnections(): Promise<TelegramConnection[]> {
-  return fetchJson<TelegramConnection[]>('/api/v1/integrations/telegram/connections')
+  return sharedTelegramApi.connections()
 }
 
 export async function startTelegramBotChatConnection(): Promise<TelegramConnectionAttempt> {
-  return fetchJson<TelegramConnectionAttempt>('/api/v1/integrations/telegram/connect/bot-chat', {
-    method: 'POST',
-  })
+  return sharedTelegramApi.startBotChat()
 }
 
 export async function startTelegramBusinessConnection(): Promise<TelegramConnectionAttempt> {
-  return fetchJson<TelegramConnectionAttempt>('/api/v1/integrations/telegram/connect/business', {
-    method: 'POST',
-  })
+  return sharedTelegramApi.startBusiness()
 }
 
 export async function startTelegramMtprotoQrConnection(): Promise<TelegramConnectionAttempt> {
-  return fetchJson<TelegramConnectionAttempt>('/api/v1/integrations/telegram/connect/mtproto-qr', {
-    method: 'POST',
-  })
+  return sharedTelegramApi.startMtprotoQr()
 }
 
 export async function fetchTelegramConnectionAttempt(attemptId: string): Promise<TelegramConnectionAttempt> {
-  return fetchJson<TelegramConnectionAttempt>(`/api/v1/integrations/telegram/connect/attempts/${attemptId}`)
+  return sharedTelegramApi.attempt(attemptId)
 }
 
 export async function cancelTelegramConnectionAttempt(attemptId: string): Promise<TelegramConnectionAttempt> {
-  return fetchJson<TelegramConnectionAttempt>(`/api/v1/integrations/telegram/connect/attempts/${attemptId}/cancel`, {
-    method: 'POST',
-  })
+  return sharedTelegramApi.cancelAttempt(attemptId)
 }
 
 export async function updateTelegramConnection(
   connectionId: string,
   enabled: boolean,
 ): Promise<TelegramConnection> {
-  return fetchJson<TelegramConnection>(`/api/v1/integrations/telegram/connections/${connectionId}`, {
-    method: 'PATCH',
-    body: JSON.stringify({ enabled }),
-  })
+  return sharedTelegramApi.updateConnection(connectionId, enabled)
 }
 
 export async function updateTelegramConnectionSource(
@@ -488,15 +649,11 @@ export async function updateTelegramConnectionSource(
 }
 
 export async function deleteTelegramConnection(connectionId: string): Promise<void> {
-  return fetchJson<void>(`/api/v1/integrations/telegram/connections/${connectionId}`, {
-    method: 'DELETE',
-  })
+  return sharedTelegramApi.deleteConnection(connectionId)
 }
 
 export async function deleteTelegramConnectionSource(sourceId: string): Promise<void> {
-  return fetchJson<void>(`/api/v1/integrations/telegram/sources/${sourceId}`, {
-    method: 'DELETE',
-  })
+  return sharedTelegramApi.deleteSource(sourceId)
 }
 
 export async function generateOpportunityAiDraft(
@@ -509,17 +666,14 @@ export async function generateOpportunityAiDraft(
 }
 
 export async function fetchTelegramMtprotoDialogs(connectionId: string): Promise<TelegramMtprotoDialog[]> {
-  return fetchJson<TelegramMtprotoDialog[]>(`/api/v1/integrations/telegram/connections/${connectionId}/dialogs`)
+  return sharedTelegramApi.dialogs(connectionId)
 }
 
 export async function addTelegramMtprotoSource(
   connectionId: string,
   chatId: string,
 ): Promise<TelegramConnection> {
-  return fetchJson<TelegramConnection>(`/api/v1/integrations/telegram/connections/${connectionId}/sources`, {
-    method: 'POST',
-    body: JSON.stringify({ chatId }),
-  })
+  return sharedTelegramApi.addSource(connectionId, chatId)
 }
 
 export async function fetchWeComConnections(): Promise<WeComConnection[]> {
@@ -584,32 +738,23 @@ export async function deleteWeComArchiveConnection(connectionId: string): Promis
 // MARK: 用户级设置（与 iOS/Android 共享同一后端设置源）
 
 export async function fetchSettings(): Promise<SettingsBundle> {
-  return fetchJson<SettingsBundle>('/api/v1/settings/me')
+  return sharedSettingsApi.get()
 }
 
 export async function updateDetectionSettings(
   body: DetectionSettings,
 ): Promise<DetectionSettings> {
-  return fetchJson<DetectionSettings>('/api/v1/settings/detection', {
-    method: 'PATCH',
-    body: JSON.stringify(body),
-  })
+  return sharedSettingsApi.updateDetection(body)
 }
 
 export async function updateWorkSchedule(
   body: Omit<WorkSchedule, 'isDefault'>,
 ): Promise<WorkSchedule> {
-  return fetchJson<WorkSchedule>('/api/v1/settings/work-schedule', {
-    method: 'PATCH',
-    body: JSON.stringify(body),
-  })
+  return sharedSettingsApi.updateWorkSchedule(body)
 }
 
 export async function updateNotificationSettings(
   body: NotificationSettings,
 ): Promise<NotificationSettings> {
-  return fetchJson<NotificationSettings>('/api/v1/settings/notifications', {
-    method: 'PATCH',
-    body: JSON.stringify(body),
-  })
+  return sharedSettingsApi.updateNotifications(body)
 }

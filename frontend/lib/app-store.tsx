@@ -1,24 +1,27 @@
 'use client'
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import {
   archiveOpportunity as archiveOpportunityRequest,
   bulkArchiveOpportunities as bulkArchiveOpportunitiesRequest,
+  claimOpportunity as claimOpportunityRequest,
   enqueueAgentAnalysis,
+  fetchMessagePage,
   fetchOpportunities,
   fetchOpportunity,
   fetchReplyTemplates,
+  generateAIDraft as generateAIDraftRequest,
   restoreOpportunity as restoreOpportunityRequest,
   sendManualReply,
+  updateOpportunityStatus as updateOpportunityStatusRequest,
   updateFriendRequest,
 } from './api'
 import { useAuth } from './auth'
-import { mockMessages, mockOpportunities, mockTemplates } from './mock-data'
 import type {
   ChatMessage,
   ExtractedContacts,
+  InternalOpportunityStatus,
   Opportunity,
-  OpportunityStatus,
   ReplyTemplate,
 } from './types'
 
@@ -27,12 +30,15 @@ export type WorkMode = 'work' | 'ai'
 interface AppStore {
   opportunities: Opportunity[]
   messagesByOpportunity: Record<string, ChatMessage[]>
+  messageTotalsByOpportunity: Record<string, number>
   templates: ReplyTemplate[]
   workMode: WorkMode
   newOpportunityId: string | null
   toggleWorkMode: () => void
-  setOpportunityStatus: (id: string, status: OpportunityStatus) => void
-  sendMessage: (opportunityId: string, content: string, source: 'human' | 'ai') => Promise<void>
+  setOpportunityStatus: (id: string, status: InternalOpportunityStatus) => Promise<void>
+  sendMessage: (opportunityId: string, content: string, idempotencyKey: string) => Promise<void>
+  generateAIDraft: (opportunityId: string) => Promise<string>
+  claimOpportunity: (opportunityId: string) => Promise<void>
   addTemplate: (template: Omit<ReplyTemplate, 'id'>) => void
   updateTemplate: (template: ReplyTemplate) => void
   updateOpportunity: (id: string, patch: Partial<Opportunity>) => void
@@ -43,29 +49,33 @@ interface AppStore {
     status: Exclude<Opportunity['friendRequestStatus'], 'n/a'>,
   ) => Promise<void>
   overrideRiskAndContinue: (id: string) => void
-  closeOpportunity: (id: string) => void
+  closeOpportunity: (id: string) => Promise<void>
   archiveOpportunity: (id: string) => Promise<void>
   restoreOpportunity: (id: string) => Promise<void>
   bulkArchiveOpportunities: (ids: string[]) => Promise<void>
+  loadOpportunityDetail: (id: string, signal?: AbortSignal) => Promise<void>
+  loadMoreMessages: (id: string, offset: number) => Promise<void>
 }
 
 const AppStoreContext = createContext<AppStore | null>(null)
 
 export function AppStoreProvider({ children }: { children: React.ReactNode }) {
   const { token } = useAuth()
-  const [opportunities, setOpportunities] = useState<Opportunity[]>(mockOpportunities)
-  const [messagesByOpportunity, setMessagesByOpportunity] = useState<Record<string, ChatMessage[]>>(mockMessages)
-  const [templates, setTemplates] = useState<ReplyTemplate[]>(mockTemplates)
+  const [opportunities, setOpportunities] = useState<Opportunity[]>([])
+  const [messagesByOpportunity, setMessagesByOpportunity] = useState<Record<string, ChatMessage[]>>({})
+  const [messageTotalsByOpportunity, setMessageTotalsByOpportunity] = useState<Record<string, number>>({})
+  const [templates, setTemplates] = useState<ReplyTemplate[]>([])
   const [workMode, setWorkMode] = useState<WorkMode>('work')
   const [newOpportunityId] = useState<string | null>(null)
-  const timersRef = useRef<ReturnType<typeof setTimeout>[]>([])
 
   useEffect(() => {
     let cancelled = false
+    setOpportunities([])
+    setMessagesByOpportunity({})
+    setMessageTotalsByOpportunity({})
+    setTemplates([])
     async function loadBackendData() {
       if (!token) {
-        setOpportunities([])
-        setMessagesByOpportunity({})
         return
       }
       try {
@@ -75,8 +85,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
         ])
         if (cancelled) return
         setOpportunities(backendOpportunities)
-        setTemplates(backendTemplates.length > 0 ? backendTemplates : mockTemplates)
-        setMessagesByOpportunity({})
+        setTemplates(backendTemplates)
       } catch (error) {
         console.warn('Failed to load backend data.', error)
         if (!cancelled) {
@@ -94,17 +103,16 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
     }
   }, [token])
 
-  useEffect(() => {
-    const timers = timersRef.current
-    return () => timers.forEach(clearTimeout)
-  }, [])
-
   const toggleWorkMode = useCallback(() => {
     setWorkMode((prev) => (prev === 'work' ? 'ai' : 'work'))
   }, [])
 
-  const setOpportunityStatus = useCallback((id: string, status: OpportunityStatus) => {
-    setOpportunities((prev) => prev.map((o) => (o.id === id ? { ...o, status } : o)))
+  const setOpportunityStatus = useCallback(async (
+    id: string,
+    status: InternalOpportunityStatus,
+  ) => {
+    const updated = await updateOpportunityStatusRequest(id, status)
+    setOpportunities((prev) => prev.map((item) => (item.id === id ? updated : item)))
   }, [])
 
   const updateOpportunity = useCallback((id: string, patch: Partial<Opportunity>) => {
@@ -196,11 +204,9 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
     )
   }, [])
 
-  const closeOpportunity = useCallback((id: string) => {
-    setOpportunities((prev) =>
-      prev.map((o) => (o.id === id ? { ...o, sopStage: 'closed', status: 'ignored' } : o)),
-    )
-  }, [])
+  const closeOpportunity = useCallback(async (id: string) => {
+    await setOpportunityStatus(id, 'closed')
+  }, [setOpportunityStatus])
 
   const archiveOpportunity = useCallback(async (id: string) => {
     const updated = await archiveOpportunityRequest(id)
@@ -218,25 +224,73 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
     setOpportunities((prev) => prev.map((item) => byId.get(item.id) ?? item))
   }, [])
 
+  const loadOpportunityDetail = useCallback(async (id: string, signal?: AbortSignal) => {
+    const [detail, messagePage] = await Promise.all([
+      fetchOpportunity(id, signal),
+      fetchMessagePage(id, { limit: 200, offset: 0, signal }),
+    ])
+    setOpportunities((prev) => (
+      prev.some((item) => item.id === id)
+        ? prev.map((item) => (item.id === id ? detail : item))
+        : [detail, ...prev]
+    ))
+    setMessagesByOpportunity((prev) => ({ ...prev, [id]: messagePage.items }))
+    setMessageTotalsByOpportunity((prev) => ({ ...prev, [id]: messagePage.total }))
+  }, [])
+
+  const loadMoreMessages = useCallback(async (id: string, offset: number) => {
+    const messagePage = await fetchMessagePage(id, { limit: 200, offset })
+    setMessagesByOpportunity((prev) => {
+      const current = prev[id] ?? []
+      if (current.length !== offset) return prev
+      const currentIds = new Set(current.map((message) => message.id))
+      return {
+        ...prev,
+        [id]: [
+          ...current,
+          ...messagePage.items.filter((message) => !currentIds.has(message.id)),
+        ],
+      }
+    })
+    setMessageTotalsByOpportunity((prev) => ({ ...prev, [id]: messagePage.total }))
+  }, [])
+
   const sendMessage = useCallback(async (
     opportunityId: string,
     content: string,
-    source: 'human' | 'ai',
+    idempotencyKey: string,
   ) => {
-    const updated = await sendManualReply(opportunityId, content)
-    const message: ChatMessage = {
-      id: `msg-${Date.now()}`,
-      senderName: '商机助手',
-      content,
-      isFromContact: false,
-      sentAt: new Date().toISOString(),
-      source,
-    }
+    const result = await sendManualReply(opportunityId, content, idempotencyKey)
     setMessagesByOpportunity((prev) => ({
       ...prev,
-      [opportunityId]: [...(prev[opportunityId] ?? []), message],
+      [opportunityId]: (prev[opportunityId] ?? []).some(
+        (message) => message.id === result.message.id,
+      )
+        ? prev[opportunityId] ?? []
+        : [...(prev[opportunityId] ?? []), result.message],
     }))
-    setOpportunities((prev) => prev.map((item) => (item.id === opportunityId ? updated : item)))
+    setMessageTotalsByOpportunity((prev) => ({
+      ...prev,
+      [opportunityId]: result.messageTotal,
+    }))
+    setOpportunities((prev) => prev.map(
+      (item) => (item.id === opportunityId ? result.opportunity : item),
+    ))
+  }, [])
+
+  const generateAIDraft = useCallback(async (opportunityId: string) => {
+    const draft = await generateAIDraftRequest(opportunityId)
+    setOpportunities((prev) => prev.map(
+      (item) => (item.id === opportunityId ? { ...item, aiReplyDraft: draft } : item),
+    ))
+    return draft
+  }, [])
+
+  const claimOpportunity = useCallback(async (opportunityId: string) => {
+    const updated = await claimOpportunityRequest(opportunityId)
+    setOpportunities((prev) => prev.map(
+      (item) => (item.id === opportunityId ? updated : item),
+    ))
   }, [])
 
   const addTemplate = useCallback((template: Omit<ReplyTemplate, 'id'>) => {
@@ -251,12 +305,15 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
     () => ({
       opportunities,
       messagesByOpportunity,
+      messageTotalsByOpportunity,
       templates,
       workMode,
       newOpportunityId,
       toggleWorkMode,
       setOpportunityStatus,
       sendMessage,
+      generateAIDraft,
+      claimOpportunity,
       addTemplate,
       updateTemplate,
       updateOpportunity,
@@ -268,16 +325,21 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
       archiveOpportunity,
       restoreOpportunity,
       bulkArchiveOpportunities,
+      loadOpportunityDetail,
+      loadMoreMessages,
     }),
     [
       opportunities,
       messagesByOpportunity,
+      messageTotalsByOpportunity,
       templates,
       workMode,
       newOpportunityId,
       toggleWorkMode,
       setOpportunityStatus,
       sendMessage,
+      generateAIDraft,
+      claimOpportunity,
       addTemplate,
       updateTemplate,
       updateOpportunity,
@@ -289,6 +351,8 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
       archiveOpportunity,
       restoreOpportunity,
       bulkArchiveOpportunities,
+      loadOpportunityDetail,
+      loadMoreMessages,
     ],
   )
 

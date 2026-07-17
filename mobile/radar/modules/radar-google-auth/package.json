@@ -1,0 +1,8 @@
+{
+  "name": "radar-google-auth",
+  "version": "0.1.0",
+  "description": "Opportunity Radar native Google identity bridge",
+  "main": "index.ts",
+  "private": true,
+  "license": "UNLICENSED"
+}

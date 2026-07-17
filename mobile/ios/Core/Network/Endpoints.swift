@@ -78,9 +78,15 @@ extension APIClient {
         )
     }
 
-    func sendManualReply(opportunityID: UUID, text: String, operatorID: String) async throws -> Opportunity {
+    func sendManualReply(
+        opportunityID: UUID,
+        text: String,
+        operatorID: String,
+        idempotencyKey: String
+    ) async throws -> Opportunity {
         try await post(
             "opportunities/\(opportunityID.uuidString)/manual-reply",
+            headers: ["Idempotency-Key": idempotencyKey],
             body: ManualReplyRequest(text: text, operatorId: operatorID)
         )
     }

@@ -1,7 +1,9 @@
+import json
+import re
 from datetime import datetime
-from decimal import Decimal
-from typing import Literal
+from typing import Annotated, Literal
 from uuid import UUID
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -9,24 +11,30 @@ from app.core.time_window import WorkTimeConfig
 from app.domain.enums import (
     AgentActionType,
     AgentAnalysisStatus,
+    AnalysisRunExecutor,
+    AnalysisRunMode,
+    AnalysisRunStatus,
     BillingInterval,
     BillingStore,
+    DevicePlatform,
+    DeviceStatus,
     FrontendOpportunityStatus,
     IMChannel,
-    JobEligibility,
-    JobEmploymentType,
-    JobFeedbackType,
-    JobMessageClassification,
-    JobSeniority,
-    JobWorkMode,
+    InteractiveAgentApprovalStatus,
+    InteractiveAgentTurnStatus,
     MessageSource,
     OpportunityStatus,
     PlanCode,
     Priority,
+    PushEnvironment,
+    PushProvider,
+    PushRegistrationStatus,
     RuleType,
     SalaryPeriod,
     SourcePrimaryFunction,
     SubscriptionStatus,
+    SyncAggregateType,
+    SyncOperation,
     TelegramConnectionAttemptStatus,
     TelegramConnectionStatus,
     TelegramConnectionType,
@@ -37,6 +45,7 @@ from app.domain.enums import (
     WeComSendCapability,
     WeComSourceType,
 )
+from app.domain.ports import AgentAnalysisResult, LinkInspection
 
 
 class AgentActionRead(BaseModel):
@@ -357,6 +366,7 @@ class OpportunityDetailRead(OpportunityRead):
     aiReplyDraft: str | None = None
     finalReply: str | None = None
     detectionReason: str | None = None
+    assignedTo: str | None = None
 
 
 class DashboardRead(BaseModel):
@@ -380,10 +390,23 @@ class ChatMessageRead(BaseModel):
     source: MessageSource | None
 
 
+class MessagePageRead(BaseModel):
+    items: list[ChatMessageRead]
+    total: int
+    limit: int
+    offset: int
+
+
 class ManualReplyRequest(BaseModel):
     text: str = Field(min_length=1, max_length=4000)
     operator_id: str = Field(default="operator", min_length=1, max_length=128)
     mark_following: bool = True
+
+
+class ManualReplyResponse(BaseModel):
+    opportunity: OpportunityDetailRead
+    message: ChatMessageRead
+    messageTotal: int = Field(ge=1)
 
 
 class AIDraftResponse(BaseModel):
@@ -398,6 +421,7 @@ class AgentAnalysisEnqueueRead(BaseModel):
 
 class OpportunityStatusUpdate(BaseModel):
     status: OpportunityStatus
+    expectedVersion: int | None = Field(default=None, ge=1)
 
 
 class FriendRequestUpdate(BaseModel):
@@ -521,6 +545,542 @@ class AuthTokenRead(BaseModel):
     accessToken: str
     tokenType: str = "bearer"
     user: AuthUserRead
+
+
+DeviceCapabilityValue = bool | int | str
+DEVICE_CAPABILITY_KEY = re.compile(r"^[A-Za-z][A-Za-z0-9._-]{0,63}$")
+
+
+class DeviceRegistrationRequest(BaseModel):
+    installationId: UUID
+    platform: DevicePlatform
+    displayName: str = Field(default="", max_length=100)
+    appVariant: Literal["development", "production"]
+    appVersion: str = Field(pattern=r"^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$")
+    appBuild: str = Field(min_length=1, max_length=32, pattern=r"^[0-9A-Za-z._+-]+$")
+    osVersion: str | None = Field(default=None, max_length=64)
+    locale: str | None = Field(
+        default=None,
+        max_length=35,
+        pattern=r"^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$",
+    )
+    timezone: str | None = Field(default=None, max_length=64)
+    capabilities: dict[str, DeviceCapabilityValue] = Field(default_factory=dict, max_length=64)
+
+    @field_validator("displayName", "osVersion", mode="before")
+    @classmethod
+    def strip_optional_text(cls, value: object) -> object:
+        return value.strip() if isinstance(value, str) else value
+
+    @field_validator("timezone")
+    @classmethod
+    def validate_timezone(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        try:
+            ZoneInfo(value)
+        except ZoneInfoNotFoundError as exc:
+            raise ValueError("timezone must be a valid IANA identifier") from exc
+        return value
+
+    @field_validator("capabilities")
+    @classmethod
+    def validate_capabilities(
+        cls,
+        value: dict[str, DeviceCapabilityValue],
+    ) -> dict[str, DeviceCapabilityValue]:
+        for key, item in value.items():
+            if not DEVICE_CAPABILITY_KEY.fullmatch(key):
+                raise ValueError("capability keys must be bounded identifiers")
+            if isinstance(item, str) and len(item) > 256:
+                raise ValueError("capability string values must not exceed 256 characters")
+            if (
+                isinstance(item, int)
+                and not isinstance(item, bool)
+                and not (-1_000_000 <= item <= 1_000_000)
+            ):
+                raise ValueError("capability integer values are out of range")
+        encoded = json.dumps(value, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+        if len(encoded) > 16_384:
+            raise ValueError("capabilities must not exceed 16 KiB")
+        return value
+
+
+class DeviceRead(BaseModel):
+    id: UUID
+    platform: DevicePlatform
+    status: DeviceStatus
+    displayName: str
+    appVariant: str
+    appVersion: str
+    appBuild: str
+    osVersion: str | None = None
+    locale: str | None = None
+    timezone: str | None = None
+    capabilities: dict[str, DeviceCapabilityValue]
+    lastSeenAt: datetime
+    revokedAt: datetime | None = None
+    createdAt: datetime
+    updatedAt: datetime
+
+
+class DeviceSessionRead(BaseModel):
+    accessToken: str
+    tokenType: Literal["bearer"] = "bearer"
+    deviceRefreshToken: str
+    deviceRefreshTokenExpiresAt: datetime
+    device: DeviceRead
+    user: AuthUserRead
+
+
+class ClientCapabilitiesRead(BaseModel):
+    agentToolsAvailable: bool = False
+    deviceAgentAvailable: bool = False
+    e2eeAvailable: bool = False
+    hostedFallbackAvailable: bool = False
+    pushAvailable: bool = False
+    rnClientSupported: bool = False
+    syncAvailable: bool = False
+
+
+class InteractiveAgentTurnClaimRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    localSessionId: UUID
+    idempotencyKey: str = Field(
+        min_length=1,
+        max_length=128,
+        pattern=r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+    )
+
+
+class InteractiveAgentTurnHeartbeatRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    expectedLockVersion: int = Field(ge=1)
+
+
+class InteractiveAgentTurnCompleteRequest(InteractiveAgentTurnHeartbeatRequest):
+    pass
+
+
+class InteractiveAgentTurnFailRequest(InteractiveAgentTurnHeartbeatRequest):
+    failureCode: str = Field(pattern=r"^[a-z][a-z0-9_.-]{0,63}$")
+
+
+class InteractiveAgentTurnRead(BaseModel):
+    id: UUID
+    localSessionId: UUID
+    deviceId: UUID
+    status: InteractiveAgentTurnStatus
+    runtimeVersion: str
+    schemaVersion: int = Field(ge=1)
+    modelAlias: str
+    policyVersion: str
+    lockVersion: int = Field(ge=1)
+    requestCount: int = Field(ge=0)
+    leaseExpiresAt: datetime
+    claimedAt: datetime
+    heartbeatAt: datetime | None = None
+    completedAt: datetime | None = None
+    failedAt: datetime | None = None
+    expiredAt: datetime | None = None
+    failureCode: str | None = None
+
+
+class InteractiveAgentTurnClaimRead(InteractiveAgentTurnRead):
+    turnToken: str
+
+
+class InteractiveAgentApprovalDecisionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    approved: bool
+    toolCallId: str = Field(pattern=r"^[A-Za-z0-9._:-]{1,128}$")
+    opportunityId: UUID
+    expectedVersion: int = Field(ge=1)
+    idempotencyKey: str = Field(
+        min_length=8,
+        max_length=128,
+        pattern=r"^[A-Za-z0-9][A-Za-z0-9_.:-]{7,127}$",
+    )
+    text: str = Field(min_length=1, max_length=4000)
+
+    @field_validator("text")
+    @classmethod
+    def interactive_reply_must_not_be_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("reply text must not be blank")
+        return value
+
+
+class InteractiveAgentApprovalDecisionRead(BaseModel):
+    id: UUID
+    status: InteractiveAgentApprovalStatus
+    toolCallId: str
+    opportunityId: UUID
+    expectedVersion: int = Field(ge=1)
+    expiresAt: datetime | None = None
+    approvalToken: str | None = None
+
+
+class InteractiveAgentApprovedSendRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    opportunityId: UUID
+    expectedVersion: int = Field(ge=1)
+    idempotencyKey: str = Field(
+        min_length=8,
+        max_length=128,
+        pattern=r"^[A-Za-z0-9][A-Za-z0-9_.:-]{7,127}$",
+    )
+    text: str = Field(min_length=1, max_length=4000)
+
+    @field_validator("text")
+    @classmethod
+    def approved_reply_must_not_be_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("reply text must not be blank")
+        return value
+
+
+class InteractiveAgentApprovedSendRead(ManualReplyResponse):
+    approvalId: UUID
+
+
+class AnalysisRunClaimRequest(BaseModel):
+    messageId: UUID
+
+
+class AnalysisRunHeartbeatRequest(BaseModel):
+    expectedLockVersion: int = Field(ge=1)
+
+
+class AnalysisRunCompleteRequest(AnalysisRunHeartbeatRequest):
+    result: AgentAnalysisResult
+
+
+class AnalysisRunFailRequest(AnalysisRunHeartbeatRequest):
+    failureCode: str = Field(pattern=r"^[a-z][a-z0-9_.-]{0,63}$")
+
+
+class AnalysisRunInputRead(BaseModel):
+    messageId: UUID
+    sourceMessageVersion: int = Field(ge=1)
+    channel: IMChannel
+    senderDisplayName: str | None = None
+    sourceType: str
+    groupName: str | None = None
+    text: str
+    links: list[str] = Field(default_factory=list, max_length=10)
+
+
+class AnalysisRunRead(BaseModel):
+    id: UUID
+    messageId: UUID
+    deviceId: UUID
+    status: AnalysisRunStatus
+    executedBy: AnalysisRunExecutor
+    mode: AnalysisRunMode
+    runtimeVersion: str
+    schemaVersion: int = Field(ge=1)
+    modelAlias: str
+    policyVersion: str
+    sourceMessageVersion: int = Field(ge=1)
+    lockVersion: int = Field(ge=1)
+    leaseExpiresAt: datetime
+    claimedAt: datetime
+    heartbeatAt: datetime | None = None
+    completedAt: datetime | None = None
+    failedAt: datetime | None = None
+    expiredAt: datetime | None = None
+    failureCode: str | None = None
+    shadowMatch: bool | None = None
+    shadowDifferenceCount: int | None = Field(default=None, ge=0)
+
+
+class AnalysisRunClaimRead(AnalysisRunRead):
+    runToken: str
+    input: AnalysisRunInputRead
+
+
+class AnalysisRunShadowClaimRead(BaseModel):
+    claim: AnalysisRunClaimRead | None = None
+
+
+class AnalysisRunNextClaimRead(BaseModel):
+    claim: AnalysisRunClaimRead | None = None
+
+
+class AnalysisRolloutReadinessRead(BaseModel):
+    ready: bool
+    enforced: bool
+    primaryGateOpen: bool
+    terminalSamples: int = Field(ge=0)
+    completedSamples: int = Field(ge=0)
+    matchedSamples: int = Field(ge=0)
+    successRate: float = Field(ge=0.0, le=1.0)
+    matchRate: float = Field(ge=0.0, le=1.0)
+    p95Seconds: float | None = Field(default=None, ge=0.0)
+    minimumSamples: int = Field(ge=1)
+    minimumSuccessRate: float = Field(ge=0.0, le=1.0)
+    minimumMatchRate: float = Field(ge=0.0, le=1.0)
+    maximumP95Seconds: float = Field(gt=0.0)
+    rolloutPercentage: int = Field(ge=0, le=100)
+    allowlistedDeviceCount: int = Field(ge=0)
+    reasons: list[str] = Field(default_factory=list, max_length=8)
+
+
+class AnalysisRunLinksRead(BaseModel):
+    runId: UUID
+    sourceMessageVersion: int = Field(ge=1)
+    fetchedAt: datetime
+    evidence: list[LinkInspection] = Field(max_length=10)
+
+
+class AnalysisGatewayTextContent(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["text"]
+    text: str = Field(min_length=1, max_length=100_000)
+
+
+class AnalysisGatewayMessage(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    role: Literal["system", "developer", "user"]
+    content: str | list[AnalysisGatewayTextContent]
+
+
+class AnalysisGatewayFunction(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length=1, max_length=64)
+    description: str | None = Field(default=None, max_length=500)
+    parameters: dict
+    strict: bool | None = None
+
+
+class AnalysisGatewayTool(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["function"]
+    function: AnalysisGatewayFunction
+
+
+class AnalysisGatewayStreamOptions(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    include_usage: Literal[True]
+
+
+class AnalysisGatewayToolChoiceFunction(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: Literal["submit_analysis"]
+
+
+class AnalysisGatewayToolChoice(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["function"]
+    function: AnalysisGatewayToolChoiceFunction
+
+
+class AnalysisGatewayRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    model: str = Field(min_length=1, max_length=64)
+    messages: list[AnalysisGatewayMessage] = Field(min_length=2, max_length=2)
+    stream: Literal[True]
+    stream_options: AnalysisGatewayStreamOptions | None = None
+    store: Literal[False] | None = None
+    tools: list[AnalysisGatewayTool] = Field(min_length=1, max_length=1)
+    tool_choice: Literal["auto", "required"] | AnalysisGatewayToolChoice | None = None
+    max_tokens: int | None = Field(default=None, ge=1, le=16_384)
+    max_completion_tokens: int | None = Field(default=None, ge=1, le=16_384)
+    temperature: float | None = Field(default=None, ge=0.0, le=2.0)
+
+
+InteractiveToolName = Literal[
+    "search_opportunities",
+    "get_opportunity",
+    "get_messages",
+    "draft_reply",
+    "update_status",
+    "claim_opportunity",
+    "send_reply",
+]
+
+
+class InteractiveGatewaySystemMessage(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    role: Literal["system"]
+    content: str = Field(min_length=1, max_length=2_000)
+
+
+class InteractiveGatewayUserMessage(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    role: Literal["user"]
+    content: str = Field(min_length=1, max_length=32_000)
+
+
+class InteractiveGatewayToolCallFunction(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: InteractiveToolName
+    arguments: str = Field(min_length=2, max_length=65_536)
+
+
+class InteractiveGatewayToolCall(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: str = Field(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9._:-]+$")
+    type: Literal["function"]
+    function: InteractiveGatewayToolCallFunction
+
+
+class InteractiveGatewayAssistantMessage(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    role: Literal["assistant"]
+    content: str | None = Field(default=None, max_length=32_000)
+    tool_calls: list[InteractiveGatewayToolCall] | None = Field(
+        default=None,
+        min_length=1,
+        max_length=4,
+    )
+
+    @model_validator(mode="after")
+    def require_assistant_content(self) -> "InteractiveGatewayAssistantMessage":
+        if not self.content and not self.tool_calls:
+            raise ValueError("assistant message requires content or tool calls")
+        return self
+
+
+class InteractiveGatewayToolMessage(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    role: Literal["tool"]
+    tool_call_id: str = Field(
+        min_length=1,
+        max_length=128,
+        pattern=r"^[A-Za-z0-9._:-]+$",
+    )
+    content: str = Field(min_length=1, max_length=65_536)
+
+
+InteractiveGatewayMessage = Annotated[
+    InteractiveGatewaySystemMessage
+    | InteractiveGatewayUserMessage
+    | InteractiveGatewayAssistantMessage
+    | InteractiveGatewayToolMessage,
+    Field(discriminator="role"),
+]
+
+
+class InteractiveGatewayFunction(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: InteractiveToolName
+    description: str = Field(min_length=1, max_length=500)
+    parameters: dict
+    strict: Literal[False] | None = None
+
+
+class InteractiveGatewayTool(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["function"]
+    function: InteractiveGatewayFunction
+
+
+class InteractiveGatewayRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    model: str = Field(min_length=1, max_length=64)
+    messages: list[InteractiveGatewayMessage] = Field(min_length=2, max_length=32)
+    stream: Literal[True]
+    stream_options: AnalysisGatewayStreamOptions | None = None
+    store: Literal[False] | None = None
+    tools: list[InteractiveGatewayTool] = Field(min_length=3, max_length=7)
+    tool_choice: Literal["auto"] | None = None
+    parallel_tool_calls: Literal[False] | None = None
+    max_tokens: int | None = Field(default=None, ge=1, le=16_384)
+    max_completion_tokens: int | None = Field(default=None, ge=1, le=16_384)
+    temperature: float | None = Field(default=None, ge=0.0, le=2.0)
+
+
+class PushRegistrationRequest(BaseModel):
+    provider: PushProvider
+    environment: PushEnvironment
+    token: str = Field(min_length=16, max_length=4096)
+
+
+class PushRegistrationRead(BaseModel):
+    id: UUID
+    provider: PushProvider
+    environment: PushEnvironment
+    status: PushRegistrationStatus
+    tokenFingerprint: str = Field(min_length=12, max_length=12)
+    lastRegisteredAt: datetime
+    lastSuccessAt: datetime | None = None
+    lastNotifiedCursor: int = Field(ge=0)
+
+
+class SyncSnapshotItemRead(BaseModel):
+    aggregateType: SyncAggregateType
+    aggregateId: UUID
+    aggregateVersion: int = Field(ge=0)
+    schemaVersion: int = Field(default=1, ge=1)
+    payload: dict
+
+
+class SyncBootstrapRead(BaseModel):
+    watermarkCursor: int = Field(ge=0)
+    items: list[SyncSnapshotItemRead]
+    nextPageToken: str | None = None
+    hasMore: bool
+
+
+class SyncChangeRead(BaseModel):
+    eventId: UUID
+    cursor: int = Field(gt=0)
+    aggregateType: SyncAggregateType
+    aggregateId: UUID
+    aggregateVersion: int = Field(gt=0)
+    operation: SyncOperation
+    schemaVersion: int = Field(gt=0)
+    createdAt: datetime
+    payload: dict | None
+
+
+class SyncChangesRead(BaseModel):
+    changes: list[SyncChangeRead]
+    nextCursor: int = Field(ge=0)
+    serverCursor: int = Field(ge=0)
+    hasMore: bool
+    resetRequired: bool = False
+    resetReason: Literal["cursor_expired", "cursor_ahead"] | None = None
+
+
+class SyncAckRequest(BaseModel):
+    cursor: int = Field(ge=0)
+    errorCode: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=64,
+        pattern=r"^[a-z0-9][a-z0-9._-]*$",
+    )
+
+
+class SyncAckRead(BaseModel):
+    deviceId: UUID
+    acknowledgedCursor: int = Field(ge=0)
+    acknowledgedAt: datetime
+    errorCode: str | None = None
 
 
 class PlanEntitlementsRead(BaseModel):
