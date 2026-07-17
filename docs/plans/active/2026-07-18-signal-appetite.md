@@ -67,7 +67,7 @@
 - [x] S2：实现主动学习、L0/L1 决策、历史试跑、版本/rollback/shadow/临时关注纯逻辑。
 - [x] S3：增加偏好事件服务端持久化/同步契约、API client、owner/幂等/版本/迁移测试与 capability。
 - [x] S4：扩展 Pi Agent tools、Host registry 与明确 apply 审批；补 faux provider/tool loop 测试。
-- [ ] S5：实现首次教学、卡片栈、左右滑 UI-thread 动效、haptic、原因、撤销和 Session 总结。
+- [x] S5：实现首次教学、卡片栈、左右滑 UI-thread 动效、haptic、原因、撤销和 Session 总结。
 - [ ] S6：实现首页注意力控制台、意图地图、时间线、预览/Shadow、安静区和消息解释。
 - [ ] S7：补自然语言入口、详情“教 Pi”、本地化、无障碍、Reduce Motion、键盘与无正文埋点。
 - [ ] S8：Golden/性能/双平台构建与分层检查；更新架构、功能地图、命令、ADR/计划并归档。
@@ -87,6 +87,9 @@
 - 2026-07-18：完成教学卡片 Commit 3 切片。增加 SQLite v7 首次引导状态、真实教学入口和显式状态机；
   左滑 positive / 右滑 negative 的 UI-thread 手势、分段语义层、阈值 haptic、下一张上浮、按钮/读屏替代、
   Reduce Motion、跳过、单步/连续撤销和真实 Session 汇总均接入事件日志。原因补充与候选提案留在 Commit 4。
+- 2026-07-18：完成 Commit 4。原因 Sheet 支持正负建议与自由文本，重复 capture 只更新同一 example 的原因、
+  不重复 Session 计数；教学结束后生成候选、运行本地历史试跑并保持“尚未生效”，应用前展示独立确认层，
+  确认后才写 `PreferenceApplied` 和带版本的过滤决定。
 
 ## 发现日志
 
@@ -120,7 +123,7 @@
 | `pnpm --dir mobile/radar test` | 通过 | S2 后 48 files / 161 tests |
 | `pnpm --dir mobile/radar typecheck` | 通过 | S2/v4 工具类型检查通过 |
 | Signal Appetite sync targeted checks | 通过 | radar-api 14 files / 62 tests；RN 49 files / 163 tests；后端 19 tests |
-| `pnpm --dir mobile/radar test` | 通过 | 教学卡片切片后 50 files / 167 tests |
+| `pnpm --dir mobile/radar test` | 通过 | 教学卡片与原因/候选切片后 50 files / 167 tests |
 | `pnpm --dir mobile/radar export:ios` / `export:android` | 通过 | Hermes bundle 成功；不等同真机 haptic/FPS 验收 |
 | `make backend-check` | 待运行 | 服务端同步切片后 |
 | 双平台 Hermes export / Release | 待运行 | 不能替代真机手势、haptic 和 FPS |

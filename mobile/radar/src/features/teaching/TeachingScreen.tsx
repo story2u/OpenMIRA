@@ -14,10 +14,18 @@ import {
 } from 'react-native';
 
 import { useI18n } from '../../i18n/I18nProvider';
+import type { MessageKey } from '../../i18n/catalog';
 import { colors } from '../../ui/theme';
 import { useReducedMotion } from '../../ui/useReducedMotion';
 import { TeachingCardDeck, type TeachingCardDeckHandle } from './TeachingCardDeck';
+import { TeachingReasonSheet } from './TeachingReasonSheet';
 import { useTeachingSession } from './useTeachingSession';
+
+const reasonCodes = new Set([
+  'important_customer', 'purchase_intent', 'needs_reply', 'suitable_job',
+  'current_project', 'deadline', 'industry_signal', 'advertising', 'training',
+  'duplicate', 'unrelated_chat', 'expired', 'untrusted_source',
+]);
 
 function TeachingOnboarding({
   onClose,
@@ -67,15 +75,24 @@ export default function TeachingScreen() {
   const compact = height < 750;
   const deck = useRef<TeachingCardDeckHandle>(null);
   const [contextVisible, setContextVisible] = useState(false);
+  const [reasonVisible, setReasonVisible] = useState(false);
+  const [applyConfirmVisible, setApplyConfirmVisible] = useState(false);
   const {
+    annotate,
+    apply,
+    applied,
     begin,
     capture,
     cards,
     complete,
     currentCard,
+    lastExampleId,
+    proposal,
+    preparing,
     setDragging,
     state,
     summary,
+    simulation,
     undo,
   } = useTeachingSession();
   const lastAction = state.completedActions.at(-1)?.label;
@@ -89,13 +106,47 @@ export default function TeachingScreen() {
     );
   }
 
-  if (state.phase === 'loading' || (state.phase === 'completed' && !summary)) {
+  if (state.phase === 'loading' || preparing) {
     return (
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.centerState}>
           <ActivityIndicator color={colors.accent} size="large" />
           <Text style={styles.loadingText}>{t('teaching.loading')}</Text>
         </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (state.phase === 'completed' && !summary) {
+    const reasonLabel = lastAction === 'positive' || lastAction === 'negative' ? lastAction : null;
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.reviewContainer}>
+          <Text style={styles.eyebrow}>{t('teaching.summary.eyebrow')}</Text>
+          <View style={styles.summaryMark}><Text style={styles.summaryMarkText}>✓</Text></View>
+          <Text accessibilityRole="header" style={styles.summaryTitle}>{t('teaching.review.title')}</Text>
+          <Text style={styles.onboardingBody}>{t('teaching.review.body')}</Text>
+          {reasonLabel && lastExampleId ? (
+            <Pressable accessibilityRole="button" onPress={() => setReasonVisible(true)} style={styles.reasonButton}>
+              <Text style={styles.reasonButtonText}>{t('teaching.action.reason')}</Text>
+            </Pressable>
+          ) : null}
+          <Pressable accessibilityRole="button" onPress={() => void complete()} style={styles.primaryButton}>
+            <Text style={styles.primaryButtonText}>{t('teaching.review.preview')}</Text>
+          </Pressable>
+          <Pressable accessibilityRole="button" onPress={() => void undo()} style={styles.textButton}>
+            <Text style={styles.textButtonText}>↶ {t('teaching.action.undo')}</Text>
+          </Pressable>
+        </View>
+        {reasonLabel ? (
+          <TeachingReasonSheet
+            label={reasonLabel}
+            onClose={() => setReasonVisible(false)}
+            onSave={(reasons, freeform) => void annotate(reasons, freeform)}
+            reduceMotion={reduceMotion}
+            visible={reasonVisible}
+          />
+        ) : null}
       </SafeAreaView>
     );
   }
@@ -128,21 +179,73 @@ export default function TeachingScreen() {
             <View style={styles.summaryGrid}>
               <View style={[styles.summaryCard, styles.increaseCard]}>
                 <Text style={styles.summaryLabel}>{t('teaching.summary.increase')}</Text>
-                <Text style={styles.summaryItems}>{summary.increase.join(' · ') || '—'}</Text>
+                <Text style={styles.summaryItems}>{summary.increase.map((reason) => (
+                  reasonCodes.has(reason) ? t(`teaching.reason.${reason}` as MessageKey) : reason
+                )).join(' · ') || '—'}</Text>
               </View>
               <View style={[styles.summaryCard, styles.reduceCard]}>
                 <Text style={styles.summaryLabel}>{t('teaching.summary.reduce')}</Text>
-                <Text style={styles.summaryItems}>{summary.reduce.join(' · ') || '—'}</Text>
+                <Text style={styles.summaryItems}>{summary.reduce.map((reason) => (
+                  reasonCodes.has(reason) ? t(`teaching.reason.${reason}` as MessageKey) : reason
+                )).join(' · ') || '—'}</Text>
               </View>
             </View>
           ) : <Text style={styles.onboardingBody}>{t('teaching.summary.empty')}</Text>}
-          <Pressable accessibilityRole="button" onPress={() => void begin(false)} style={styles.primaryButton}>
-            <Text style={styles.primaryButtonText}>{t('teaching.summary.more')}</Text>
-          </Pressable>
+          {simulation && proposal ? (
+            <View style={styles.previewCard}>
+              <View style={styles.previewHeader}>
+                <Text style={styles.previewTitle}>{t('teaching.preview.title')}</Text>
+                <Text style={styles.notApplied}>{applied
+                  ? t('teaching.preview.applied')
+                  : t('teaching.preview.notApplied')}</Text>
+              </View>
+              <View style={styles.previewGrid}>
+                {([
+                  ['original', simulation.originalCount],
+                  ['immediate', simulation.immediateCount],
+                  ['inbox', simulation.inboxCount],
+                  ['digest', simulation.digestCount],
+                  ['suppress', simulation.suppressCount],
+                ] as const).map(([key, count]) => (
+                  <View key={key} style={styles.previewStat}>
+                    <Text style={styles.previewCount}>{count}</Text>
+                    <Text style={styles.previewLabel}>{t(`teaching.preview.${key}`)}</Text>
+                  </View>
+                ))}
+              </View>
+              {!applied ? (
+                <Pressable accessibilityRole="button" onPress={() => setApplyConfirmVisible(true)} style={styles.primaryButton}>
+                  <Text style={styles.primaryButtonText}>{t('teaching.preview.apply')}</Text>
+                </Pressable>
+              ) : null}
+            </View>
+          ) : null}
+          {!applied ? (
+            <Pressable accessibilityRole="button" onPress={() => void begin(false)} style={styles.textButton}>
+              <Text style={styles.textButtonText}>{t('teaching.summary.more')}</Text>
+            </Pressable>
+          ) : null}
           <Pressable accessibilityRole="button" onPress={() => router.back()} style={styles.textButton}>
             <Text style={styles.textButtonText}>{t('teaching.summary.close')}</Text>
           </Pressable>
         </ScrollView>
+        <Modal animationType="fade" onRequestClose={() => setApplyConfirmVisible(false)} transparent visible={applyConfirmVisible}>
+          <View style={styles.confirmBackdrop}>
+            <View accessibilityViewIsModal style={styles.confirmCard}>
+              <Text accessibilityRole="header" style={styles.contextTitle}>{t('teaching.preview.confirmTitle')}</Text>
+              <Text style={styles.onboardingBody}>{t('teaching.preview.confirmBody')}</Text>
+              <Pressable accessibilityRole="button" onPress={() => {
+                setApplyConfirmVisible(false);
+                void apply();
+              }} style={styles.primaryButton}>
+                <Text style={styles.primaryButtonText}>{t('teaching.preview.confirm')}</Text>
+              </Pressable>
+              <Pressable accessibilityRole="button" onPress={() => setApplyConfirmVisible(false)} style={styles.textButton}>
+                <Text style={styles.textButtonText}>{t('common.cancel')}</Text>
+              </Pressable>
+            </View>
+          </View>
+        </Modal>
       </SafeAreaView>
     );
   }
@@ -204,6 +307,11 @@ export default function TeachingScreen() {
         {lastAction ? (
           <View accessibilityLiveRegion="polite" style={styles.feedbackBar}>
             <Text style={styles.feedbackText}>{t(`teaching.feedback.${lastAction}`)}</Text>
+            {(lastAction === 'positive' || lastAction === 'negative') && lastExampleId ? (
+              <Pressable accessibilityRole="button" onPress={() => setReasonVisible(true)}>
+                <Text style={styles.reasonInline}>{t('teaching.action.reason')}</Text>
+              </Pressable>
+            ) : null}
             <Pressable accessibilityRole="button" onPress={() => void undo()}>
               <Text style={styles.undoText}>↶ {t('teaching.action.undo')}</Text>
             </Pressable>
@@ -223,6 +331,15 @@ export default function TeachingScreen() {
           </Pressable>
         </Pressable>
       </Modal>
+      {lastAction === 'positive' || lastAction === 'negative' ? (
+        <TeachingReasonSheet
+          label={lastAction}
+          onClose={() => setReasonVisible(false)}
+          onSave={(reasons, freeform) => void annotate(reasons, freeform)}
+          reduceMotion={reduceMotion}
+          visible={reasonVisible}
+        />
+      ) : null}
       <StatusBar style="light" />
     </SafeAreaView>
   );
@@ -254,6 +371,7 @@ const styles = StyleSheet.create({
   secondaryText: { color: colors.mutedText, fontSize: 12, fontWeight: '700' },
   feedbackBar: { minHeight: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 8, borderRadius: 14, backgroundColor: colors.card, paddingHorizontal: 14 },
   feedbackText: { flex: 1, color: colors.text, fontSize: 12, fontWeight: '700' },
+  reasonInline: { marginHorizontal: 10, color: colors.mutedText, fontSize: 11, fontWeight: '800' },
   undoText: { color: colors.accent, fontSize: 12, fontWeight: '900' },
   privacy: { marginTop: 8, color: colors.subtleText, fontSize: 10, lineHeight: 15, textAlign: 'center' },
   centerState: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 18, padding: 32 },
@@ -274,6 +392,9 @@ const styles = StyleSheet.create({
   textButton: { minHeight: 46, alignItems: 'center', justifyContent: 'center' },
   textButtonText: { color: colors.mutedText, fontSize: 14, fontWeight: '700' },
   summaryContainer: { flexGrow: 1, justifyContent: 'center', gap: 18, padding: 28 },
+  reviewContainer: { flex: 1, justifyContent: 'center', gap: 18, padding: 28 },
+  reasonButton: { minHeight: 48, alignItems: 'center', justifyContent: 'center', borderRadius: 15, borderWidth: 1, borderColor: colors.accent, backgroundColor: colors.accentMuted },
+  reasonButtonText: { color: '#a7f3d0', fontSize: 14, fontWeight: '900' },
   summaryMark: { width: 66, height: 66, alignItems: 'center', justifyContent: 'center', borderRadius: 24, backgroundColor: colors.accentMuted },
   summaryMarkText: { color: colors.accent, fontSize: 30 },
   summaryTitle: { color: colors.text, fontSize: 31, lineHeight: 39, fontWeight: '900' },
@@ -283,6 +404,16 @@ const styles = StyleSheet.create({
   reduceCard: { backgroundColor: '#322832' },
   summaryLabel: { color: colors.mutedText, fontSize: 12, fontWeight: '800' },
   summaryItems: { color: colors.text, fontSize: 16, lineHeight: 24, fontWeight: '800' },
+  previewCard: { gap: 15, borderRadius: 20, borderWidth: 1, borderColor: colors.border, backgroundColor: '#0b1b2d', padding: 16 },
+  previewHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
+  previewTitle: { color: colors.text, fontSize: 16, fontWeight: '900' },
+  notApplied: { color: colors.warning, fontSize: 11, fontWeight: '900' },
+  previewGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  previewStat: { minWidth: '29%', flexGrow: 1, borderRadius: 13, backgroundColor: colors.card, padding: 10 },
+  previewCount: { color: colors.text, fontSize: 20, fontWeight: '900', fontVariant: ['tabular-nums'] },
+  previewLabel: { marginTop: 2, color: colors.mutedText, fontSize: 10, fontWeight: '700' },
+  confirmBackdrop: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(2, 8, 23, 0.78)', padding: 24 },
+  confirmCard: { width: '100%', maxWidth: 440, gap: 16, borderRadius: 24, backgroundColor: colors.card, padding: 22 },
   modalBackdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(2, 8, 23, 0.72)' },
   contextSheet: { maxHeight: '76%', gap: 12, borderTopLeftRadius: 28, borderTopRightRadius: 28, backgroundColor: colors.card, padding: 22, paddingBottom: 36 },
   sheetHandle: { width: 38, height: 4, alignSelf: 'center', borderRadius: 99, backgroundColor: colors.border },

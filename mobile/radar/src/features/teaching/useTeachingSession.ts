@@ -1,12 +1,22 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 
 import {
+  annotateTeachingExample,
   captureTeachingExample,
   completeTeachingSession,
   startTeachingSession,
   undoTeachingExamples,
   type TeachingMessageCard,
 } from '../../attention/teachingService';
+import {
+  applyPreferenceVersion,
+  proposeAppetiteFromTeaching,
+  simulatePreferenceVersion,
+} from '../../attention/appetiteService';
+import type {
+  AppetiteSimulationSummary,
+  AttentionPreference,
+} from '@story2u/radar-core/attention/model';
 import {
   hasSeenTeachingOnboarding,
   setTeachingOnboardingSeen,
@@ -26,6 +36,11 @@ export function useTeachingSession() {
   const [cards, setCards] = useState<TeachingMessageCard[]>([]);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [summary, setSummary] = useState<{ increase: string[]; reduce: string[] } | null>(null);
+  const [proposal, setProposal] = useState<AttentionPreference | null>(null);
+  const [simulation, setSimulation] = useState<AppetiteSimulationSummary | null>(null);
+  const [lastExampleId, setLastExampleId] = useState<string | null>(null);
+  const [applied, setApplied] = useState(false);
+  const [preparing, setPreparing] = useState(false);
   const mounted = useRef(true);
 
   const fail = useCallback((error: unknown) => {
@@ -51,6 +66,11 @@ export function useTeachingSession() {
       setCards(started.cards);
       setSessionId(started.sessionId);
       setSummary(null);
+      setProposal(null);
+      setSimulation(null);
+      setLastExampleId(null);
+      setApplied(false);
+      setPreparing(false);
       dispatch({ type: 'READY' });
     } catch (error) {
       if (mounted.current) fail(error);
@@ -74,7 +94,8 @@ export function useTeachingSession() {
   }, [begin, fail, ownerId]);
 
   const complete = useCallback(async () => {
-    if (!ownerId || !sessionId) return;
+    if (!ownerId || !sessionId || preparing) return;
+    setPreparing(true);
     try {
       const [database, deviceId] = await Promise.all([
         initializeRadarDatabase(),
@@ -86,13 +107,27 @@ export function useTeachingSession() {
         deviceId,
         sessionId,
       });
+      const candidate = await proposeAppetiteFromTeaching(database, {
+        ownerId,
+        deviceId,
+        sessionId,
+      });
+      const preview = await simulatePreferenceVersion(database, {
+        ownerId,
+        deviceId,
+        version: candidate.preference.version,
+      });
       if (!mounted.current) return;
       setSummary({ increase: [...result.increase], reduce: [...result.reduce] });
+      setProposal(candidate.preference);
+      setSimulation(preview);
       dispatch({ type: 'COMPLETE' });
     } catch (error) {
       if (mounted.current) fail(error);
+    } finally {
+      if (mounted.current) setPreparing(false);
     }
-  }, [fail, ownerId, sessionId]);
+  }, [fail, ownerId, preparing, sessionId]);
 
   const capture = useCallback(async (label: 'positive' | 'negative' | 'skipped') => {
     const card = cards[state.cardIndex];
@@ -104,7 +139,7 @@ export function useTeachingSession() {
         currentDeviceIdStore.read(),
       ]);
       if (!deviceId) throw new Error('teaching_device_unavailable');
-      await captureTeachingExample(database, {
+      const example = await captureTeachingExample(database, {
         ownerId,
         deviceId,
         sessionId,
@@ -113,12 +148,12 @@ export function useTeachingSession() {
       });
       if (!mounted.current) return;
       const finished = state.cardIndex + 1 >= cards.length;
+      setLastExampleId(example.id);
       dispatch({ type: 'ADVANCE', finished });
-      if (finished) await complete();
     } catch (error) {
       if (mounted.current) fail(error);
     }
-  }, [cards, complete, fail, ownerId, sessionId, state.cardIndex]);
+  }, [cards, fail, ownerId, sessionId, state.cardIndex]);
 
   const undo = useCallback(async () => {
     if (!ownerId || !sessionId || state.completedActions.length === 0) return;
@@ -132,11 +167,53 @@ export function useTeachingSession() {
       await undoTeachingExamples(database, { ownerId, deviceId, sessionId, count: 1 });
       if (!mounted.current) return;
       setSummary(null);
+      setLastExampleId(null);
       dispatch({ type: 'UNDO_COMPLETE' });
     } catch (error) {
       if (mounted.current) fail(error);
     }
   }, [fail, ownerId, sessionId, state.completedActions.length]);
+
+  const annotate = useCallback(async (reasons: readonly string[], freeformReason: string | null) => {
+    if (!ownerId || !sessionId || !lastExampleId) return;
+    try {
+      const [database, deviceId] = await Promise.all([
+        initializeRadarDatabase(),
+        currentDeviceIdStore.read(),
+      ]);
+      if (!deviceId) throw new Error('teaching_device_unavailable');
+      await annotateTeachingExample(database, {
+        ownerId,
+        deviceId,
+        sessionId,
+        exampleId: lastExampleId,
+        reasons,
+        freeformReason,
+      });
+    } catch (error) {
+      if (mounted.current) fail(error);
+    }
+  }, [fail, lastExampleId, ownerId, sessionId]);
+
+  const apply = useCallback(async () => {
+    if (!ownerId || !proposal) return;
+    try {
+      const [database, deviceId] = await Promise.all([
+        initializeRadarDatabase(),
+        currentDeviceIdStore.read(),
+      ]);
+      if (!deviceId) throw new Error('teaching_device_unavailable');
+      await applyPreferenceVersion(database, {
+        ownerId,
+        deviceId,
+        version: proposal.version,
+        confirmed: true,
+      });
+      if (mounted.current) setApplied(true);
+    } catch (error) {
+      if (mounted.current) fail(error);
+    }
+  }, [fail, ownerId, proposal]);
 
   const setDragging = useCallback((direction: 'left' | 'right' | null) => {
     dispatch(direction
@@ -146,13 +223,20 @@ export function useTeachingSession() {
 
   return {
     begin,
+    annotate,
+    apply,
+    applied,
     capture,
     cards,
     complete,
     currentCard: cards[state.cardIndex] ?? null,
+    lastExampleId,
+    proposal,
+    preparing,
     sessionId,
     state,
     summary,
+    simulation,
     setDragging,
     undo,
   };

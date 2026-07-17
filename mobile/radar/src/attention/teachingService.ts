@@ -382,6 +382,43 @@ export async function undoTeachingExamples(
   return examples.map((example) => example.id);
 }
 
+export async function annotateTeachingExample(
+  database: SignalAppetiteStoreDatabase,
+  input: {
+    ownerId: string;
+    deviceId: string;
+    sessionId: string;
+    exampleId: string;
+    reasons: readonly string[];
+    freeformReason?: string | null;
+    now?: Date;
+    createId?: () => string;
+  },
+) {
+  const examples = await readPreferenceExamples(database, input.ownerId, input.sessionId);
+  const existing = examples.find((example) => example.id === input.exampleId);
+  if (!existing || existing.revertedAt) throw new Error('teaching_example_not_active');
+  const updated: PreferenceExample = {
+    ...existing,
+    selectedReasons: [...new Set(input.reasons)].slice(0, 8),
+    freeformReason: input.freeformReason?.trim().slice(0, 1_000) || null,
+  };
+  const now = input.now ?? new Date();
+  const createId = input.createId ?? createLocalId;
+  await appendSignalAppetiteEvent(database, {
+    eventId: createId(),
+    ownerId: input.ownerId,
+    deviceId: input.deviceId,
+    aggregateId: input.sessionId,
+    aggregateVersion: await nextAggregateVersion(database, input.ownerId, input.sessionId),
+    schemaVersion: 1,
+    occurredAt: now.toISOString(),
+    type: 'PreferenceExampleCaptured',
+    payload: { example: updated },
+  });
+  return updated;
+}
+
 export async function completeTeachingSession(
   database: SignalAppetiteStoreDatabase,
   input: {

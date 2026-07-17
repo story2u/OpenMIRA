@@ -12,6 +12,7 @@ import {
   type SignalAppetiteStoreExecutor,
 } from './signalAppetiteStore';
 import {
+  annotateTeachingExample,
   captureTeachingExample,
   completeTeachingSession,
   loadTeachingCandidates,
@@ -143,9 +144,13 @@ describe('teaching service', () => {
     });
     const [first, second, third] = session.cards;
     if (!first || !second || !third) throw new Error('missing cards');
-    await captureTeachingExample(database, {
+    const positive = await captureTeachingExample(database, {
       ownerId, deviceId, sessionId: session.sessionId, messageId: first.messageId,
       label: 'positive', reasons: ['needs_reply'], createId,
+    });
+    await annotateTeachingExample(database, {
+      ownerId, deviceId, sessionId: session.sessionId, exampleId: positive.id,
+      reasons: ['needs_reply', 'deadline'], freeformReason: 'Customer is waiting', createId,
     });
     await captureTeachingExample(database, {
       ownerId, deviceId, sessionId: session.sessionId, messageId: second.messageId,
@@ -158,6 +163,11 @@ describe('teaching service', () => {
     expect(await readTeachingSession(database, ownerId, session.sessionId)).toMatchObject({
       positiveCount: 1, negativeCount: 1, skippedCount: 1,
     });
+    expect((await readPreferenceExamples(database, ownerId, session.sessionId))[0])
+      .toMatchObject({
+        selectedReasons: ['needs_reply', 'deadline'],
+        freeformReason: 'Customer is waiting',
+      });
 
     expect(await undoTeachingExamples(database, {
       ownerId, deviceId, sessionId: session.sessionId, count: 2, createId,
@@ -169,7 +179,7 @@ describe('teaching service', () => {
       ownerId, deviceId, sessionId: session.sessionId, createId,
     });
     expect(summary).toMatchObject({
-      increase: ['needs_reply'], reduce: [], positiveCount: 1, negativeCount: 0,
+      increase: ['deadline', 'needs_reply'], reduce: [], positiveCount: 1, negativeCount: 0,
     });
     expect((await readPreferenceExamples(database, ownerId, session.sessionId)))
       .toHaveLength(3);

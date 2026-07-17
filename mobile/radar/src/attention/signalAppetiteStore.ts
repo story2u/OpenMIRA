@@ -246,7 +246,10 @@ async function insertExample(
     `INSERT INTO preference_examples (
       owner_id, id, message_id, label, selected_reasons_json, freeform_reason,
       captured_at, teaching_session_id, reverted_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(owner_id, id) DO UPDATE SET
+      selected_reasons_json = excluded.selected_reasons_json,
+      freeform_reason = excluded.freeform_reason`,
     ownerId,
     requireUuid(example.id, 'example_id'),
     requireUuid(example.messageId, 'message_id'),
@@ -317,8 +320,14 @@ async function projectEvent(
       );
       break;
     case 'PreferenceExampleCaptured':
+      {
+      const existing = await executor.getFirstAsync<{ reverted_at: string | null }>(
+        'SELECT reverted_at FROM preference_examples WHERE owner_id = ? AND id = ?',
+        ownerId,
+        event.payload.example.id,
+      );
       await insertExample(executor, ownerId, event.payload.example);
-      await executor.runAsync(
+      if (!existing) await executor.runAsync(
         `UPDATE teaching_sessions SET
           positive_count = positive_count + ?,
           negative_count = negative_count + ?,
@@ -331,6 +340,7 @@ async function projectEvent(
         event.payload.example.teachingSessionId,
       );
       break;
+      }
     case 'PreferenceExampleReverted': {
       const example = await executor.getFirstAsync<{ label: PreferenceExample['label'] }>(
         `SELECT label FROM preference_examples

@@ -74,6 +74,20 @@ describe('foldSignalAppetite', () => {
     expect(state.appliedEventIds.size).toBe(3);
   });
 
+  it('updates reasons on a repeated captured example without double-counting it', () => {
+    const started = event('TeachingSessionStarted', 1, { sessionId, targetCount: 8 });
+    const original = example('positive');
+    const captured = event('PreferenceExampleCaptured', 2, { example: original });
+    const annotated = event('PreferenceExampleCaptured', 3, {
+      example: { ...original, selectedReasons: ['needs_reply', 'deadline'] },
+    });
+
+    const state = foldSignalAppetite([annotated, captured, started]);
+
+    expect(state.sessions.get(sessionId)?.positiveCount).toBe(1);
+    expect(state.examples.get(original.id)?.selectedReasons).toEqual(['needs_reply', 'deadline']);
+  });
+
   it('requires a proposed version before apply and supports auditable rollback', () => {
     const ignoredApply = event('PreferenceApplied', 1, {
       preferenceId,
