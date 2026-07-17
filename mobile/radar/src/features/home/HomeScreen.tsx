@@ -59,6 +59,10 @@ export default function HomeScreen() {
               </View>
             ))}
           </View>
+          <Pressable accessibilityRole="button" onPress={() => router.push('/quiet-zone' as Href)} style={styles.quietZoneButton}>
+            <View><Text style={styles.quietZoneTitle}>{t('home.quietZone.title')}</Text><Text style={styles.quietZoneDetail}>{t('home.quietZone.detail')}</Text></View>
+            <Text style={styles.quietZoneArrow}>›</Text>
+          </Pressable>
         </View>
       </ScrollView>
       <StatusBar style="light" />
@@ -90,4 +94,8 @@ const styles = StyleSheet.create({
   stat: { width: '48%', flexGrow: 1, minHeight: 82, borderRadius: 16, backgroundColor: '#0a1a2b', padding: 12 },
   statCount: { fontSize: 25, fontWeight: '900', fontVariant: ['tabular-nums'] },
   statLabel: { marginTop: 3, color: colors.mutedText, fontSize: 11, lineHeight: 16 },
+  quietZoneButton: { minHeight: 64, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginTop: 8, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, paddingTop: 14 },
+  quietZoneTitle: { color: colors.text, fontSize: 14, fontWeight: '900' },
+  quietZoneDetail: { marginTop: 3, color: colors.mutedText, fontSize: 10 },
+  quietZoneArrow: { color: colors.accent, fontSize: 27 },
 });

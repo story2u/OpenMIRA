@@ -93,6 +93,9 @@
 - 2026-07-18：完成首页与意图地图切片。首页升级为注意力控制台并保留机会入口；SVG 地图以确定性布局呈现
   核心、上下文、降低与临时意图，支持平移/缩放、节点解释和线性无障碍替代。一天时间轴直接融入地图，
   选择时刻会突出当时生效的意图；节点总量限制为 30。Shadow、安静区和消息解释仍留在 S6 后续切片。
+- 2026-07-18：完成安静区切片。首页新增抽查入口，页面从 owner-scoped 本地消息与过滤决定投影读取 suppress
+  消息，保留正文副本并显示原因摘要、证据、处理位置、置信度和 evaluator；纠正入口回到 Pi，界面明确不展示
+  私有推理。Shadow 与前后预览仍留在 S6 后续切片。
 
 ## 发现日志
 
@@ -130,6 +133,7 @@
 | `pnpm --dir mobile/radar test` | 通过 | 首页、意图地图与时间轴后 52 files / 170 tests |
 | `pnpm --dir mobile/radar typecheck` | 通过 | 首页、地图、SVG 手势与时间轴类型检查通过 |
 | `pnpm --dir mobile/radar export:ios` | 通过 | 地图切片 Hermes bundle 成功；未替代真机地图手势/FPS 验收 |
+| `pnpm --dir mobile/radar test` | 通过 | 安静区与置信度语义后 53 files / 171 tests |
 | `pnpm --dir mobile/radar export:ios` / `export:android` | 通过 | Hermes bundle 成功；不等同真机 haptic/FPS 验收 |
 | `make backend-check` | 待运行 | 服务端同步切片后 |
 | 双平台 Hermes export / Release | 待运行 | 不能替代真机手势、haptic 和 FPS |
