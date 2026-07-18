@@ -1,6 +1,6 @@
 # ADR-0006：移动端作为现有 API 的瘦客户端（Swift/Kotlin 原生双端）
 
-> 状态：superseded by [ADR-0009](0009-react-native-expo-mobile-client.md) · 日期：2026-07-11
+> 状态：superseded by [ADR-0012](0012-react-native-expo-mobile-client.md) · 日期：2026-07-11
 
 ## 背景
 

@@ -6,11 +6,29 @@ from app.infrastructure.db.models import (
     Message,
     Opportunity,
     PushRegistration,
+    SignalAppetiteEvent,
     SyncChange,
     UserDetectionPreference,
     UserNotificationPreference,
     UserWorkSchedule,
 )
+
+
+def test_signal_appetite_event_stream_is_owner_scoped_and_append_only() -> None:
+    assert {
+        "uq_signal_appetite_events_owner_event",
+        "ck_signal_appetite_events_aggregate_version_positive",
+        "ck_signal_appetite_events_schema_v1",
+        "ck_signal_appetite_events_payload_bounded_object",
+    }.issubset(constraint_names(SignalAppetiteEvent))
+    assert any(
+        constraint.name == "fk_signal_appetite_events_owner_device"
+        for constraint in SignalAppetiteEvent.__table__.foreign_key_constraints
+    )
+    assert {
+        "ix_signal_appetite_events_owner_cursor",
+        "ix_signal_appetite_events_owner_aggregate",
+    }.issubset(index_names(SignalAppetiteEvent))
 
 
 def constraint_names(model) -> set[str]:

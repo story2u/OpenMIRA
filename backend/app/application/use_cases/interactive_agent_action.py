@@ -33,8 +33,9 @@ from app.domain.enums import (
     OpportunityStatus,
 )
 from app.domain.services.interactive_agent import (
-    INTERACTIVE_AGENT_APPROVED_SEND_POLICY_VERSION,
     INTERACTIVE_AGENT_APPROVED_SEND_SCHEMA_VERSION,
+    INTERACTIVE_AGENT_SIGNAL_APPETITE_SCHEMA_VERSION,
+    supports_interactive_agent_contract,
 )
 from app.domain.services.interactive_agent_action import (
     CanonicalSendReplyArguments,
@@ -42,8 +43,8 @@ from app.domain.services.interactive_agent_action import (
     InteractiveAgentActionExpiredError,
     InteractiveAgentActionProjectionError,
     InteractiveAgentActionRejectedError,
-    InteractiveAgentActionUncertainError,
     InteractiveAgentActionUnavailableError,
+    InteractiveAgentActionUncertainError,
     canonical_send_reply_arguments_hash,
 )
 from app.domain.services.opportunity_state import (
@@ -114,15 +115,22 @@ class InteractiveAgentActionService:
         self.routing_service = routing_service
 
     def _external_actions_available(self) -> bool:
+        schema_version = self.settings.interactive_agent_schema_version
+        policy_version = self.settings.interactive_agent_policy_version
         return bool(
             self.settings.interactive_agent_beta_enabled
             and self.settings.interactive_agent_gateway_enabled
             and self.settings.interactive_agent_external_actions_enabled
             and self.settings.im_send_enabled
-            and self.settings.interactive_agent_schema_version
-            == INTERACTIVE_AGENT_APPROVED_SEND_SCHEMA_VERSION
-            and self.settings.interactive_agent_policy_version
-            == INTERACTIVE_AGENT_APPROVED_SEND_POLICY_VERSION
+            and schema_version
+            in {
+                INTERACTIVE_AGENT_APPROVED_SEND_SCHEMA_VERSION,
+                INTERACTIVE_AGENT_SIGNAL_APPETITE_SCHEMA_VERSION,
+            }
+            and supports_interactive_agent_contract(
+                schema_version=schema_version,
+                policy_version=policy_version,
+            )
         )
 
     def _authorize_turn(
@@ -134,8 +142,15 @@ class InteractiveAgentActionService:
             turn.status
             not in {InteractiveAgentTurnStatus.CLAIMED, InteractiveAgentTurnStatus.RUNNING}
             or turn.lease_expires_at <= utc_now()
-            or turn.schema_version != INTERACTIVE_AGENT_APPROVED_SEND_SCHEMA_VERSION
-            or turn.policy_version != INTERACTIVE_AGENT_APPROVED_SEND_POLICY_VERSION
+            or turn.schema_version
+            not in {
+                INTERACTIVE_AGENT_APPROVED_SEND_SCHEMA_VERSION,
+                INTERACTIVE_AGENT_SIGNAL_APPETITE_SCHEMA_VERSION,
+            }
+            or not supports_interactive_agent_contract(
+                schema_version=turn.schema_version,
+                policy_version=turn.policy_version,
+            )
             or turn.runtime_version != self.settings.interactive_agent_runtime_version
             or turn.model_alias != self.settings.interactive_agent_model_alias
             or not hmac.compare_digest(
@@ -150,8 +165,15 @@ class InteractiveAgentActionService:
             turn.status
             not in {InteractiveAgentTurnStatus.CLAIMED, InteractiveAgentTurnStatus.RUNNING}
             or turn.lease_expires_at <= utc_now()
-            or turn.schema_version != INTERACTIVE_AGENT_APPROVED_SEND_SCHEMA_VERSION
-            or turn.policy_version != INTERACTIVE_AGENT_APPROVED_SEND_POLICY_VERSION
+            or turn.schema_version
+            not in {
+                INTERACTIVE_AGENT_APPROVED_SEND_SCHEMA_VERSION,
+                INTERACTIVE_AGENT_SIGNAL_APPETITE_SCHEMA_VERSION,
+            }
+            or not supports_interactive_agent_contract(
+                schema_version=turn.schema_version,
+                policy_version=turn.policy_version,
+            )
             or turn.runtime_version != self.settings.interactive_agent_runtime_version
             or turn.model_alias != self.settings.interactive_agent_model_alias
         ):
@@ -270,7 +292,7 @@ class InteractiveAgentActionService:
             approval.token_nonce_hash = hash_interactive_agent_approval_nonce(nonce)
         try:
             approval = await self.repository.add_and_commit(approval)
-        except IntegrityError:
+        except IntegrityError as exc:
             await self.repository.rollback()
             concurrent = await self.repository.lock_by_tool_call(
                 owner_user_id=principal.owner_user_id,
@@ -278,7 +300,7 @@ class InteractiveAgentActionService:
                 tool_call_id=tool_call_id,
             )
             if not concurrent:
-                raise InteractiveAgentActionConflictError()
+                raise InteractiveAgentActionConflictError() from exc
             return await self._replay_decision(
                 concurrent,
                 approved=approved,

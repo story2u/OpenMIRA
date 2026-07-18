@@ -1492,6 +1492,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sync/signal-appetite/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Signal Appetite Events */
+        get: operations["list_signal_appetite_events_api_v1_sync_signal_appetite_events_get"];
+        put?: never;
+        /** Append Signal Appetite Events */
+        post: operations["append_signal_appetite_events_api_v1_sync_signal_appetite_events_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/templates": {
         parameters: {
             query?: never;
@@ -2056,6 +2074,11 @@ export interface components {
              * @default false
              */
             rnClientSupported: boolean;
+            /**
+             * Signalappetitesyncavailable
+             * @default false
+             */
+            signalAppetiteSyncAvailable: boolean;
             /**
              * Syncavailable
              * @default false
@@ -3022,6 +3045,116 @@ export interface components {
              * @default false
              */
             wecomUserBindingAvailable: boolean;
+        };
+        /** SignalAppetiteEventRead */
+        SignalAppetiteEventRead: {
+            /**
+             * Aggregateid
+             * Format: uuid
+             */
+            aggregateId: string;
+            /** Aggregateversion */
+            aggregateVersion: number;
+            /** Cursor */
+            cursor: number;
+            /**
+             * Deviceid
+             * Format: uuid
+             */
+            deviceId: string;
+            /**
+             * Eventid
+             * Format: uuid
+             */
+            eventId: string;
+            /**
+             * Eventtype
+             * @enum {string}
+             */
+            eventType: "TeachingSessionStarted" | "TeachingCardPresented" | "PreferenceExampleCaptured" | "PreferenceExampleReverted" | "TeachingSessionCompleted" | "PreferenceChangeProposed" | "PreferenceSimulationCompleted" | "PreferenceShadowStarted" | "PreferenceApplied" | "PreferenceReverted" | "MessageFilterDecisionMade" | "MessageDecisionCorrected" | "IntentMapUpdated" | "TemporaryFocusCreated" | "TemporaryFocusExpired";
+            /**
+             * Occurredat
+             * Format: date-time
+             */
+            occurredAt: string;
+            /**
+             * Ownerid
+             * Format: uuid
+             */
+            ownerId: string;
+            /** Payload */
+            payload: {
+                [key: string]: unknown;
+            };
+            /**
+             * Schemaversion
+             * @default 1
+             * @constant
+             */
+            schemaVersion: 1;
+            /**
+             * Serverreceivedat
+             * Format: date-time
+             */
+            serverReceivedAt: string;
+        };
+        /** SignalAppetiteEventWrite */
+        SignalAppetiteEventWrite: {
+            /**
+             * Aggregateid
+             * Format: uuid
+             */
+            aggregateId: string;
+            /** Aggregateversion */
+            aggregateVersion: number;
+            /**
+             * Eventid
+             * Format: uuid
+             */
+            eventId: string;
+            /**
+             * Eventtype
+             * @enum {string}
+             */
+            eventType: "TeachingSessionStarted" | "TeachingCardPresented" | "PreferenceExampleCaptured" | "PreferenceExampleReverted" | "TeachingSessionCompleted" | "PreferenceChangeProposed" | "PreferenceSimulationCompleted" | "PreferenceShadowStarted" | "PreferenceApplied" | "PreferenceReverted" | "MessageFilterDecisionMade" | "MessageDecisionCorrected" | "IntentMapUpdated" | "TemporaryFocusCreated" | "TemporaryFocusExpired";
+            /**
+             * Occurredat
+             * Format: date-time
+             */
+            occurredAt: string;
+            /** Payload */
+            payload: {
+                [key: string]: unknown;
+            };
+            /**
+             * Schemaversion
+             * @default 1
+             * @constant
+             */
+            schemaVersion: 1;
+        };
+        /** SignalAppetiteEventsAppendRead */
+        SignalAppetiteEventsAppendRead: {
+            /** Events */
+            events: components["schemas"]["SignalAppetiteEventRead"][];
+            /** Servercursor */
+            serverCursor: number;
+        };
+        /** SignalAppetiteEventsAppendRequest */
+        SignalAppetiteEventsAppendRequest: {
+            /** Events */
+            events: components["schemas"]["SignalAppetiteEventWrite"][];
+        };
+        /** SignalAppetiteEventsPageRead */
+        SignalAppetiteEventsPageRead: {
+            /** Events */
+            events: components["schemas"]["SignalAppetiteEventRead"][];
+            /** Hasmore */
+            hasMore: boolean;
+            /** Nextcursor */
+            nextCursor: number;
+            /** Servercursor */
+            serverCursor: number;
         };
         /** StatsSummaryRead */
         StatsSummaryRead: {
@@ -6555,6 +6688,71 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SyncChangesRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_signal_appetite_events_api_v1_sync_signal_appetite_events_get: {
+        parameters: {
+            query?: {
+                after?: number;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignalAppetiteEventsPageRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    append_signal_appetite_events_api_v1_sync_signal_appetite_events_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SignalAppetiteEventsAppendRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignalAppetiteEventsAppendRead"];
                 };
             };
             /** @description Validation Error */

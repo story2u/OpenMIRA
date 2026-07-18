@@ -236,10 +236,32 @@ def test_client_capabilities_require_server_rollout_and_supported_device_schema(
         "pushAvailable": False,
         "rnClientSupported": True,
         "syncAvailable": True,
+        "signalAppetiteSyncAvailable": False,
     }
     assert old_schema.status_code == 200
     assert old_schema.json()["rnClientSupported"] is True
     assert old_schema.json()["syncAvailable"] is False
+
+
+def test_signal_appetite_sync_capability_requires_v6_and_independent_rollout() -> None:
+    settings = Settings(
+        database_url="postgresql+asyncpg://user:password@localhost/test",
+        admin_api_token="test-admin-token",
+        rn_sync_rollout_enabled=True,
+        signal_appetite_sync_enabled=True,
+    )
+    client, service, _, _ = build_client(settings)
+    service.device.capabilities = {
+        "client.reactNative": True,
+        "sqlite.schema": 6,
+    }
+    supported = client.get("/devices/current/capabilities")
+    service.device.capabilities["sqlite.schema"] = 5
+    old_schema = client.get("/devices/current/capabilities")
+
+    assert supported.json()["signalAppetiteSyncAvailable"] is True
+    assert old_schema.json()["syncAvailable"] is True
+    assert old_schema.json()["signalAppetiteSyncAvailable"] is False
 
 
 def test_device_agent_capability_requires_exact_runtime_schema_and_rollout() -> None:

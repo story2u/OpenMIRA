@@ -124,11 +124,11 @@
 
 此阶段不得改变生产行为，是后续投入的硬前置。
 
-- [x] 新增 ADR-0009：RN/Expo 单代码库，supersede 尚未 accepted 的 ADR-0006；记录同 bundle id 换装、
+- [x] 新增 ADR-0012：RN/Expo 单代码库，supersede 尚未 accepted 的 ADR-0006；记录同 bundle id 换装、
       dev bundle id、原生目录保留期、构建/OTA 边界。
-- [x] 新增 ADR-0010：端上分析 + 服务端网关/fallback；明确 ADR-0002 继续约束服务端 fallback，
+- [x] 新增 ADR-0013：端上分析 + 服务端网关/fallback；明确 ADR-0002 继续约束服务端 fallback，
       ADR-0004 的顶层分析计量不变。
-- [x] 新增 ADR-0011：先采用同步变更日志/客户端投影，不立即切事件溯源；定义游标、版本、tombstone、
+- [x] 新增 ADR-0014：先采用同步变更日志/客户端投影，不立即切事件溯源；定义游标、版本、tombstone、
       bootstrap、保留期和未来升级为端上权威的复审信号。
 - [x] 制作 RN parity 清单：逐项对照 Web、SwiftUI、Compose、真实 API、成熟度与 mock 边界；锁定
       首发必须项和明确不迁移项。

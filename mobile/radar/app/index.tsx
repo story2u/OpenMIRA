@@ -1,4 +1,4 @@
-import { Redirect } from 'expo-router';
+import { Redirect, type Href } from 'expo-router';
 import { ActivityIndicator, Pressable, SafeAreaView, StyleSheet, Text, View } from 'react-native';
 
 import { sessionUnavailableMessage, useSession } from '../src/auth/SessionProvider';
@@ -9,7 +9,7 @@ export default function EntryScreen() {
   const { state, retry } = useSession();
   const { t } = useI18n();
 
-  if (state.status === 'authenticated') return <Redirect href="/(tabs)/dashboard" />;
+  if (state.status === 'authenticated') return <Redirect href={'/(tabs)/home' as Href} />;
   if (state.status === 'anonymous' || state.status === 'requires-login') {
     return <Redirect href="/login" />;
   }

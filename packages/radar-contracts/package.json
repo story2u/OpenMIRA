@@ -55,6 +55,10 @@
     "./sync": {
       "types": "./src/sync.ts",
       "default": "./src/sync.ts"
+    },
+    "./signal-appetite-sync": {
+      "types": "./src/signal-appetite-sync.ts",
+      "default": "./src/signal-appetite-sync.ts"
     }
   },
   "scripts": {

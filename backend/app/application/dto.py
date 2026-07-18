@@ -641,6 +641,7 @@ class ClientCapabilitiesRead(BaseModel):
     pushAvailable: bool = False
     rnClientSupported: bool = False
     syncAvailable: bool = False
+    signalAppetiteSyncAvailable: bool = False
 
 
 class InteractiveAgentTurnClaimRequest(BaseModel):
@@ -1081,6 +1082,90 @@ class SyncAckRead(BaseModel):
     acknowledgedCursor: int = Field(ge=0)
     acknowledgedAt: datetime
     errorCode: str | None = None
+
+
+SignalAppetiteEventType = Literal[
+    "TeachingSessionStarted",
+    "TeachingCardPresented",
+    "PreferenceExampleCaptured",
+    "PreferenceExampleReverted",
+    "TeachingSessionCompleted",
+    "PreferenceChangeProposed",
+    "PreferenceSimulationCompleted",
+    "PreferenceShadowStarted",
+    "PreferenceApplied",
+    "PreferenceReverted",
+    "MessageFilterDecisionMade",
+    "MessageDecisionCorrected",
+    "IntentMapUpdated",
+    "TemporaryFocusCreated",
+    "TemporaryFocusExpired",
+]
+
+
+class SignalAppetiteEventWrite(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    eventId: UUID
+    eventType: SignalAppetiteEventType
+    aggregateId: UUID
+    aggregateVersion: int = Field(gt=0)
+    schemaVersion: Literal[1] = 1
+    occurredAt: datetime
+    payload: dict
+
+    @field_validator("payload")
+    @classmethod
+    def validate_content_free_payload(cls, value: dict) -> dict:
+        serialized = json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+        if len(serialized.encode("utf-8")) > 65_536:
+            raise ValueError("signal appetite event payload exceeds 64 KiB")
+        forbidden = {"body", "content", "raw", "rawpayload", "messagebody"}
+
+        def inspect(item: object, depth: int = 0) -> None:
+            if depth > 12:
+                raise ValueError("signal appetite event payload is too deeply nested")
+            if isinstance(item, dict):
+                if len(item) > 128:
+                    raise ValueError("signal appetite event payload has too many fields")
+                for key, nested in item.items():
+                    normalized = str(key).replace("_", "").lower()
+                    if normalized in forbidden:
+                        raise ValueError("message content is forbidden in preference events")
+                    inspect(nested, depth + 1)
+            elif isinstance(item, list):
+                if len(item) > 500:
+                    raise ValueError("signal appetite event payload list is too large")
+                for nested in item:
+                    inspect(nested, depth + 1)
+
+        inspect(value)
+        return value
+
+
+class SignalAppetiteEventsAppendRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    events: list[SignalAppetiteEventWrite] = Field(min_length=1, max_length=100)
+
+
+class SignalAppetiteEventRead(SignalAppetiteEventWrite):
+    ownerId: UUID
+    deviceId: UUID
+    cursor: int = Field(gt=0)
+    serverReceivedAt: datetime
+
+
+class SignalAppetiteEventsPageRead(BaseModel):
+    events: list[SignalAppetiteEventRead]
+    nextCursor: int = Field(ge=0)
+    serverCursor: int = Field(ge=0)
+    hasMore: bool
+
+
+class SignalAppetiteEventsAppendRead(BaseModel):
+    events: list[SignalAppetiteEventRead]
+    serverCursor: int = Field(ge=0)
 
 
 class PlanEntitlementsRead(BaseModel):

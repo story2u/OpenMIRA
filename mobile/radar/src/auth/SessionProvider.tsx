@@ -179,7 +179,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         });
         if (!resolved.syncAvailable) return;
         try {
-          const result = await synchronizeInstalledOwner(baseUrl, ownerId, controller.signal);
+          const result = await synchronizeInstalledOwner(baseUrl, ownerId, controller.signal, {
+            signalAppetiteSyncAvailable: resolved.signalAppetiteSyncAvailable,
+          });
           setCommandSummary(result.commands);
         } catch (error) {
           if (controller.signal.aborted) return;
@@ -372,7 +374,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     const baseUrl = apiBaseUrl.current;
     if (!baseUrl) return;
     try {
-      const result = await synchronizeInstalledOwner(baseUrl, state.user.id);
+      const result = await synchronizeInstalledOwner(baseUrl, state.user.id, undefined, {
+        signalAppetiteSyncAvailable: capabilities.signalAppetiteSyncAvailable,
+      });
       setCommandSummary(result.commands);
       void recoverInstalledDeviceAnalysis(
         baseUrl,
@@ -388,7 +392,12 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         errorClass: error instanceof Error ? error.name : 'UnknownError',
       });
     }
-  }, [capabilities.deviceAgentAvailable, capabilities.syncAvailable, state]);
+  }, [
+    capabilities.deviceAgentAvailable,
+    capabilities.signalAppetiteSyncAvailable,
+    capabilities.syncAvailable,
+    state,
+  ]);
 
   useEffect(() => {
     if (

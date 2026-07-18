@@ -1,7 +1,9 @@
 import hashlib
 import json
 import os
+import subprocess
 from datetime import timedelta
+from pathlib import Path
 from uuid import uuid4
 
 import httpx
@@ -34,6 +36,8 @@ from app.domain.enums import (
 from app.domain.services.interactive_agent_gateway import (
     INTERACTIVE_APPROVED_SEND_SYSTEM_PROMPT,
     INTERACTIVE_APPROVED_SEND_TOOLS,
+    INTERACTIVE_SIGNAL_APPETITE_ALL_TOOLS,
+    INTERACTIVE_SIGNAL_APPETITE_SYSTEM_PROMPT,
     INTERACTIVE_AGENT_SYSTEM_PROMPT,
     INTERACTIVE_INTERNAL_SYSTEM_PROMPT,
     INTERACTIVE_INTERNAL_TOOLS,
@@ -467,6 +471,103 @@ def test_v3_contract_adds_only_strict_approved_send() -> None:
             schema_version=3,
             policy_version="interactive-approved-send-v3",
         )
+
+
+def test_v4_contract_adds_strict_signal_appetite_tools_without_model_confirmation() -> None:
+    message_id = str(uuid4())
+    payload = {
+        **valid_gateway_payload(),
+        "messages": [
+            {"role": "system", "content": INTERACTIVE_SIGNAL_APPETITE_SYSTEM_PROMPT},
+            {"role": "user", "content": "Try the new appetite and show me the preview."},
+            {
+                "role": "assistant",
+                "content": None,
+                "tool_calls": [
+                    {
+                        "id": "call-capture",
+                        "type": "function",
+                        "function": {
+                            "name": "capture_preference_example",
+                            "arguments": json.dumps(
+                                {
+                                    "message_id": message_id,
+                                    "label": "positive",
+                                    "reasons": ["needs_reply"],
+                                }
+                            ),
+                        },
+                    }
+                ],
+            },
+            {"role": "tool", "tool_call_id": "call-capture", "content": '{"state":"captured"}'},
+        ],
+        "tools": list(INTERACTIVE_SIGNAL_APPETITE_ALL_TOOLS),
+    }
+    validate_interactive_gateway_contract(
+        payload,
+        expected_model_alias="radar-interactive-v1",
+        max_prompt_chars=64_000,
+        max_completion_tokens=4_096,
+        schema_version=4,
+        policy_version="interactive-signal-appetite-v4",
+    )
+
+    smuggled = json.loads(json.dumps(payload))
+    smuggled["messages"][2]["tool_calls"][0]["function"] = {
+        "name": "apply_appetite_change",
+        "arguments": json.dumps(
+            {"preference_version": 2, "confirmation_token": "model-controlled"}
+        ),
+    }
+    with pytest.raises(InteractiveAgentGatewayContractError):
+        validate_interactive_gateway_contract(
+            smuggled,
+            expected_model_alias="radar-interactive-v1",
+            max_prompt_chars=64_000,
+            max_completion_tokens=4_096,
+            schema_version=4,
+            policy_version="interactive-signal-appetite-v4",
+        )
+
+
+def test_v4_python_gateway_contract_matches_shared_typescript_contract() -> None:
+    module_path = (
+        Path(__file__).resolve().parents[2]
+        / "packages"
+        / "radar-agent"
+        / "src"
+        / "interactive.mjs"
+    )
+    script = (
+        f"import({json.dumps(module_path.as_uri())}).then(m => "
+        "console.log(JSON.stringify(m.interactiveAgentContractForSchema(4))))"
+    )
+    completed = subprocess.run(  # noqa: S603
+        ["node", "--input-type=module", "-e", script],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    shared = json.loads(completed.stdout)
+    assert shared["schemaVersion"] == 4
+    assert shared["policyVersion"] == "interactive-signal-appetite-v4"
+    assert shared["systemPrompt"] == INTERACTIVE_SIGNAL_APPETITE_SYSTEM_PROMPT
+    assert [
+        {
+            "name": tool["name"],
+            "description": tool["description"],
+            "parameters": tool["parameters"],
+        }
+        for tool in shared["tools"]
+    ] == [
+        {
+            "name": tool["function"]["name"],
+            "description": tool["function"]["description"],
+            "parameters": tool["function"]["parameters"],
+        }
+        for tool in INTERACTIVE_SIGNAL_APPETITE_ALL_TOOLS
+    ]
 
 
 @pytest.mark.asyncio

@@ -6,6 +6,7 @@ import type {
 import {
   INTERACTIVE_APPROVED_SEND_SYSTEM_PROMPT,
   INTERACTIVE_INTERNAL_SYSTEM_PROMPT,
+  INTERACTIVE_SIGNAL_APPETITE_SYSTEM_PROMPT,
 } from '@story2u/radar-agent/interactive';
 import type { OpportunityDetail } from '@story2u/radar-contracts/opportunities';
 import { describe, expect, it, vi } from 'vitest';
@@ -165,6 +166,34 @@ function sendToolResponse() {
                 opportunity_id: opportunityId,
                 text: 'Model-proposed reply',
               }),
+            },
+          }],
+        },
+        finish_reason: null,
+      }],
+    },
+    {
+      model: 'radar-interactive-v1',
+      choices: [{ index: 0, delta: {}, finish_reason: 'tool_calls' }],
+    },
+  ]);
+}
+
+function applyAppetiteToolResponse() {
+  return response([
+    {
+      model: 'radar-interactive-v1',
+      choices: [{
+        index: 0,
+        delta: {
+          role: 'assistant',
+          tool_calls: [{
+            index: 0,
+            id: 'call-apply-appetite',
+            type: 'function',
+            function: {
+              name: 'apply_appetite_change',
+              arguments: JSON.stringify({ preference_version: 2 }),
             },
           }],
         },
@@ -466,6 +495,63 @@ describe('interactive RN pi host', () => {
         toolName: 'send_reply',
         result: expect.objectContaining({ sent: true, state: 'sent' }),
       }),
+    ]));
+  });
+
+  it('blocks appetite apply when the host confirmation is denied', async () => {
+    const requests: Array<Record<string, unknown>> = [];
+    const fetch = vi.fn(async (_url: string, init: RequestInit) => {
+      requests.push(JSON.parse(String(init.body)));
+      return requests.length === 1 ? applyAppetiteToolResponse() : answerResponse();
+    });
+    const runAsync = vi.fn(async () => undefined);
+    const database = {
+      async getAllAsync<Row>() { return [] as Row[]; },
+      async getFirstAsync<Row>() { return null as Row | null; },
+      runAsync,
+      async withExclusiveTransactionAsync(task: (transaction: SyncStoreExecutor) => Promise<void>) {
+        await task(this);
+      },
+    };
+    const requestAppetiteApproval = vi.fn(async () => false);
+
+    const result = await runInteractiveAgentHost({
+      approvedSendDependencies: {
+        decide: vi.fn(async () => { throw new Error('send must not run'); }),
+        execute: vi.fn(async () => { throw new Error('send must not run'); }),
+      },
+      baseUrl: 'https://api.example.test',
+      claim: {
+        ...claim(),
+        schemaVersion: 4,
+        policyVersion: 'interactive-signal-appetite-v4',
+      },
+      database,
+      entries: [{
+        ownerId,
+        sessionId,
+        seq: 1,
+        content: { type: 'user', text: 'Apply version two.' },
+        createdAt: '2026-07-18T10:00:00Z',
+      }],
+      fetch,
+      ownerId,
+      randomId: () => '91234567-89ab-4def-8123-456789abcdef',
+      requestApproval: async () => ({ approved: false, text: '' }),
+      requestAppetiteApproval,
+    });
+
+    expect((requests[0]?.messages as Array<Record<string, unknown>>)[0]).toEqual({
+      role: 'system',
+      content: INTERACTIVE_SIGNAL_APPETITE_SYSTEM_PROMPT,
+    });
+    expect(requestAppetiteApproval).toHaveBeenCalledWith({
+      preferenceVersion: 2,
+      toolCallId: 'call-apply-appetite',
+    }, expect.any(AbortSignal));
+    expect(runAsync).not.toHaveBeenCalled();
+    expect(result.entries).toEqual(expect.arrayContaining([
+      expect.objectContaining({ type: 'tool_call', toolName: 'apply_appetite_change' }),
     ]));
   });
 

@@ -7,8 +7,11 @@ import {
   INTERACTIVE_INTERNAL_ACTION_TOOLS,
   INTERACTIVE_INTERNAL_TOOLS,
   INTERACTIVE_READ_ONLY_TOOLS,
+  INTERACTIVE_SIGNAL_APPETITE_ALL_TOOLS,
+  INTERACTIVE_SIGNAL_APPETITE_TOOLS,
   interactiveAgentContractForSchema,
   type InteractiveAgentContract,
+  type InteractiveAppetiteToolName,
   type InteractiveExternalToolName,
   type InteractiveInternalToolName,
   type InteractiveReadOnlyToolName,
@@ -23,6 +26,7 @@ import {
   type InteractiveInternalToolDependencies,
 } from './internalTools';
 import { executeInteractiveReadOnlyTool } from './readOnlyTools';
+import { executeInteractiveAppetiteTool } from './appetiteTools';
 import type { AgentEntryContent, LocalAgentEntry } from './sessionStore';
 import {
   createInteractiveApprovedSendCoordinator,
@@ -42,9 +46,22 @@ const internalToolNames = new Set<InteractiveInternalToolName>(
 const externalToolNames = new Set<InteractiveExternalToolName>(
   INTERACTIVE_EXTERNAL_ACTION_TOOLS.map((tool) => tool.name as InteractiveExternalToolName),
 );
-const allToolNames = new Set<InteractiveToolName>(
-  INTERACTIVE_APPROVED_SEND_TOOLS.map((tool) => tool.name),
+const appetiteToolNames = new Set<InteractiveAppetiteToolName>(
+  INTERACTIVE_SIGNAL_APPETITE_TOOLS.map((tool) => tool.name as InteractiveAppetiteToolName),
 );
+const allToolNames = new Set<InteractiveToolName>(
+  INTERACTIVE_SIGNAL_APPETITE_ALL_TOOLS.map((tool) => tool.name),
+);
+
+export interface InteractiveAppetiteApprovalRequest {
+  preferenceVersion: number;
+  toolCallId: string;
+}
+
+export type RequestInteractiveAppetiteApproval = (
+  request: InteractiveAppetiteApprovalRequest,
+  signal?: AbortSignal,
+) => Promise<boolean>;
 
 function gatewayModel(baseUrl: string, modelAlias: string): Model<'radar-interactive-gateway'> {
   return {
@@ -249,6 +266,8 @@ function createTools(
     signal?: AbortSignal,
   ) => Promise<Record<string, unknown>>,
   internalToolDependencies?: InteractiveInternalToolDependencies,
+  approvedApplyCalls: ReadonlySet<string> = new Set(),
+  deviceId = '',
 ): AgentTool[] {
   const allowedReadTools = new Set<InteractiveReadOnlyToolName>(
     contract.tools
@@ -262,6 +281,13 @@ function createTools(
       .map((tool) => tool.name)
       .filter((name): name is InteractiveInternalToolName => internalToolNames.has(
         name as InteractiveInternalToolName,
+      )),
+  );
+  const allowedAppetiteTools = new Set<InteractiveAppetiteToolName>(
+    contract.tools
+      .map((tool) => tool.name)
+      .filter((name): name is InteractiveAppetiteToolName => appetiteToolNames.has(
+        name as InteractiveAppetiteToolName,
       )),
   );
   return contract.tools.map((definition) => ({
@@ -278,6 +304,16 @@ function createTools(
         )
         : externalToolNames.has(definition.name as InteractiveExternalToolName)
           ? await executeApprovedSend(_toolCallId, parameters, signal)
+          : appetiteToolNames.has(definition.name as InteractiveAppetiteToolName)
+            ? await executeInteractiveAppetiteTool(database, {
+              allowedTools: allowedAppetiteTools,
+              approvedApplyCalls,
+              call: { name: definition.name, arguments: parameters, toolCallId: _toolCallId },
+              deviceId,
+              ownerId,
+              randomId,
+              signal,
+            })
           : await executeInteractiveInternalTool(database, {
             allowedTools: allowedInternalTools,
             baseUrl,
@@ -370,6 +406,7 @@ export interface RunInteractiveAgentHostOptions {
   ownerId: string;
   randomId(): string;
   requestApproval?: RequestInteractiveSendApproval;
+  requestAppetiteApproval?: RequestInteractiveAppetiteApproval;
   signal?: AbortSignal;
 }
 
@@ -391,6 +428,7 @@ export async function runInteractiveAgentHost({
   ownerId,
   randomId,
   requestApproval,
+  requestAppetiteApproval,
   signal,
 }: RunInteractiveAgentHostOptions): Promise<InteractiveAgentHostResult> {
   if (
@@ -427,6 +465,7 @@ export async function runInteractiveAgentHost({
   const allowedToolNames = new Set<InteractiveToolName>(
     contract.tools.map((tool) => tool.name),
   );
+  const approvedApplyCalls = new Set<string>();
   const model = gatewayModel(baseUrl, claim.modelAlias);
   const initialMessages = boundedInteractiveContext(
     localEntriesToAgentMessages(entries, model, allowedToolNames),
@@ -450,6 +489,8 @@ export async function runInteractiveAgentHost({
           return approvedSend.execute(toolCallId, parameters, executionSignal);
         },
         internalToolDependencies,
+        approvedApplyCalls,
+        claim.deviceId,
       ),
       messages: initialMessages,
     },
@@ -464,6 +505,19 @@ export async function runInteractiveAgentHost({
     beforeToolCall: async ({ args, toolCall }, toolSignal) => {
       if (!allowedToolNames.has(toolCall.name as InteractiveToolName)) {
         return { block: true, reason: 'Only tools registered for this session are allowed' };
+      }
+      if (toolCall.name === 'apply_appetite_change') {
+        const preferenceVersion = Number((args as Record<string, unknown>).preference_version);
+        if (!requestAppetiteApproval || !Number.isInteger(preferenceVersion)) {
+          return { block: true, reason: 'Explicit appetite confirmation is unavailable' };
+        }
+        const approved = await requestAppetiteApproval({
+          preferenceVersion,
+          toolCallId: toolCall.id,
+        }, toolSignal);
+        if (!approved) return { block: true, reason: 'The user did not apply this appetite change' };
+        approvedApplyCalls.add(toolCall.id);
+        return undefined;
       }
       if (toolCall.name !== 'send_reply') return undefined;
       if (!approvedSend) {

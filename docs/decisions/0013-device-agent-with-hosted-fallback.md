@@ -1,4 +1,4 @@
-# ADR-0010：端上 pi Agent 优先，服务端网关与 runner 兜底
+# ADR-0013：端上 pi Agent 优先，服务端网关与 runner 兜底
 
 > 状态：accepted · 日期：2026-07-17
 
@@ -53,4 +53,3 @@
 - 数据库/API 测试覆盖 claim 竞态、租约回收、重复 complete/fail、owner 隔离和账本 reserve/consume/release。
 - 网关测试覆盖正文/速率上限、取消、provider 错误、无正文日志与模型 alias；隔离环境才做真实 provider smoke。
 - 端上成功率、P95、重复 run、quota 漂移或 fallback 延迟达不到发布阈值时关闭 capability，不下发 key。
-

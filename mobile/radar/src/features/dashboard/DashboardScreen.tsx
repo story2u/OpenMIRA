@@ -628,6 +628,20 @@ export default function DashboardScreen() {
         </View>
       </View>
 
+      <Pressable
+        accessibilityRole="button"
+        onPress={() => router.push('/teaching' as Href)}
+        style={({ pressed }) => [styles.appetiteCard, pressed && styles.pressed]}
+      >
+        <View style={styles.appetiteMark}><Text style={styles.appetiteGlyph}>✦</Text></View>
+        <View style={styles.appetiteCopy}>
+          <Text style={styles.appetiteEyebrow}>{t('dashboard.appetite.eyebrow')}</Text>
+          <Text style={styles.appetiteTitle}>{t('dashboard.appetite.title')}</Text>
+          <Text style={styles.appetiteDetail}>{t('dashboard.appetite.detail')}</Text>
+        </View>
+        <Text style={styles.appetiteAction}>{t('dashboard.appetite.action')} ›</Text>
+      </Pressable>
+
       {dashboard ? <AttentionBanner dashboard={dashboard} /> : null}
       {commandSummary.pendingCount > 0 ? (
         <View accessibilityLiveRegion="polite" style={styles.commandNotice}>
@@ -779,6 +793,18 @@ const styles = StyleSheet.create({
   pendingBadge: { minWidth: 70, alignItems: 'center', borderRadius: 16, backgroundColor: colors.card, padding: 10 },
   pendingCount: { color: colors.warning, fontSize: 22, fontWeight: '900' },
   pendingLabel: { marginTop: 2, color: colors.mutedText, fontSize: 11 },
+  appetiteCard: {
+    flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 16,
+    borderRadius: 20, borderWidth: 1, borderColor: '#245b5e',
+    backgroundColor: '#0d2a32', padding: 15,
+  },
+  appetiteMark: { width: 42, height: 42, alignItems: 'center', justifyContent: 'center', borderRadius: 15, backgroundColor: colors.accentMuted },
+  appetiteGlyph: { color: colors.accent, fontSize: 19 },
+  appetiteCopy: { flex: 1, gap: 3 },
+  appetiteEyebrow: { color: colors.accent, fontSize: 9, fontWeight: '900', letterSpacing: 1.1 },
+  appetiteTitle: { color: colors.text, fontSize: 15, fontWeight: '900' },
+  appetiteDetail: { color: colors.mutedText, fontSize: 11, lineHeight: 16 },
+  appetiteAction: { maxWidth: 62, color: colors.accent, fontSize: 11, fontWeight: '900', textAlign: 'right' },
   attentionBanner: { marginBottom: 18, borderWidth: 1, borderColor: colors.warning, borderRadius: 14, backgroundColor: colors.noticeBackground, padding: 14 },
   attentionTitle: { color: colors.noticeText, fontSize: 14, fontWeight: '800' },
   attentionDescription: { marginTop: 5, color: colors.noticeText, fontSize: 12, lineHeight: 18 },

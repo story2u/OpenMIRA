@@ -1,4 +1,4 @@
-# ADR-0009：移动端迁移到 React Native + Expo 单代码库
+# ADR-0012：移动端迁移到 React Native + Expo 单代码库
 
 > 状态：accepted · 日期：2026-07-17 · supersedes ADR-0006
 
@@ -48,7 +48,7 @@ ADR-0006 提议以 SwiftUI 与 Jetpack Compose 维护两个瘦客户端。该提
 按平台实现。成本：新增 Metro/Expo/EAS 可选工具链；原生换装期间同时维护两代 App；必须解决 token、
 RevenueCat、OAuth audience、深链和商店升级兼容。
 
-本决策不证明 pi 能在 Hermes 运行；该能力由 ADR-0010 和 P0 双平台 release spike 单独裁决。即使 pi
+本决策不证明 pi 能在 Hermes 运行；该能力由 ADR-0013 和 P0 双平台 release spike 单独裁决。即使 pi
 spike 失败，RN 客户端迁移仍继续，Agent 暂留服务端。
 
 ## 验证与复审
@@ -58,4 +58,3 @@ spike 失败，RN 客户端迁移仍继续，Agent 暂留服务端。
   或隐藏失败状态标记完成。
 - 真实换装前验证旧版 token、RevenueCat entitlement、OAuth、深链、推送 token、账号切换与登出清理。
 - 若 Expo SDK 阻塞必须的原生能力，先尝试最小 Expo Module；只有可复现的性能/兼容证据才能复审 bare RN。
-

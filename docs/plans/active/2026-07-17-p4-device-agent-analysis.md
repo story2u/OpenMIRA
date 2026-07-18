@@ -24,7 +24,7 @@ runner，成功后消费、最终失败后释放。RN 已能在 iOS Hermes 用 f
 `expo/fetch` SSE/Abort spike，但 production capability 固定关闭，尚无可领取的 analysis run、短期 run
 token、租约、网关成本记录或设备完成结果 API。
 
-权威约束见 ADR-0010、总计划 P4、安全基线和订阅用量计划。P0 go/no-go 仍要求真实 gateway adapter、
+权威约束见 ADR-0013、总计划 P4、安全基线和订阅用量计划。P0 go/no-go 仍要求真实 gateway adapter、
 Android Hermes 运行态、前后台/被杀恢复及同签名升级证据；因此本计划先建立默认关闭、可独立验证和可回滚
 的纵向切片。
 

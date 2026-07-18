@@ -3,7 +3,7 @@ import type { InternalOpportunityStatus } from '@story2u/radar-contracts/opportu
 import type { OpportunityDetail } from '@story2u/radar-contracts/opportunities';
 import type { ReplyTemplate } from '@story2u/radar-contracts/templates';
 import { randomUUID } from 'expo-crypto';
-import { useRouter } from 'expo-router';
+import { type Href, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import {
   memo,
@@ -692,6 +692,20 @@ export default function OpportunityDetailScreen({ opportunityId }: { opportunity
                 onClaim={claim}
                 onStatus={setStatus}
               />
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => {
+                  const prompt = t('agent.context.teachOpportunity', { opportunityId: data.detail.id });
+                  router.push(`/(tabs)/agent?prompt=${encodeURIComponent(prompt)}` as Href);
+                }}
+                style={styles.teachPiCard}
+              >
+                <View style={styles.teachPiCopy}>
+                  <Text style={styles.teachPiTitle}>{t('opportunity.teachPi.title')}</Text>
+                  <Text style={styles.teachPiDetail}>{t('opportunity.teachPi.detail')}</Text>
+                </View>
+                <Text style={styles.teachPiArrow}>›</Text>
+              </Pressable>
             </View>
           )}
           onRefresh={retry}
@@ -755,6 +769,11 @@ const styles = StyleSheet.create({
   statusActionButton: { minHeight: 38, justifyContent: 'center', borderWidth: 1, borderColor: colors.border, borderRadius: 11, paddingHorizontal: 12, paddingVertical: 8 },
   dangerActionButton: { borderColor: colors.danger },
   statusActionText: { color: colors.text, fontSize: 12, fontWeight: '700' },
+  teachPiCard: { minHeight: 70, flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 16, borderWidth: 1, borderColor: '#27516a', borderRadius: 16, backgroundColor: '#0b1b2d', padding: 14 },
+  teachPiCopy: { flex: 1, gap: 4 },
+  teachPiTitle: { color: colors.text, fontSize: 14, fontWeight: '900' },
+  teachPiDetail: { color: colors.mutedText, fontSize: 11, lineHeight: 16 },
+  teachPiArrow: { color: colors.accent, fontSize: 25 },
   messageRow: { marginBottom: 14, maxWidth: '88%' },
   incomingRow: { alignSelf: 'flex-start' },
   outgoingRow: { alignSelf: 'flex-end' },

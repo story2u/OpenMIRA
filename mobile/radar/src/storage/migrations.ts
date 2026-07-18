@@ -211,6 +211,174 @@ const interactiveAgentSessionSchema = `
   ) WITHOUT ROWID;
 `;
 
+const signalAppetiteSchema = `
+  CREATE TABLE attention_events (
+    local_sequence INTEGER PRIMARY KEY AUTOINCREMENT,
+    owner_id TEXT NOT NULL,
+    event_id TEXT NOT NULL,
+    device_id TEXT NOT NULL,
+    event_type TEXT NOT NULL CHECK (event_type IN (
+      'TeachingSessionStarted',
+      'TeachingCardPresented',
+      'PreferenceExampleCaptured',
+      'PreferenceExampleReverted',
+      'TeachingSessionCompleted',
+      'PreferenceChangeProposed',
+      'PreferenceSimulationCompleted',
+      'PreferenceShadowStarted',
+      'PreferenceApplied',
+      'PreferenceReverted',
+      'MessageFilterDecisionMade',
+      'MessageDecisionCorrected',
+      'IntentMapUpdated',
+      'TemporaryFocusCreated',
+      'TemporaryFocusExpired'
+    )),
+    aggregate_id TEXT NOT NULL,
+    aggregate_version INTEGER NOT NULL CHECK (aggregate_version > 0),
+    schema_version INTEGER NOT NULL CHECK (schema_version = 1),
+    payload_json TEXT NOT NULL CHECK (json_valid(payload_json) AND length(payload_json) <= 65536),
+    occurred_at TEXT NOT NULL,
+    sync_status TEXT NOT NULL DEFAULT 'pending'
+      CHECK (sync_status IN ('pending', 'synced', 'error')),
+    server_cursor INTEGER CHECK (server_cursor IS NULL OR server_cursor > 0),
+    UNIQUE (owner_id, event_id)
+  );
+
+  CREATE INDEX attention_events_owner_sequence_idx
+    ON attention_events (owner_id, local_sequence);
+  CREATE INDEX attention_events_pending_idx
+    ON attention_events (owner_id, local_sequence)
+    WHERE sync_status IN ('pending', 'error');
+
+  CREATE TABLE attention_preferences (
+    owner_id TEXT NOT NULL,
+    id TEXT NOT NULL,
+    version INTEGER NOT NULL CHECK (version > 0),
+    title TEXT NOT NULL CHECK (length(title) BETWEEN 1 AND 120),
+    natural_language_summary TEXT NOT NULL CHECK (length(natural_language_summary) <= 4000),
+    scope TEXT NOT NULL CHECK (scope IN ('all_messages', 'opportunities', 'jobs')),
+    status TEXT NOT NULL CHECK (status IN ('candidate', 'active', 'superseded', 'reverted')),
+    confidence REAL NOT NULL CHECK (confidence BETWEEN 0 AND 1),
+    active_from TEXT,
+    active_until TEXT,
+    schedule_json TEXT NOT NULL CHECK (json_valid(schedule_json)),
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (owner_id, id, version)
+  ) WITHOUT ROWID;
+
+  CREATE UNIQUE INDEX attention_preferences_one_active_idx
+    ON attention_preferences (owner_id) WHERE status = 'active';
+
+  CREATE TABLE attention_intents (
+    owner_id TEXT NOT NULL,
+    id TEXT NOT NULL,
+    preference_id TEXT NOT NULL,
+    preference_version INTEGER NOT NULL CHECK (preference_version > 0),
+    concept TEXT NOT NULL CHECK (length(concept) BETWEEN 1 AND 120),
+    intent_type TEXT NOT NULL CHECK (intent_type IN ('include', 'reduce', 'context')),
+    weight REAL NOT NULL CHECK (weight BETWEEN -1 AND 1),
+    delivery_mode TEXT NOT NULL CHECK (delivery_mode IN ('immediate', 'inbox', 'digest', 'suppress')),
+    confidence REAL NOT NULL CHECK (confidence BETWEEN 0 AND 1),
+    user_confirmed INTEGER NOT NULL CHECK (user_confirmed IN (0, 1)),
+    source TEXT NOT NULL CHECK (source IN ('teaching', 'conversation', 'correction', 'temporary_focus')),
+    valid_from TEXT,
+    valid_until TEXT,
+    PRIMARY KEY (owner_id, id, preference_version),
+    FOREIGN KEY (owner_id, preference_id, preference_version)
+      REFERENCES attention_preferences (owner_id, id, version) ON DELETE CASCADE
+  ) WITHOUT ROWID;
+
+  CREATE INDEX attention_intents_preference_idx
+    ON attention_intents (owner_id, preference_id, preference_version);
+
+  CREATE TABLE teaching_sessions (
+    owner_id TEXT NOT NULL,
+    id TEXT NOT NULL,
+    started_at TEXT NOT NULL,
+    completed_at TEXT,
+    target_count INTEGER NOT NULL CHECK (target_count BETWEEN 1 AND 15),
+    presented_count INTEGER NOT NULL DEFAULT 0 CHECK (presented_count >= 0),
+    positive_count INTEGER NOT NULL DEFAULT 0 CHECK (positive_count >= 0),
+    negative_count INTEGER NOT NULL DEFAULT 0 CHECK (negative_count >= 0),
+    skipped_count INTEGER NOT NULL DEFAULT 0 CHECK (skipped_count >= 0),
+    status TEXT NOT NULL CHECK (status IN ('active', 'summarized', 'completed', 'abandoned')),
+    proposed_preference_version INTEGER,
+    summary_json TEXT CHECK (summary_json IS NULL OR json_valid(summary_json)),
+    PRIMARY KEY (owner_id, id)
+  ) WITHOUT ROWID;
+
+  CREATE TABLE preference_examples (
+    owner_id TEXT NOT NULL,
+    id TEXT NOT NULL,
+    message_id TEXT NOT NULL,
+    label TEXT NOT NULL CHECK (label IN ('positive', 'negative', 'skipped', 'boundary')),
+    selected_reasons_json TEXT NOT NULL CHECK (json_valid(selected_reasons_json)),
+    freeform_reason TEXT CHECK (freeform_reason IS NULL OR length(freeform_reason) <= 1000),
+    captured_at TEXT NOT NULL,
+    teaching_session_id TEXT NOT NULL,
+    reverted_at TEXT,
+    PRIMARY KEY (owner_id, id),
+    FOREIGN KEY (owner_id, teaching_session_id)
+      REFERENCES teaching_sessions (owner_id, id) ON DELETE CASCADE
+  ) WITHOUT ROWID;
+
+  CREATE INDEX preference_examples_session_idx
+    ON preference_examples (owner_id, teaching_session_id, captured_at, id);
+  CREATE INDEX preference_examples_message_idx
+    ON preference_examples (owner_id, message_id, captured_at DESC);
+
+  CREATE TABLE message_filter_decisions (
+    owner_id TEXT NOT NULL,
+    message_id TEXT NOT NULL,
+    preference_version INTEGER NOT NULL CHECK (preference_version > 0),
+    decision TEXT NOT NULL CHECK (decision IN ('immediate', 'inbox', 'digest', 'suppress')),
+    confidence REAL NOT NULL CHECK (confidence BETWEEN 0 AND 1),
+    reason_summary TEXT NOT NULL CHECK (length(reason_summary) BETWEEN 1 AND 1000),
+    evidence_json TEXT NOT NULL CHECK (json_valid(evidence_json)),
+    evaluator TEXT NOT NULL CHECK (evaluator IN ('deterministic', 'on_device_model', 'cloud_agent')),
+    decided_at TEXT NOT NULL,
+    expires_at TEXT,
+    PRIMARY KEY (owner_id, message_id)
+  ) WITHOUT ROWID;
+
+  CREATE INDEX message_filter_decisions_delivery_idx
+    ON message_filter_decisions (owner_id, decision, decided_at DESC);
+
+  CREATE TABLE shadow_evaluations (
+    owner_id TEXT NOT NULL,
+    id TEXT NOT NULL,
+    old_version INTEGER NOT NULL CHECK (old_version > 0),
+    candidate_version INTEGER NOT NULL CHECK (candidate_version > 0),
+    started_at TEXT NOT NULL,
+    ends_at TEXT NOT NULL,
+    diff_summary_json TEXT NOT NULL CHECK (json_valid(diff_summary_json)),
+    status TEXT NOT NULL CHECK (status IN ('running', 'completed', 'applied', 'abandoned')),
+    PRIMARY KEY (owner_id, id)
+  ) WITHOUT ROWID;
+
+  CREATE TABLE temporary_focuses (
+    owner_id TEXT NOT NULL,
+    id TEXT NOT NULL,
+    concept TEXT NOT NULL CHECK (length(concept) BETWEEN 1 AND 120),
+    delivery_mode TEXT NOT NULL CHECK (delivery_mode IN ('immediate', 'inbox', 'digest', 'suppress')),
+    created_at TEXT NOT NULL,
+    expires_at TEXT NOT NULL,
+    expired_at TEXT,
+    PRIMARY KEY (owner_id, id)
+  ) WITHOUT ROWID;
+`;
+
+const signalAppetiteUiSchema = `
+  CREATE TABLE signal_appetite_ui_state (
+    owner_id TEXT NOT NULL PRIMARY KEY,
+    teaching_onboarding_seen INTEGER NOT NULL DEFAULT 0
+      CHECK (teaching_onboarding_seen IN (0, 1)),
+    updated_at TEXT NOT NULL
+  ) WITHOUT ROWID;
+`;
+
 export const radarMigrations: readonly RadarMigration[] = Object.freeze([
   {
     version: 1,
@@ -236,6 +404,16 @@ export const radarMigrations: readonly RadarMigration[] = Object.freeze([
     version: 5,
     name: 'interactive_agent_local_sessions',
     up: (executor) => executor.execAsync(interactiveAgentSessionSchema),
+  },
+  {
+    version: 6,
+    name: 'signal_appetite_event_log_and_projections',
+    up: (executor) => executor.execAsync(signalAppetiteSchema),
+  },
+  {
+    version: 7,
+    name: 'signal_appetite_local_ui_state',
+    up: (executor) => executor.execAsync(signalAppetiteUiSchema),
   },
 ]);
 

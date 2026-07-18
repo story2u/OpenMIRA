@@ -1,4 +1,5 @@
 import { randomUUID } from 'expo-crypto';
+import { useLocalSearchParams } from 'expo-router';
 import type { InteractiveToolName } from '@story2u/radar-agent/interactive';
 import type { InternalOpportunityStatus } from '@story2u/radar-contracts/opportunity-actions';
 import {
@@ -44,6 +45,9 @@ import type {
   InteractiveSendApprovalRequest,
 } from '../../agent/interactive/approvedSend';
 import { interactiveToolPresentation } from './toolPresentation';
+import type {
+  InteractiveAppetiteApprovalRequest,
+} from '../../agent/interactive/host';
 
 interface StreamingBubbleHandle {
   clear(): void;
@@ -63,6 +67,21 @@ const toolLabelKeys: Record<InteractiveToolName, MessageKey> = {
   update_status: 'agent.tool.updateStatus',
   claim_opportunity: 'agent.tool.claimOpportunity',
   send_reply: 'agent.tool.sendReply',
+  inspect_signal_appetite: 'agent.tool.inspectAppetite',
+  start_teaching_session: 'agent.tool.startTeaching',
+  capture_preference_example: 'agent.tool.captureExample',
+  summarize_teaching_session: 'agent.tool.summarizeTeaching',
+  propose_appetite_change: 'agent.tool.proposeAppetite',
+  simulate_appetite: 'agent.tool.simulateAppetite',
+  apply_appetite_change: 'agent.tool.applyAppetite',
+  start_shadow_mode: 'agent.tool.startShadow',
+  explain_message_decision: 'agent.tool.explainDecision',
+  list_suppressed_samples: 'agent.tool.listQuietZone',
+  correct_message_decision: 'agent.tool.correctDecision',
+  create_temporary_focus: 'agent.tool.createFocus',
+  update_attention_schedule: 'agent.tool.updateSchedule',
+  undo_preference_change: 'agent.tool.undoAppetite',
+  compare_preference_versions: 'agent.tool.compareAppetite',
 };
 const statusLabelKeys: Record<InternalOpportunityStatus, MessageKey> = {
   pending_human: 'opportunity.status.pendingHuman',
@@ -143,6 +162,32 @@ const ApprovalCard = memo(function ApprovalCard({
   );
 });
 
+const AppetiteApprovalCard = memo(function AppetiteApprovalCard({
+  request,
+  onDecision,
+}: {
+  request: InteractiveAppetiteApprovalRequest;
+  onDecision(approved: boolean): void;
+}) {
+  const { t } = useI18n();
+  return (
+    <View accessibilityRole="summary" style={[styles.approvalCard, styles.appetiteApprovalCard]}>
+      <Text style={styles.toolCardTitle}>{t('agent.appetiteApproval.title')}</Text>
+      <Text style={styles.toolCardBody}>{t('agent.appetiteApproval.version', { version: request.preferenceVersion })}</Text>
+      <Text style={styles.approvalRisk}>{t('agent.appetiteApproval.risk')}</Text>
+      <Text style={styles.toolCardMeta}>{t('agent.appetiteApproval.validity')}</Text>
+      <View style={styles.approvalActions}>
+        <Pressable accessibilityRole="button" onPress={() => onDecision(false)} style={styles.denyButton}>
+          <Text style={styles.cancelButtonText}>{t('agent.appetiteApproval.deny')}</Text>
+        </Pressable>
+        <Pressable accessibilityRole="button" onPress={() => onDecision(true)} style={styles.approveButton}>
+          <Text style={styles.sendButtonText}>{t('agent.appetiteApproval.approve')}</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+});
+
 function entryKey(entry: LocalAgentEntry) {
   return `${entry.sessionId}:${entry.seq}`;
 }
@@ -173,7 +218,7 @@ const AgentEntry = memo(function AgentEntry({
     return (
       <Text style={styles.toolStatus}>
         {t(
-          entry.content.toolName === 'send_reply'
+          entry.content.toolName === 'send_reply' || entry.content.toolName === 'apply_appetite_change'
             ? 'agent.tool.awaitingApproval'
             : readOnlyToolNames.has(entry.content.toolName)
               ? 'agent.tool.reading'
@@ -249,6 +294,7 @@ const AgentEntry = memo(function AgentEntry({
 });
 
 export default function AgentScreen() {
+  const params = useLocalSearchParams<{ prompt?: string | string[] }>();
   const { capabilities, state } = useSession();
   const { t } = useI18n();
   const [sessions, setSessions] = useState<LocalAgentSession[]>([]);
@@ -263,13 +309,22 @@ export default function AgentScreen() {
     request: InteractiveSendApprovalRequest;
     text: string;
   } | null>(null);
+  const [pendingAppetiteApproval, setPendingAppetiteApproval] = useState<InteractiveAppetiteApprovalRequest | null>(null);
   const pendingApprovalController = useRef<{
     settle(decision: InteractiveSendApprovalDecision): void;
   } | null>(null);
+  const pendingAppetiteApprovalController = useRef<{ settle(approved: boolean): void } | null>(null);
+  const consumedPrompt = useRef<string | null>(null);
   const abortController = useRef<AbortController | null>(null);
   const stream = useRef<StreamingBubbleHandle>(null);
 
   const ownerId = state.status === 'authenticated' ? state.user.id : null;
+  const contextualPrompt = Array.isArray(params.prompt) ? params.prompt[0] : params.prompt;
+  useEffect(() => {
+    if (!contextualPrompt || consumedPrompt.current === contextualPrompt || running) return;
+    consumedPrompt.current = contextualPrompt;
+    setInput(contextualPrompt.slice(0, 8_000));
+  }, [contextualPrompt, running]);
   const loadSessions = useCallback(async (preferredSessionId?: string | null) => {
     if (!ownerId) return;
     const database = await initializeRadarDatabase();
@@ -392,6 +447,20 @@ export default function AgentScreen() {
           setPendingApproval({ request, text: request.proposedText });
           signal?.addEventListener('abort', denyOnAbort, { once: true });
         }),
+        requestAppetiteApproval: (request, signal) => new Promise((resolve) => {
+          const settle = (approved: boolean) => {
+            signal?.removeEventListener('abort', denyOnAbort);
+            pendingAppetiteApprovalController.current = null;
+            setPendingAppetiteApproval(null);
+            resolve(approved);
+          };
+          const denyOnAbort = () => settle(false);
+          if (signal?.aborted) { denyOnAbort(); return; }
+          pendingAppetiteApprovalController.current?.settle(false);
+          pendingAppetiteApprovalController.current = { settle };
+          setPendingAppetiteApproval(request);
+          signal?.addEventListener('abort', denyOnAbort, { once: true });
+        }),
       });
     } catch (caught) {
       setError(caught instanceof Error && caught.message === 'interactive_agent_cancelled'
@@ -400,6 +469,7 @@ export default function AgentScreen() {
     } finally {
       abortController.current = null;
       setPendingApproval(null);
+      setPendingAppetiteApproval(null);
       pendingApprovalController.current = null;
       setPendingUserText('');
       setRunning(false);
@@ -415,6 +485,10 @@ export default function AgentScreen() {
     if (!pendingApproval) return;
     pendingApprovalController.current?.settle({ approved, text: pendingApproval.text });
   }, [pendingApproval]);
+
+  const decideAppetiteApproval = useCallback((approved: boolean) => {
+    pendingAppetiteApprovalController.current?.settle(approved);
+  }, []);
 
   const useDraft = useCallback((draft: string) => {
     if (!running) setInput(draft);
@@ -524,6 +598,9 @@ export default function AgentScreen() {
                 onChangeText={updateApprovalText}
                 onDecision={decideApproval}
               />
+            ) : null}
+            {pendingAppetiteApproval ? (
+              <AppetiteApprovalCard onDecision={decideAppetiteApproval} request={pendingAppetiteApproval} />
             ) : null}
             {loading ? <ActivityIndicator color={colors.accent} style={styles.loading} /> : null}
           </View>
@@ -643,6 +720,7 @@ const styles = StyleSheet.create({
     marginTop: 10,
     padding: 14,
   },
+  appetiteApprovalCard: { borderColor: '#6d5ca5', backgroundColor: '#211d3b' },
   approvalLabel: { color: colors.text, fontSize: 13, fontWeight: '700' },
   approvalInput: {
     backgroundColor: colors.background,

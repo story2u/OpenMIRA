@@ -44,6 +44,7 @@ const clientCapabilities = {
   pushAvailable: false,
   rnClientSupported: true,
   syncAvailable: true,
+  signalAppetiteSyncAvailable: true,
 };
 const pushRegistration = {
   id: '31234567-89ab-cdef-0123-456789abcdef',

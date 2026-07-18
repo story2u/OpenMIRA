@@ -10,6 +10,7 @@ export const disabledCapabilities: Readonly<ClientCapabilities> = Object.freeze(
   pushAvailable: false,
   rnClientSupported: false,
   syncAvailable: false,
+  signalAppetiteSyncAvailable: false,
 });
 
 export function parseCapabilities(value: unknown): ClientCapabilities {

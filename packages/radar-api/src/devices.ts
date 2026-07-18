@@ -98,6 +98,7 @@ export const ClientCapabilitiesSchema = Type.Object(
     pushAvailable: Type.Boolean(),
     rnClientSupported: Type.Boolean(),
     syncAvailable: Type.Boolean(),
+    signalAppetiteSyncAvailable: Type.Boolean(),
   },
   { additionalProperties: false },
 );

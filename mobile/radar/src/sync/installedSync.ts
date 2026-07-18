@@ -2,6 +2,8 @@ import {
   acknowledgeSync,
   readSyncBootstrap,
   readSyncChanges,
+  appendSignalAppetiteEvents,
+  readSyncedSignalAppetiteEvents,
   updateOpportunityStatus,
 } from '../api/client';
 import type { InternalOpportunityStatus } from '@story2u/radar-contracts/opportunity-actions';
@@ -25,6 +27,7 @@ import {
   type SyncRunResult,
   type SyncTransport,
 } from './syncEngine';
+import { runSignalAppetiteSync, type SignalAppetiteSyncResult } from './signalAppetiteSync';
 
 function transportFor(baseUrl: string): SyncTransport {
   return {
@@ -37,6 +40,7 @@ function transportFor(baseUrl: string): SyncTransport {
 export interface InstalledSyncResult {
   commands: DrainCommandResult;
   sync: SyncRunResult;
+  signalAppetite: SignalAppetiteSyncResult | null;
 }
 
 const inFlight = new Map<string, Promise<InstalledSyncResult>>();
@@ -73,6 +77,7 @@ export async function synchronizeInstalledOwner(
   baseUrl: string,
   ownerId: string,
   signal?: AbortSignal,
+  options: { signalAppetiteSyncAvailable?: boolean } = {},
 ) {
   const key = `${baseUrl}\0${ownerId}`;
   const existing = inFlight.get(key);
@@ -101,7 +106,17 @@ export async function synchronizeInstalledOwner(
         if (commands.succeededCount > 0) {
           sync = await runOwnerSync(database, transportFor(baseUrl), ownerId, signal);
         }
-        return { commands, sync };
+        const signalAppetite = options.signalAppetiteSyncAvailable
+          ? await runSignalAppetiteSync(database, {
+              append: (input, appetiteSignal) => appendSignalAppetiteEvents(
+                baseUrl, input, appetiteSignal,
+              ),
+              list: (query, appetiteSignal) => readSyncedSignalAppetiteEvents(
+                baseUrl, query, appetiteSignal,
+              ),
+            }, ownerId, signal)
+          : null;
+        return { commands, sync, signalAppetite };
       } catch (error) {
         if (error instanceof LocalSyncStateError && !signal?.aborted) {
           await markLocalSyncError(database, ownerId, 'apply_failed');

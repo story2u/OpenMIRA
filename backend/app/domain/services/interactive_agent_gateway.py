@@ -1,3 +1,6 @@
+# Tool descriptions and prompts must stay byte-for-byte aligned with packages/radar-agent.
+# ruff: noqa: E501
+
 from __future__ import annotations
 
 import json
@@ -12,6 +15,8 @@ from app.domain.services.interactive_agent import (
     INTERACTIVE_AGENT_INTERNAL_TOOLS_SCHEMA_VERSION,
     INTERACTIVE_AGENT_READ_ONLY_POLICY_VERSION,
     INTERACTIVE_AGENT_READ_ONLY_SCHEMA_VERSION,
+    INTERACTIVE_AGENT_SIGNAL_APPETITE_POLICY_VERSION,
+    INTERACTIVE_AGENT_SIGNAL_APPETITE_SCHEMA_VERSION,
     supports_interactive_agent_contract,
 )
 
@@ -49,6 +54,17 @@ confirmation. Claim or send success may be stated only after the corresponding t
 Never claim that you contacted someone without a confirmed send_reply result. Never claim that you
 remembered data permanently or performed any other external action. If data is insufficient, say so.
 Keep answers concise and distinguish observed facts, queued work, confirmed actions, and suggestions."""
+
+INTERACTIVE_SIGNAL_APPETITE_SYSTEM_PROMPT = f"""{INTERACTIVE_APPROVED_SEND_SYSTEM_PROMPT}
+
+Signal Appetite means what deserves the user's attention right now. Use user-facing concepts such as
+keep, see less, temporary focus, remind now, later, evening digest, quiet zone, and why Pi decided.
+Do not expose rule builders, prompts, thresholds, embeddings, classifiers, raw payloads, or private
+chain-of-thought. Restate the user's intent in one sentence and ask at most two high-impact questions.
+Capture, summarize, propose, and simulate never activate a preference. apply_appetite_change may be
+called only after showing the preview and the host obtains separate explicit confirmation. Never claim
+a candidate is active, a shadow hides messages, or a cloud decision succeeded unless the tool result
+confirms it. Cloud unavailability must never be used as a reason to suppress a boundary message."""
 
 # Compatibility alias for tests and callers pinned to the v1 contract.
 INTERACTIVE_AGENT_SYSTEM_PROMPT = INTERACTIVE_READ_ONLY_SYSTEM_PROMPT
@@ -223,6 +239,166 @@ INTERACTIVE_APPROVED_SEND_TOOL_NAMES = frozenset(
     tool["function"]["name"] for tool in INTERACTIVE_APPROVED_SEND_TOOLS
 )
 
+_PREFERENCE_VERSION_SCHEMA = {"type": "integer", "minimum": 1, "maximum": 1_000_000}
+_DELIVERY_MODE_SCHEMA = {
+    "anyOf": [
+        {"const": value, "type": "string"}
+        for value in ("immediate", "inbox", "digest", "suppress")
+    ]
+}
+
+
+def _appetite_tool(
+    name: str,
+    description: str,
+    properties: dict[str, Any],
+    required: list[str] | None = None,
+) -> dict[str, Any]:
+    return {
+        "type": "function",
+        "function": {
+            "name": name,
+            "description": description,
+            "parameters": {
+                "type": "object",
+                "properties": properties,
+                **({"required": required} if required else {}),
+                "additionalProperties": False,
+            },
+            "strict": False,
+        },
+    }
+
+
+INTERACTIVE_SIGNAL_APPETITE_TOOLS: tuple[dict[str, Any], ...] = (
+    _appetite_tool(
+        "inspect_signal_appetite",
+        "Read the active appetite, schedule, temporary focuses, and bounded filter statistics.",
+        {},
+    ),
+    _appetite_tool(
+        "start_teaching_session",
+        "Select a diverse active-learning deck from eligible locally synchronized messages.",
+        {"target_count": {"type": "integer", "minimum": 5, "maximum": 15}},
+    ),
+    _appetite_tool(
+        "capture_preference_example",
+        "Record one positive, negative, or skipped teaching example without changing the active appetite.",
+        {
+            "message_id": _OPPORTUNITY_ID_SCHEMA,
+            "label": {
+                "anyOf": [
+                    {"const": value, "type": "string"}
+                    for value in ("positive", "negative", "skipped")
+                ]
+            },
+            "reasons": {
+                "type": "array",
+                "items": {"type": "string", "minLength": 1, "maxLength": 64},
+                "maxItems": 8,
+                "uniqueItems": True,
+            },
+            "freeform_reason": {"type": "string", "minLength": 1, "maxLength": 1_000},
+        },
+        ["message_id", "label"],
+    ),
+    _appetite_tool(
+        "summarize_teaching_session",
+        "Summarize the non-reverted examples in one teaching session.",
+        {"teaching_session_id": _OPPORTUNITY_ID_SCHEMA},
+        ["teaching_session_id"],
+    ),
+    _appetite_tool(
+        "propose_appetite_change",
+        "Create a candidate appetite version. This does not activate it.",
+        {"teaching_session_id": _OPPORTUNITY_ID_SCHEMA},
+        ["teaching_session_id"],
+    ),
+    _appetite_tool(
+        "simulate_appetite",
+        "Run a candidate version over bounded local message history without changing delivery.",
+        {"preference_version": _PREFERENCE_VERSION_SCHEMA},
+        ["preference_version"],
+    ),
+    _appetite_tool(
+        "apply_appetite_change",
+        "Activate one simulated candidate only after separate explicit user confirmation by the host.",
+        {"preference_version": _PREFERENCE_VERSION_SCHEMA},
+        ["preference_version"],
+    ),
+    _appetite_tool(
+        "start_shadow_mode",
+        "Compare active and candidate appetites without hiding messages.",
+        {
+            "preference_version": _PREFERENCE_VERSION_SCHEMA,
+            "duration_hours": {"type": "integer", "minimum": 1, "maximum": 72},
+        },
+        ["preference_version"],
+    ),
+    _appetite_tool(
+        "explain_message_decision",
+        "Read the user-facing reason, evidence, confidence, and processing location for one decision.",
+        {"message_id": _OPPORTUNITY_ID_SCHEMA},
+        ["message_id"],
+    ),
+    _appetite_tool(
+        "list_suppressed_samples",
+        "Read a bounded sample of messages currently kept in the quiet zone.",
+        {"limit": {"type": "integer", "minimum": 1, "maximum": 20}},
+    ),
+    _appetite_tool(
+        "correct_message_decision",
+        "Correct one decision and capture an auditable preference example.",
+        {
+            "message_id": _OPPORTUNITY_ID_SCHEMA,
+            "decision": _DELIVERY_MODE_SCHEMA,
+            "reason": {"type": "string", "minLength": 1, "maxLength": 1_000},
+        },
+        ["message_id", "decision"],
+    ),
+    _appetite_tool(
+        "create_temporary_focus",
+        "Create a time-bounded focus that expires automatically.",
+        {
+            "concept": {"type": "string", "minLength": 1, "maxLength": 120},
+            "duration_hours": {"type": "integer", "minimum": 1, "maximum": 720},
+            "delivery_mode": {
+                "anyOf": [
+                    {"const": value, "type": "string"}
+                    for value in ("immediate", "inbox", "digest")
+                ]
+            },
+        },
+        ["concept", "duration_hours"],
+    ),
+    _appetite_tool(
+        "update_attention_schedule",
+        "Turn one natural-language schedule instruction into a candidate appetite change.",
+        {"instruction": {"type": "string", "minLength": 1, "maxLength": 1_000}},
+        ["instruction"],
+    ),
+    _appetite_tool(
+        "undo_preference_change",
+        "Roll the active appetite back to the most recent prior version.",
+        {},
+    ),
+    _appetite_tool(
+        "compare_preference_versions",
+        "Compare two local versions and their intent-map structure.",
+        {
+            "from_version": _PREFERENCE_VERSION_SCHEMA,
+            "to_version": _PREFERENCE_VERSION_SCHEMA,
+        },
+        ["from_version", "to_version"],
+    ),
+)
+INTERACTIVE_SIGNAL_APPETITE_ALL_TOOLS = (
+    INTERACTIVE_APPROVED_SEND_TOOLS + INTERACTIVE_SIGNAL_APPETITE_TOOLS
+)
+INTERACTIVE_SIGNAL_APPETITE_TOOL_NAMES = frozenset(
+    tool["function"]["name"] for tool in INTERACTIVE_SIGNAL_APPETITE_ALL_TOOLS
+)
+
 
 @dataclass(frozen=True, slots=True)
 class InteractiveAgentGatewayContract:
@@ -266,6 +442,14 @@ def interactive_agent_gateway_contract(
             system_prompt=INTERACTIVE_APPROVED_SEND_SYSTEM_PROMPT,
             tools=INTERACTIVE_APPROVED_SEND_TOOLS,
             tool_names=INTERACTIVE_APPROVED_SEND_TOOL_NAMES,
+        )
+    if schema_version == INTERACTIVE_AGENT_SIGNAL_APPETITE_SCHEMA_VERSION:
+        return InteractiveAgentGatewayContract(
+            schema_version=schema_version,
+            policy_version=INTERACTIVE_AGENT_SIGNAL_APPETITE_POLICY_VERSION,
+            system_prompt=INTERACTIVE_SIGNAL_APPETITE_SYSTEM_PROMPT,
+            tools=INTERACTIVE_SIGNAL_APPETITE_ALL_TOOLS,
+            tool_names=INTERACTIVE_SIGNAL_APPETITE_TOOL_NAMES,
         )
     raise InteractiveAgentGatewayContractError()
 
@@ -381,6 +565,112 @@ def _valid_tool_arguments(name: str, arguments: str) -> bool:
             return False
         text = value["text"]
         return isinstance(text, str) and bool(text.strip()) and len(text) <= 4_000
+    if name in {"inspect_signal_appetite", "undo_preference_change"}:
+        return not value
+    if name == "start_teaching_session":
+        return set(value) <= {"target_count"} and (
+            "target_count" not in value
+            or _bounded_integer(value["target_count"], minimum=5, maximum=15)
+        )
+    if name == "capture_preference_example":
+        if not {"message_id", "label"} <= set(value) or set(value) - {
+            "message_id",
+            "label",
+            "reasons",
+            "freeform_reason",
+        }:
+            return False
+        try:
+            UUID(str(value["message_id"]))
+        except (ValueError, TypeError):
+            return False
+        reasons = value.get("reasons", [])
+        freeform = value.get("freeform_reason")
+        return (
+            value["label"] in {"positive", "negative", "skipped"}
+            and isinstance(reasons, list)
+            and len(reasons) <= 8
+            and len(set(reasons)) == len(reasons)
+            and all(isinstance(item, str) and 1 <= len(item) <= 64 for item in reasons)
+            and (
+                freeform is None
+                or isinstance(freeform, str)
+                and 1 <= len(freeform) <= 1_000
+            )
+        )
+    if name in {"summarize_teaching_session", "propose_appetite_change"}:
+        if set(value) != {"teaching_session_id"}:
+            return False
+        try:
+            UUID(str(value["teaching_session_id"]))
+        except (ValueError, TypeError):
+            return False
+        return True
+    if name in {"simulate_appetite", "apply_appetite_change"}:
+        return set(value) == {"preference_version"} and _bounded_integer(
+            value["preference_version"], minimum=1, maximum=1_000_000
+        )
+    if name == "start_shadow_mode":
+        return (
+            "preference_version" in value
+            and not set(value) - {"preference_version", "duration_hours"}
+            and _bounded_integer(value["preference_version"], minimum=1, maximum=1_000_000)
+            and (
+                "duration_hours" not in value
+                or _bounded_integer(value["duration_hours"], minimum=1, maximum=72)
+            )
+        )
+    if name == "explain_message_decision":
+        if set(value) != {"message_id"}:
+            return False
+        try:
+            UUID(str(value["message_id"]))
+        except (ValueError, TypeError):
+            return False
+        return True
+    if name == "list_suppressed_samples":
+        return set(value) <= {"limit"} and (
+            "limit" not in value or _bounded_integer(value["limit"], minimum=1, maximum=20)
+        )
+    if name == "correct_message_decision":
+        if not {"message_id", "decision"} <= set(value) or set(value) - {
+            "message_id",
+            "decision",
+            "reason",
+        }:
+            return False
+        try:
+            UUID(str(value["message_id"]))
+        except (ValueError, TypeError):
+            return False
+        reason = value.get("reason")
+        return value["decision"] in {"immediate", "inbox", "digest", "suppress"} and (
+            reason is None or isinstance(reason, str) and 1 <= len(reason) <= 1_000
+        )
+    if name == "create_temporary_focus":
+        if not {"concept", "duration_hours"} <= set(value) or set(value) - {
+            "concept",
+            "duration_hours",
+            "delivery_mode",
+        }:
+            return False
+        concept = value["concept"]
+        return (
+            isinstance(concept, str)
+            and 1 <= len(concept) <= 120
+            and _bounded_integer(value["duration_hours"], minimum=1, maximum=720)
+            and value.get("delivery_mode", "immediate") in {"immediate", "inbox", "digest"}
+        )
+    if name == "update_attention_schedule":
+        instruction = value.get("instruction")
+        return set(value) == {"instruction"} and (
+            isinstance(instruction, str) and 1 <= len(instruction) <= 1_000
+        )
+    if name == "compare_preference_versions":
+        return set(value) == {"from_version", "to_version"} and all(
+            _bounded_integer(value[key], minimum=1, maximum=1_000_000)
+            for key in ("from_version", "to_version")
+        )
     return False
 
 

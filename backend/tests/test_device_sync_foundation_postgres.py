@@ -19,13 +19,19 @@ from app.domain.enums import (
     SyncAggregateType,
     SyncOperation,
 )
+from app.application.dto import SignalAppetiteEventWrite
 from app.infrastructure.db.models import (
     Device,
     DeviceCredential,
     PushRegistration,
+    SignalAppetiteEvent,
     SyncChange,
     User,
     utc_now,
+)
+from app.infrastructure.db.signal_appetite_repository import (
+    SignalAppetiteEventConflictError,
+    SignalAppetiteRepository,
 )
 
 TEST_DATABASE_URL = os.getenv("SUBSCRIPTION_TEST_DATABASE_URL")
@@ -69,6 +75,11 @@ async def device_sync_subject() -> AsyncIterator[
 
     async with factory() as session:
         owner_ids = [owner.id, other_owner.id]
+        await session.exec(
+            delete(SignalAppetiteEvent).where(
+                SignalAppetiteEvent.owner_user_id.in_(owner_ids)
+            )
+        )
         await session.exec(delete(SyncChange).where(SyncChange.owner_user_id.in_(owner_ids)))
         await session.exec(
             delete(PushRegistration).where(PushRegistration.owner_user_id.in_(owner_ids))
@@ -80,6 +91,54 @@ async def device_sync_subject() -> AsyncIterator[
         await session.exec(delete(User).where(User.id.in_(owner_ids)))
         await session.commit()
     await engine.dispose()
+
+
+async def test_signal_appetite_repository_is_idempotent_and_owner_scoped(
+    device_sync_subject,
+) -> None:
+    factory, owner, other_owner, owned_device, foreign_device = device_sync_subject
+    event_id = uuid4()
+    aggregate_id = uuid4()
+    event = SignalAppetiteEventWrite(
+        eventId=event_id,
+        eventType="TeachingSessionStarted",
+        aggregateId=aggregate_id,
+        aggregateVersion=1,
+        occurredAt=utc_now(),
+        payload={"sessionId": str(aggregate_id), "targetCount": 8},
+    )
+
+    async with factory() as session:
+        repository = SignalAppetiteRepository(session)
+        first = await repository.append(
+            owner_user_id=owner.id,
+            device_id=owned_device.id,
+            events=[event],
+        )
+        duplicate = await repository.append(
+            owner_user_id=owner.id,
+            device_id=owned_device.id,
+            events=[event],
+        )
+        foreign = await repository.append(
+            owner_user_id=other_owner.id,
+            device_id=foreign_device.id,
+            events=[event],
+        )
+
+        assert first[0].cursor == duplicate[0].cursor
+        assert foreign[0].cursor != first[0].cursor
+        assert [row.event_id for row in await repository.list_events(
+            owner.id, after=0, limit=10
+        )] == [event_id]
+
+        conflicting = event.model_copy(update={"payload": {"targetCount": 9}})
+        with pytest.raises(SignalAppetiteEventConflictError):
+            await repository.append(
+                owner_user_id=owner.id,
+                device_id=owned_device.id,
+                events=[conflicting],
+            )
 
 
 async def test_installation_hash_is_unique_per_owner_but_not_globally(device_sync_subject) -> None:

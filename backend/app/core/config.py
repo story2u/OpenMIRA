@@ -33,6 +33,7 @@ class Settings(BaseSettings):
     sync_change_retention_days: int = Field(default=30, ge=1, le=365)
     sync_bootstrap_token_minutes: int = Field(default=60, ge=5, le=240)
     rn_sync_rollout_enabled: bool = False
+    signal_appetite_sync_enabled: bool = False
     rn_push_rollout_enabled: bool = False
     rn_device_agent_rollout_enabled: bool = False
     rn_device_agent_rollout_percentage: int = Field(default=0, ge=0, le=100)

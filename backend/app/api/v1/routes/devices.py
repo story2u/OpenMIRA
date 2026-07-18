@@ -133,6 +133,11 @@ async def get_current_device_capabilities(
         and not isinstance(sqlite_schema, bool)
         and sqlite_schema >= 3
     )
+    supports_signal_appetite_schema = (
+        isinstance(sqlite_schema, int)
+        and not isinstance(sqlite_schema, bool)
+        and sqlite_schema >= 6
+    )
     push_environment = reported.get("push.environment")
     supports_push_environment = isinstance(push_environment, str) and push_environment in {
         PushEnvironment.SANDBOX.value,
@@ -150,6 +155,11 @@ async def get_current_device_capabilities(
         rnClientSupported=react_native,
         deviceAgentAvailable=await agent_routing.capability_available(device),
         syncAvailable=sync_available,
+        signalAppetiteSyncAvailable=(
+            sync_available
+            and settings.signal_appetite_sync_enabled
+            and supports_signal_appetite_schema
+        ),
         pushAvailable=(
             sync_available
             and settings.rn_push_rollout_enabled

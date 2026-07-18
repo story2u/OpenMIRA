@@ -1140,6 +1140,11 @@
             "title": "Rnclientsupported",
             "type": "boolean"
           },
+          "signalAppetiteSyncAvailable": {
+            "default": false,
+            "title": "Signalappetitesyncavailable",
+            "type": "boolean"
+          },
           "syncAvailable": {
             "default": false,
             "title": "Syncavailable",
@@ -3537,6 +3542,238 @@
           }
         },
         "title": "SettingsCapabilitiesRead",
+        "type": "object"
+      },
+      "SignalAppetiteEventRead": {
+        "additionalProperties": false,
+        "properties": {
+          "aggregateId": {
+            "format": "uuid",
+            "title": "Aggregateid",
+            "type": "string"
+          },
+          "aggregateVersion": {
+            "exclusiveMinimum": 0.0,
+            "title": "Aggregateversion",
+            "type": "integer"
+          },
+          "cursor": {
+            "exclusiveMinimum": 0.0,
+            "title": "Cursor",
+            "type": "integer"
+          },
+          "deviceId": {
+            "format": "uuid",
+            "title": "Deviceid",
+            "type": "string"
+          },
+          "eventId": {
+            "format": "uuid",
+            "title": "Eventid",
+            "type": "string"
+          },
+          "eventType": {
+            "enum": [
+              "TeachingSessionStarted",
+              "TeachingCardPresented",
+              "PreferenceExampleCaptured",
+              "PreferenceExampleReverted",
+              "TeachingSessionCompleted",
+              "PreferenceChangeProposed",
+              "PreferenceSimulationCompleted",
+              "PreferenceShadowStarted",
+              "PreferenceApplied",
+              "PreferenceReverted",
+              "MessageFilterDecisionMade",
+              "MessageDecisionCorrected",
+              "IntentMapUpdated",
+              "TemporaryFocusCreated",
+              "TemporaryFocusExpired"
+            ],
+            "title": "Eventtype",
+            "type": "string"
+          },
+          "occurredAt": {
+            "format": "date-time",
+            "title": "Occurredat",
+            "type": "string"
+          },
+          "ownerId": {
+            "format": "uuid",
+            "title": "Ownerid",
+            "type": "string"
+          },
+          "payload": {
+            "additionalProperties": true,
+            "title": "Payload",
+            "type": "object"
+          },
+          "schemaVersion": {
+            "const": 1,
+            "default": 1,
+            "title": "Schemaversion",
+            "type": "integer"
+          },
+          "serverReceivedAt": {
+            "format": "date-time",
+            "title": "Serverreceivedat",
+            "type": "string"
+          }
+        },
+        "required": [
+          "eventId",
+          "eventType",
+          "aggregateId",
+          "aggregateVersion",
+          "occurredAt",
+          "payload",
+          "ownerId",
+          "deviceId",
+          "cursor",
+          "serverReceivedAt"
+        ],
+        "title": "SignalAppetiteEventRead",
+        "type": "object"
+      },
+      "SignalAppetiteEventWrite": {
+        "additionalProperties": false,
+        "properties": {
+          "aggregateId": {
+            "format": "uuid",
+            "title": "Aggregateid",
+            "type": "string"
+          },
+          "aggregateVersion": {
+            "exclusiveMinimum": 0.0,
+            "title": "Aggregateversion",
+            "type": "integer"
+          },
+          "eventId": {
+            "format": "uuid",
+            "title": "Eventid",
+            "type": "string"
+          },
+          "eventType": {
+            "enum": [
+              "TeachingSessionStarted",
+              "TeachingCardPresented",
+              "PreferenceExampleCaptured",
+              "PreferenceExampleReverted",
+              "TeachingSessionCompleted",
+              "PreferenceChangeProposed",
+              "PreferenceSimulationCompleted",
+              "PreferenceShadowStarted",
+              "PreferenceApplied",
+              "PreferenceReverted",
+              "MessageFilterDecisionMade",
+              "MessageDecisionCorrected",
+              "IntentMapUpdated",
+              "TemporaryFocusCreated",
+              "TemporaryFocusExpired"
+            ],
+            "title": "Eventtype",
+            "type": "string"
+          },
+          "occurredAt": {
+            "format": "date-time",
+            "title": "Occurredat",
+            "type": "string"
+          },
+          "payload": {
+            "additionalProperties": true,
+            "title": "Payload",
+            "type": "object"
+          },
+          "schemaVersion": {
+            "const": 1,
+            "default": 1,
+            "title": "Schemaversion",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "eventId",
+          "eventType",
+          "aggregateId",
+          "aggregateVersion",
+          "occurredAt",
+          "payload"
+        ],
+        "title": "SignalAppetiteEventWrite",
+        "type": "object"
+      },
+      "SignalAppetiteEventsAppendRead": {
+        "properties": {
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/SignalAppetiteEventRead"
+            },
+            "title": "Events",
+            "type": "array"
+          },
+          "serverCursor": {
+            "minimum": 0.0,
+            "title": "Servercursor",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "events",
+          "serverCursor"
+        ],
+        "title": "SignalAppetiteEventsAppendRead",
+        "type": "object"
+      },
+      "SignalAppetiteEventsAppendRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/SignalAppetiteEventWrite"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Events",
+            "type": "array"
+          }
+        },
+        "required": [
+          "events"
+        ],
+        "title": "SignalAppetiteEventsAppendRequest",
+        "type": "object"
+      },
+      "SignalAppetiteEventsPageRead": {
+        "properties": {
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/SignalAppetiteEventRead"
+            },
+            "title": "Events",
+            "type": "array"
+          },
+          "hasMore": {
+            "title": "Hasmore",
+            "type": "boolean"
+          },
+          "nextCursor": {
+            "minimum": 0.0,
+            "title": "Nextcursor",
+            "type": "integer"
+          },
+          "serverCursor": {
+            "minimum": 0.0,
+            "title": "Servercursor",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "events",
+          "nextCursor",
+          "serverCursor",
+          "hasMore"
+        ],
+        "title": "SignalAppetiteEventsPageRead",
         "type": "object"
       },
       "StatsSummaryRead": {
@@ -10181,6 +10418,111 @@
           }
         ],
         "summary": "List Sync Changes",
+        "tags": [
+          "sync"
+        ]
+      }
+    },
+    "/api/v1/sync/signal-appetite/events": {
+      "get": {
+        "operationId": "list_signal_appetite_events_api_v1_sync_signal_appetite_events_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "after",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "After",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 200,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SignalAppetiteEventsPageRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Signal Appetite Events",
+        "tags": [
+          "sync"
+        ]
+      },
+      "post": {
+        "operationId": "append_signal_appetite_events_api_v1_sync_signal_appetite_events_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SignalAppetiteEventsAppendRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SignalAppetiteEventsAppendRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Append Signal Appetite Events",
         "tags": [
           "sync"
         ]

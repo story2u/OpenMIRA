@@ -12,13 +12,20 @@ import {
   INTERACTIVE_AGENT_INTERNAL_POLICY_VERSION,
   INTERACTIVE_AGENT_INTERNAL_TOOLS_SCHEMA_VERSION,
   INTERACTIVE_AGENT_READ_ONLY_POLICY_VERSION,
+  INTERACTIVE_AGENT_SIGNAL_APPETITE_POLICY_VERSION,
+  INTERACTIVE_AGENT_SIGNAL_APPETITE_SCHEMA_VERSION,
   INTERACTIVE_AGENT_SYSTEM_PROMPT,
   INTERACTIVE_INTERNAL_TOOLS,
   INTERACTIVE_APPROVED_SEND_TOOLS,
+  INTERACTIVE_SIGNAL_APPETITE_ALL_TOOLS,
+  INTERACTIVE_SIGNAL_APPETITE_TOOLS,
   INTERACTIVE_READ_ONLY_TOOLS,
   SearchOpportunitiesParameters,
   SendReplyParameters,
   UpdateStatusParameters,
+  ApplyAppetiteChangeParameters,
+  CapturePreferenceExampleParameters,
+  CreateTemporaryFocusParameters,
   interactiveAgentContractForSchema,
 } from '../src/interactive.mjs';
 
@@ -69,7 +76,21 @@ test('interactive v3 adds only explicitly approved send without changing older c
   assert.deepEqual(v3.tools.slice(-1).map((tool) => tool.name), ['send_reply']);
   assert.match(v3.systemPrompt, /one-time approval/);
   assert.match(v3.systemPrompt, /never ask for, invent, expose, or reuse an approval credential/);
-  assert.throws(() => interactiveAgentContractForSchema(4), /unsupported/);
+});
+
+test('interactive v4 adds reviewed Signal Appetite tools and keeps apply behind host confirmation', () => {
+  const v3 = interactiveAgentContractForSchema(3);
+  const v4 = interactiveAgentContractForSchema(INTERACTIVE_AGENT_SIGNAL_APPETITE_SCHEMA_VERSION);
+  assert.equal(v4.policyVersion, INTERACTIVE_AGENT_SIGNAL_APPETITE_POLICY_VERSION);
+  assert.deepEqual(v3.tools, INTERACTIVE_APPROVED_SEND_TOOLS);
+  assert.deepEqual(v4.tools, INTERACTIVE_SIGNAL_APPETITE_ALL_TOOLS);
+  assert.deepEqual(
+    v4.tools.slice(-INTERACTIVE_SIGNAL_APPETITE_TOOLS.length).map((tool) => tool.name),
+    INTERACTIVE_SIGNAL_APPETITE_TOOLS.map((tool) => tool.name),
+  );
+  assert.match(v4.systemPrompt, /separate explicit confirmation/);
+  assert.match(v4.systemPrompt, /never be used as a reason to suppress a boundary message/i);
+  assert.throws(() => interactiveAgentContractForSchema(5), /unsupported/);
 });
 
 test('interactive tool parameters are strict and bounded', () => {
@@ -129,4 +150,23 @@ test('interactive tool parameters are strict and bounded', () => {
       approval_token: 'model-controlled-token',
     },
   ), false);
+  assert.equal(Value.Check(CapturePreferenceExampleParameters, {
+    message_id: opportunityId,
+    label: 'positive',
+    reasons: ['needs_reply'],
+  }), true);
+  assert.equal(Value.Check(CapturePreferenceExampleParameters, {
+    message_id: opportunityId,
+    label: 'positive',
+    reasons: ['needs_reply'],
+    confirmed: true,
+  }), false);
+  assert.equal(Value.Check(ApplyAppetiteChangeParameters, { preference_version: 2 }), true);
+  assert.equal(Value.Check(ApplyAppetiteChangeParameters, {
+    preference_version: 2,
+    confirmation_token: 'model-controlled',
+  }), false);
+  assert.equal(Value.Check(CreateTemporaryFocusParameters, {
+    concept: 'launch_week', duration_hours: 48, delivery_mode: 'immediate',
+  }), true);
 });

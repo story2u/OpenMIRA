@@ -23,19 +23,19 @@ export default function AuthenticatedTabsLayout() {
       }}
     >
       <Tabs.Screen
-        name="dashboard"
+        name="home"
         options={{
-          title: t('tabs.dashboard'),
-          tabBarAccessibilityLabel: t('tabs.dashboard.accessibility'),
-          tabBarIcon: ({ color }) => <Text style={{ color, fontSize: 17 }}>◫</Text>,
+          title: t('tabs.home'),
+          tabBarAccessibilityLabel: t('tabs.home.accessibility'),
+          tabBarIcon: ({ color }) => <Text style={{ color, fontSize: 17 }}>✦</Text>,
         }}
       />
       <Tabs.Screen
-        name="account"
+        name="dashboard"
         options={{
-          title: t('tabs.settings'),
-          tabBarAccessibilityLabel: t('tabs.settings.accessibility'),
-          tabBarIcon: ({ color }) => <Text style={{ color, fontSize: 17 }}>●</Text>,
+          title: t('tabs.opportunities'),
+          tabBarAccessibilityLabel: t('tabs.opportunities.accessibility'),
+          tabBarIcon: ({ color }) => <Text style={{ color, fontSize: 17 }}>◫</Text>,
         }}
       />
       <Tabs.Screen
@@ -45,6 +45,14 @@ export default function AuthenticatedTabsLayout() {
           title: t('tabs.agent'),
           tabBarAccessibilityLabel: t('tabs.agent.accessibility'),
           tabBarIcon: ({ color }) => <Text style={{ color, fontSize: 17 }}>✦</Text>,
+        }}
+      />
+      <Tabs.Screen
+        name="account"
+        options={{
+          title: t('tabs.settings'),
+          tabBarAccessibilityLabel: t('tabs.settings.accessibility'),
+          tabBarIcon: ({ color }) => <Text style={{ color, fontSize: 17 }}>●</Text>,
         }}
       />
     </Tabs>

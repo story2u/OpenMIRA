@@ -13,11 +13,11 @@ from app.application.use_cases.analysis_run import (
     AnalysisRunTokenPrincipal,
     DeviceAgentRoutingService,
 )
+from app.application.use_cases.device_session import DeviceSessionService
 from app.application.use_cases.interactive_agent_action import (
     InteractiveAgentActionService,
     InteractiveAgentApprovalTokenPrincipal,
 )
-from app.application.use_cases.device_session import DeviceSessionService
 from app.application.use_cases.interactive_agent_gateway import (
     InteractiveAgentGatewayService,
 )
@@ -26,19 +26,20 @@ from app.application.use_cases.interactive_agent_turn import (
     InteractiveAgentTurnService,
     InteractiveAgentTurnTokenPrincipal,
 )
-from app.application.use_cases.push_registration import PushRegistrationService
 from app.application.use_cases.manual_reply import ManualReplyUseCase
+from app.application.use_cases.push_registration import PushRegistrationService
+from app.application.use_cases.signal_appetite_sync import SignalAppetiteSyncService
 from app.application.use_cases.sync_feed import SyncFeedService
 from app.core.config import Settings, get_settings
 from app.core.security import (
     constant_time_equals,
     decode_access_token,
     decode_analysis_run_token,
-    decode_interactive_agent_turn_token,
     decode_interactive_agent_approval_token,
+    decode_interactive_agent_turn_token,
     hash_analysis_run_nonce,
-    hash_interactive_agent_turn_nonce,
     hash_interactive_agent_approval_nonce,
+    hash_interactive_agent_turn_nonce,
 )
 from app.core.time_window import WorkTimeConfig, WorkTimeService
 from app.domain.services.detection_policy import OpportunityDetector
@@ -47,11 +48,11 @@ from app.infrastructure.ai.analysis_gateway import OpenAICompatibleGatewayClient
 from app.infrastructure.ai.litellm_client import LiteLLMOpportunityClassifier, LiteLLMReplyGenerator
 from app.infrastructure.db.analysis_gateway_repository import AnalysisGatewayRepository
 from app.infrastructure.db.analysis_run_repository import AnalysisRunRepository
-from app.infrastructure.db.interactive_agent_gateway_repository import (
-    InteractiveAgentGatewayRepository,
-)
 from app.infrastructure.db.interactive_agent_action_repository import (
     InteractiveAgentActionRepository,
+)
+from app.infrastructure.db.interactive_agent_gateway_repository import (
+    InteractiveAgentGatewayRepository,
 )
 from app.infrastructure.db.interactive_agent_repository import (
     InteractiveAgentTurnRepository,
@@ -83,6 +84,7 @@ from app.infrastructure.db.repositories import (
     WeComEventRepository,
 )
 from app.infrastructure.db.session import get_session
+from app.infrastructure.db.signal_appetite_repository import SignalAppetiteRepository
 from app.infrastructure.db.sync_repository import SyncFeedRepository
 from app.infrastructure.im.base import AdapterRegistry
 from app.infrastructure.im.telegram import TelegramAdapter
@@ -306,6 +308,12 @@ def get_sync_feed_service(
     settings: Settings = Depends(get_settings),
 ) -> SyncFeedService:
     return SyncFeedService(SyncFeedRepository(session), settings)
+
+
+def get_signal_appetite_sync_service(
+    session: AsyncSession = Depends(get_session),
+) -> SignalAppetiteSyncService:
+    return SignalAppetiteSyncService(SignalAppetiteRepository(session))
 
 
 def get_push_registration_service(

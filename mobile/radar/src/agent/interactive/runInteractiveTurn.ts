@@ -12,6 +12,7 @@ import {
 import type { SyncStoreDatabase } from '../../sync/syncStore';
 import type { RequestInteractiveSendApproval } from './approvedSend';
 import type { InteractiveApprovedSendDependencies } from './approvedSend';
+import type { RequestInteractiveAppetiteApproval } from './host';
 import {
   appendAgentEntries,
   appendAgentEntry,
@@ -37,6 +38,7 @@ interface RunHostOptions {
   ownerId: string;
   randomId(): string;
   requestApproval?: RequestInteractiveSendApproval;
+  requestAppetiteApproval?: RequestInteractiveAppetiteApproval;
   signal?: AbortSignal;
 }
 
@@ -88,6 +90,7 @@ export interface RunInteractiveTurnOptions {
   onStreamText?(text: string): void;
   ownerId: string;
   requestApproval?: RequestInteractiveSendApproval;
+  requestAppetiteApproval?: RequestInteractiveAppetiteApproval;
   sessionId: string;
   signal?: AbortSignal;
   text: string;
@@ -119,6 +122,7 @@ export async function runInteractiveTurn({
   onStreamText,
   ownerId,
   requestApproval,
+  requestAppetiteApproval,
   sessionId,
   signal,
   text,
@@ -192,6 +196,7 @@ export async function runInteractiveTurn({
       ownerId,
       randomId: dependencies.randomId,
       requestApproval,
+      requestAppetiteApproval,
       signal: hostController.signal,
     });
     if (signal?.aborted || lifecycleFailed) {

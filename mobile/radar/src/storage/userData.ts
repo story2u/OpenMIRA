@@ -6,6 +6,15 @@ export async function clearLocalUserDataInDatabase(
 ) {
   if (!ownerId) throw new Error('ownerId is required to clear local data');
   await database.withExclusiveTransactionAsync(async (transaction) => {
+    await transaction.runAsync('DELETE FROM signal_appetite_ui_state WHERE owner_id = ?', ownerId);
+    await transaction.runAsync('DELETE FROM temporary_focuses WHERE owner_id = ?', ownerId);
+    await transaction.runAsync('DELETE FROM shadow_evaluations WHERE owner_id = ?', ownerId);
+    await transaction.runAsync('DELETE FROM message_filter_decisions WHERE owner_id = ?', ownerId);
+    await transaction.runAsync('DELETE FROM preference_examples WHERE owner_id = ?', ownerId);
+    await transaction.runAsync('DELETE FROM teaching_sessions WHERE owner_id = ?', ownerId);
+    await transaction.runAsync('DELETE FROM attention_intents WHERE owner_id = ?', ownerId);
+    await transaction.runAsync('DELETE FROM attention_preferences WHERE owner_id = ?', ownerId);
+    await transaction.runAsync('DELETE FROM attention_events WHERE owner_id = ?', ownerId);
     await transaction.runAsync('DELETE FROM agent_sessions WHERE owner_id = ?', ownerId);
     await transaction.runAsync('DELETE FROM analysis_run_state WHERE owner_id = ?', ownerId);
     await transaction.runAsync('DELETE FROM command_outbox WHERE owner_id = ?', ownerId);

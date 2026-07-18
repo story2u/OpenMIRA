@@ -12,6 +12,8 @@ import {
   settingsStyles,
 } from './components';
 import { useSettings } from './SettingsProvider';
+import { initializeRadarDatabase } from '../../storage/database';
+import { setTeachingOnboardingSeen } from '../../attention/signalAppetiteUiState';
 
 export function SettingsHubScreen() {
   const router = useRouter();
@@ -89,6 +91,21 @@ export function SettingsHubScreen() {
       ) : (
         <StateNotice error={state.loadError} loading={state.isLoading} onRetry={retry} />
       )}
+
+      <SectionTitle>{t('settings.hub.signalAppetite')}</SectionTitle>
+      <SettingsCard>
+        <NavigationRow
+          detail={t('settings.hub.replayTeachingDetail')}
+          label={t('settings.hub.replayTeaching')}
+          onPress={() => {
+            if (!user) return;
+            void initializeRadarDatabase().then(async (database) => {
+              await setTeachingOnboardingSeen(database, user.id, false);
+              router.push('/teaching' as Href);
+            });
+          }}
+        />
+      </SettingsCard>
     </SettingsScaffold>
   );
 }

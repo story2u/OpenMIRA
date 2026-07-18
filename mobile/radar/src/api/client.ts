@@ -9,6 +9,7 @@ import { createOpportunitiesApi } from '@story2u/radar-api/opportunities';
 import { createSettingsApi } from '@story2u/radar-api/settings';
 import { createSubscriptionsApi } from '@story2u/radar-api/subscriptions';
 import { createSyncApi } from '@story2u/radar-api/sync';
+import { createSignalAppetiteSyncApi } from '@story2u/radar-api/signal-appetite-sync';
 import { createTemplatesApi } from '@story2u/radar-api/templates';
 import { createTelegramApi } from '@story2u/radar-api/telegram';
 import type {
@@ -76,6 +77,12 @@ import type {
   SyncChanges,
   SyncChangesQuery,
 } from '@story2u/radar-contracts/sync';
+import type {
+  SignalAppetiteEventsAppend,
+  SignalAppetiteEventsAppendRequest,
+  SignalAppetiteEventsPage,
+  SignalAppetiteEventsQuery,
+} from '@story2u/radar-contracts/signal-appetite-sync';
 import type {
   TelegramConnection,
   TelegramConnectionHealth,
@@ -362,6 +369,22 @@ export function acknowledgeSync(
   signal?: AbortSignal,
 ): Promise<SyncAck> {
   return createSyncApi(createMobileApiClient(baseUrl)).acknowledge(payload, { signal });
+}
+
+export function appendSignalAppetiteEvents(
+  baseUrl: string,
+  payload: SignalAppetiteEventsAppendRequest,
+  signal?: AbortSignal,
+): Promise<SignalAppetiteEventsAppend> {
+  return createSignalAppetiteSyncApi(createMobileApiClient(baseUrl)).append(payload, { signal });
+}
+
+export function readSyncedSignalAppetiteEvents(
+  baseUrl: string,
+  query: SignalAppetiteEventsQuery,
+  signal?: AbortSignal,
+): Promise<SignalAppetiteEventsPage> {
+  return createSignalAppetiteSyncApi(createMobileApiClient(baseUrl)).list(query, { signal });
 }
 
 export function readDashboard(

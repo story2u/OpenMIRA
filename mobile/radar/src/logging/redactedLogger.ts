@@ -1,4 +1,4 @@
-const sensitiveKey = /api[-_]?key|authorization|cookie|password|secret|session|token/i;
+const sensitiveKey = /api[-_]?key|authorization|body|content|cookie|message|password|prompt|raw[-_]?payload|secret|session|token/i;
 
 export function redactFields(fields: Readonly<Record<string, unknown>>) {
   return Object.fromEntries(

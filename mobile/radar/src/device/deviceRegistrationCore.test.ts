@@ -35,9 +35,9 @@ describe('device registration metadata', () => {
         'agent.streaming': true,
         'agent.submitAnalysis': true,
         'agent.interactive': true,
-        'agent.interactiveSchema': 3,
+        'agent.interactiveSchema': 4,
         'push.environment': 'production',
-        'sqlite.schema': 5,
+        'sqlite.schema': 7,
       },
     });
     expect(registration.capabilities).not.toHaveProperty('syncAvailable');

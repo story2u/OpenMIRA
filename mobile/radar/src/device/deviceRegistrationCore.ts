@@ -27,13 +27,13 @@ export function buildDeviceRegistration(
     timezone: runtime.timezone,
     capabilities: {
       'client.reactNative': true,
-      'sqlite.schema': 5,
+      'sqlite.schema': 7,
       'agent.streaming': true,
       'agent.runtime': 'pi-0.80.6',
       'agent.schema': 1,
       'agent.submitAnalysis': true,
       'agent.interactive': true,
-      'agent.interactiveSchema': 3,
+      'agent.interactiveSchema': 4,
       ...(runtime.pushEnvironment === null
         ? {}
         : { 'push.environment': runtime.pushEnvironment }),
