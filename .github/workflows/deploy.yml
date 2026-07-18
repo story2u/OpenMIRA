@@ -33,7 +33,7 @@ jobs:
             context: .
             file: backend/Dockerfile
           - image: im-frontend
-            context: frontend
+            context: .
             file: frontend/Dockerfile
     steps:
       - name: Checkout

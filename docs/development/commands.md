@@ -1,6 +1,6 @@
 # 开发命令
 
-> 状态：当前事实 · 最后核验：2026-07-12
+> 状态：当前事实 · 最后核验：2026-07-18
 
 命令默认从仓库根目录执行。根 `Makefile` 是 AI 和 CI 的稳定入口；子项目原生命令用于缩小反馈。
 后端统一由 uv 管理 Python、`.venv`、依赖声明和锁文件；不要使用 `pip install -r` 或手工修改环境。
@@ -172,6 +172,23 @@ docker compose up -d postgres redis
 docker compose run --rm migrate
 docker compose up api celery_worker celery_beat telegram_listener
 ```
+
+VPS release 使用仓库根作为两个镜像的 build context。修改 Dockerfile、根 workspace、共享包或
+`.dockerignore` 后，应在推送 release 分支前额外运行：
+
+```bash
+docker build -f backend/Dockerfile -t im-backend:verify .
+docker run --rm -e DATABASE_URL=postgresql+asyncpg://user:pass@localhost:5432/im \
+  -e ADMIN_API_TOKEN=test-admin-token \
+  -e JWT_SECRET_KEY=test-jwt-secret-key-that-is-long-enough \
+  --entrypoint sh im-backend:verify \
+  -c 'test -f /app/pi-agent-runtime/node_modules/@story2u/radar-agent/src/analysis.mjs && node --check /app/pi-agent-runtime/src/index.mjs && python -c "import app.main"'
+docker build -f frontend/Dockerfile -t im-frontend:verify .
+```
+
+后端命令验证 `file:` 共享 Agent 包已实体化进最终镜像，而不是只验证依赖 stage；前端命令必须从根
+context 执行，因为 Dockerfile 消费根 pnpm lock/workspace 与共享包。镜像启动 smoke 可将前端映射到
+本地端口后请求 `/`，预期返回 HTTP 200。
 
 - API 文档：`http://localhost:8000/docs`
 - 根健康检查：`http://localhost:8000/healthz`

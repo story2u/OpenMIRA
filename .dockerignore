@@ -4,6 +4,19 @@
 !packages/
 !packages/radar-agent/
 !packages/radar-agent/**
+!packages/radar-api/
+!packages/radar-api/**
+!packages/radar-contracts/
+!packages/radar-contracts/**
+!frontend/
+!frontend/**
+!package.json
+!pnpm-lock.yaml
+!pnpm-workspace.yaml
+!mobile/
+!mobile/radar/
+!mobile/radar/patches/
+!mobile/radar/patches/expo-modules-jsi@57.0.3.patch
 
 backend/.env
 backend/.venv
@@ -17,3 +30,8 @@ backend/*.egg-info
 backend/postgres_data
 backend/redis_data
 backend/pi-agent-runtime/node_modules
+**/node_modules
+**/.next
+**/.expo
+**/dist
+**/coverage

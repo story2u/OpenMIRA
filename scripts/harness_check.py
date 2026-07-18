@@ -442,8 +442,31 @@ def check_ci_and_commands(errors: list[str]) -> None:
     docker_text = (ROOT / "backend/Dockerfile").read_text(encoding="utf-8")
     if "FROM node:22" not in docker_text or "npm ci --omit=dev --ignore-scripts" not in docker_text:
         errors.append("backend Dockerfile must install the pinned pi agent runtime with Node 22")
+    if (
+        "WORKDIR /workspace/backend/pi-agent-runtime" not in docker_text
+        or "npm ci --omit=dev --ignore-scripts --install-links" not in docker_text
+    ):
+        errors.append(
+            "backend Dockerfile must preserve the pi runtime workspace path and materialize file dependencies"
+        )
     if "backend/pi-agent-runtime" not in ci_text or "npm ci --ignore-scripts" not in ci_text:
         errors.append("backend CI must validate the locked pi agent runtime")
+
+    frontend_docker_text = (ROOT / "frontend/Dockerfile").read_text(encoding="utf-8")
+    if (
+        "COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./" not in frontend_docker_text
+        or "pnpm install --frozen-lockfile --filter my-project..." not in frontend_docker_text
+    ):
+        errors.append("frontend Dockerfile must install from the locked root pnpm workspace")
+
+    deploy_text = deploy_path.read_text(encoding="utf-8")
+    if "- image: im-frontend\n            context: ." not in deploy_text:
+        errors.append("frontend release image must use the repository root Docker build context")
+
+    dockerignore_text = (ROOT / ".dockerignore").read_text(encoding="utf-8")
+    for required_path in ("!frontend/**", "!pnpm-lock.yaml", "!pnpm-workspace.yaml"):
+        if required_path not in dockerignore_text:
+            errors.append(f"root Docker context must include frontend workspace input: {required_path}")
 
     pi_default_surfaces = {
         "Python settings": (
@@ -476,7 +499,6 @@ def check_ci_and_commands(errors: list[str]) -> None:
                 if secret_name in contents:
                     errors.append(f"client source must not reference server payment secret {secret_name}: {relative(path)}")
 
-    deploy_text = deploy_path.read_text(encoding="utf-8")
     for github_secret in ("REVENUECAT_SECRET_API_KEY", "REVENUECAT_WEBHOOK_HMAC_SECRET"):
         if f"secrets.{github_secret}" not in deploy_text:
             errors.append(f"deploy workflow must source {github_secret} from GitHub Secrets")

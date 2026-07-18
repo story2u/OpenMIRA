@@ -1,6 +1,6 @@
 # 运行与运维
 
-> 状态：当前事实 · 最后核验：2026-07-17
+> 状态：当前事实 · 最后核验：2026-07-18
 
 ## 服务拓扑
 
@@ -10,11 +10,17 @@ GHCR 拉取镜像。`.github/workflows/deploy.yml` 在同一个 release workflow
 同步 compose/env 后部署到 VPS。
 
 后端镜像固定复制官方 uv 二进制，使用 `uv sync --locked --no-dev` 从 `pyproject.toml` 与
-`uv.lock` 构建 Python 环境；同时从固定 Node 22 镜像用 `npm ci --omit=dev --ignore-scripts` 安装
+`uv.lock` 构建 Python 环境；同时从固定 Node 22 镜像保留仓库相对目录，并用
+`npm ci --omit=dev --ignore-scripts --install-links` 安装
 `backend/pi-agent-runtime/package-lock.json` 中的 pi runtime。runner 通过 `file:../../packages/radar-agent`
-消费共享 Agent 契约，因此后端镜像使用仓库根作为 build context，并由根 `.dockerignore` 只放行
-`backend/` 与 `packages/radar-agent/`；compose 与部署 workflow 都显式指向 `backend/Dockerfile`。
+消费共享 Agent 契约；`--install-links` 将该包实体化到 runtime，避免最终镜像留下跨 stage 的失效软链接。
+后端镜像使用仓库根作为 build context；compose 与部署 workflow 都显式指向 `backend/Dockerfile`。
 `.venv` / `node_modules` 不进入 Docker context。CI 分别验证 Python、npm 与根 pnpm 锁。
+
+前端生产镜像同样使用仓库根作为 build context，从根 `pnpm-lock.yaml` 安装 `frontend` 及其
+`packages/radar-{api,contracts,agent}` workspace 依赖，再在 `frontend/` 内执行 Next production build。
+根 `.dockerignore` 只放行两个镜像需要的后端、前端、共享包、根 workspace manifest 与 pnpm patch，
+并再次排除所有嵌套 `node_modules`、`.next`、`.expo`、`dist` 与 coverage 产物。
 
 ## 配置分组
 

@@ -1,11 +1,11 @@
 FROM node:22.22.0-slim AS pi-agent-runtime
 
-WORKDIR /pi-agent-runtime
+WORKDIR /workspace/backend/pi-agent-runtime
 
 COPY backend/pi-agent-runtime/package.json backend/pi-agent-runtime/package-lock.json ./
-COPY packages/radar-agent/package.json /packages/radar-agent/package.json
-COPY packages/radar-agent/src /packages/radar-agent/src
-RUN npm ci --omit=dev --ignore-scripts
+COPY packages/radar-agent/package.json /workspace/packages/radar-agent/package.json
+COPY packages/radar-agent/src /workspace/packages/radar-agent/src
+RUN npm ci --omit=dev --ignore-scripts --install-links
 
 COPY backend/pi-agent-runtime/src ./src
 
@@ -33,7 +33,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 
 COPY backend/ .
 COPY --from=pi-agent-runtime /usr/local/ /usr/local/
-COPY --from=pi-agent-runtime /pi-agent-runtime /app/pi-agent-runtime
+COPY --from=pi-agent-runtime /workspace/backend/pi-agent-runtime /app/pi-agent-runtime
 
 ENV PATH="/app/.venv/bin:$PATH"
 
