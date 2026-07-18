@@ -4,11 +4,13 @@ export const INTERACTIVE_AGENT_READ_ONLY_SCHEMA_VERSION: 1;
 export const INTERACTIVE_AGENT_INTERNAL_TOOLS_SCHEMA_VERSION: 2;
 export const INTERACTIVE_AGENT_APPROVED_SEND_SCHEMA_VERSION: 3;
 export const INTERACTIVE_AGENT_SIGNAL_APPETITE_SCHEMA_VERSION: 4;
-export const INTERACTIVE_AGENT_SCHEMA_VERSION: 4;
+export const INTERACTIVE_AGENT_BRIEFING_SCHEMA_VERSION: 5;
+export const INTERACTIVE_AGENT_SCHEMA_VERSION: 5;
 export const INTERACTIVE_AGENT_READ_ONLY_POLICY_VERSION: 'interactive-read-only-v1';
 export const INTERACTIVE_AGENT_INTERNAL_POLICY_VERSION: 'interactive-internal-v2';
 export const INTERACTIVE_AGENT_APPROVED_SEND_POLICY_VERSION: 'interactive-approved-send-v3';
 export const INTERACTIVE_AGENT_SIGNAL_APPETITE_POLICY_VERSION: 'interactive-signal-appetite-v4';
+export const INTERACTIVE_AGENT_BRIEFING_POLICY_VERSION: 'interactive-briefing-v5';
 
 export type InteractiveReadOnlyToolName =
   | 'search_opportunities'
@@ -39,7 +41,16 @@ export type InteractiveAppetiteToolName =
   | 'undo_preference_change'
   | 'compare_preference_versions';
 
+export type InteractiveBriefingToolName =
+  | 'summarize_time_window'
+  | 'get_attention_snapshot'
+  | 'list_priority_items'
+  | 'list_category_items'
+  | 'get_quiet_summary'
+  | 'update_brief_schedule';
+
 export type InteractiveToolName =
+  | InteractiveBriefingToolName
   | InteractiveReadOnlyToolName
   | InteractiveInternalToolName
   | InteractiveExternalToolName
@@ -74,6 +85,12 @@ export const CreateTemporaryFocusParameters: TSchema;
 export const UpdateAttentionScheduleParameters: TSchema;
 export const UndoPreferenceChangeParameters: TSchema;
 export const ComparePreferenceVersionsParameters: TSchema;
+export const SummarizeTimeWindowParameters: TSchema;
+export const GetAttentionSnapshotParameters: TSchema;
+export const ListPriorityItemsParameters: TSchema;
+export const ListCategoryItemsParameters: TSchema;
+export const GetQuietSummaryParameters: TSchema;
+export const UpdateBriefScheduleParameters: TSchema;
 export const INTERACTIVE_READ_ONLY_TOOLS: readonly InteractiveToolDefinition[];
 export const INTERACTIVE_INTERNAL_ACTION_TOOLS: readonly InteractiveToolDefinition[];
 export const INTERACTIVE_INTERNAL_TOOLS: readonly InteractiveToolDefinition[];
@@ -81,19 +98,23 @@ export const INTERACTIVE_EXTERNAL_ACTION_TOOLS: readonly InteractiveToolDefiniti
 export const INTERACTIVE_APPROVED_SEND_TOOLS: readonly InteractiveToolDefinition[];
 export const INTERACTIVE_SIGNAL_APPETITE_TOOLS: readonly InteractiveToolDefinition[];
 export const INTERACTIVE_SIGNAL_APPETITE_ALL_TOOLS: readonly InteractiveToolDefinition[];
+export const INTERACTIVE_BRIEFING_TOOLS: readonly InteractiveToolDefinition[];
+export const INTERACTIVE_BRIEFING_ALL_TOOLS: readonly InteractiveToolDefinition[];
 export const INTERACTIVE_READ_ONLY_SYSTEM_PROMPT: string;
 export const INTERACTIVE_INTERNAL_SYSTEM_PROMPT: string;
 export const INTERACTIVE_APPROVED_SEND_SYSTEM_PROMPT: string;
 export const INTERACTIVE_SIGNAL_APPETITE_SYSTEM_PROMPT: string;
+export const INTERACTIVE_BRIEFING_SYSTEM_PROMPT: string;
 export const INTERACTIVE_AGENT_SYSTEM_PROMPT: string;
 
 export interface InteractiveAgentContract {
-  schemaVersion: 1 | 2 | 3 | 4;
+  schemaVersion: 1 | 2 | 3 | 4 | 5;
   policyVersion:
     | 'interactive-read-only-v1'
     | 'interactive-internal-v2'
     | 'interactive-approved-send-v3'
-    | 'interactive-signal-appetite-v4';
+    | 'interactive-signal-appetite-v4'
+    | 'interactive-briefing-v5';
   systemPrompt: string;
   tools: readonly InteractiveToolDefinition[];
 }

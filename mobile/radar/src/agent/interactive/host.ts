@@ -7,11 +7,14 @@ import {
   INTERACTIVE_INTERNAL_ACTION_TOOLS,
   INTERACTIVE_INTERNAL_TOOLS,
   INTERACTIVE_READ_ONLY_TOOLS,
+  INTERACTIVE_BRIEFING_ALL_TOOLS,
+  INTERACTIVE_BRIEFING_TOOLS,
   INTERACTIVE_SIGNAL_APPETITE_ALL_TOOLS,
   INTERACTIVE_SIGNAL_APPETITE_TOOLS,
   interactiveAgentContractForSchema,
   type InteractiveAgentContract,
   type InteractiveAppetiteToolName,
+  type InteractiveBriefingToolName,
   type InteractiveExternalToolName,
   type InteractiveInternalToolName,
   type InteractiveReadOnlyToolName,
@@ -27,6 +30,7 @@ import {
 } from './internalTools';
 import { executeInteractiveReadOnlyTool } from './readOnlyTools';
 import { executeInteractiveAppetiteTool } from './appetiteTools';
+import { executeInteractiveBriefingTool } from './briefingTools';
 import type { AgentEntryContent, LocalAgentEntry } from './sessionStore';
 import {
   createInteractiveApprovedSendCoordinator,
@@ -49,8 +53,11 @@ const externalToolNames = new Set<InteractiveExternalToolName>(
 const appetiteToolNames = new Set<InteractiveAppetiteToolName>(
   INTERACTIVE_SIGNAL_APPETITE_TOOLS.map((tool) => tool.name as InteractiveAppetiteToolName),
 );
+const briefingToolNames = new Set<InteractiveBriefingToolName>(
+  INTERACTIVE_BRIEFING_TOOLS.map((tool) => tool.name as InteractiveBriefingToolName),
+);
 const allToolNames = new Set<InteractiveToolName>(
-  INTERACTIVE_SIGNAL_APPETITE_ALL_TOOLS.map((tool) => tool.name),
+  INTERACTIVE_BRIEFING_ALL_TOOLS.map((tool) => tool.name),
 );
 
 export interface InteractiveAppetiteApprovalRequest {
@@ -290,6 +297,13 @@ function createTools(
         name as InteractiveAppetiteToolName,
       )),
   );
+  const allowedBriefingTools = new Set<InteractiveBriefingToolName>(
+    contract.tools
+      .map((tool) => tool.name)
+      .filter((name): name is InteractiveBriefingToolName => briefingToolNames.has(
+        name as InteractiveBriefingToolName,
+      )),
+  );
   return contract.tools.map((definition) => ({
     ...definition,
     executionMode: 'sequential' as const,
@@ -304,6 +318,15 @@ function createTools(
         )
         : externalToolNames.has(definition.name as InteractiveExternalToolName)
           ? await executeApprovedSend(_toolCallId, parameters, signal)
+          : briefingToolNames.has(definition.name as InteractiveBriefingToolName)
+            ? await executeInteractiveBriefingTool(database, {
+              allowedTools: allowedBriefingTools,
+              call: { name: definition.name, arguments: parameters, toolCallId: _toolCallId },
+              deviceId,
+              ownerId,
+              randomId,
+              signal,
+            })
           : appetiteToolNames.has(definition.name as InteractiveAppetiteToolName)
             ? await executeInteractiveAppetiteTool(database, {
               allowedTools: allowedAppetiteTools,

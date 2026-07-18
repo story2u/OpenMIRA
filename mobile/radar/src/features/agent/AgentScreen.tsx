@@ -82,6 +82,12 @@ const toolLabelKeys: Record<InteractiveToolName, MessageKey> = {
   update_attention_schedule: 'agent.tool.updateSchedule',
   undo_preference_change: 'agent.tool.undoAppetite',
   compare_preference_versions: 'agent.tool.compareAppetite',
+  summarize_time_window: 'agent.tool.summarizeTimeWindow',
+  get_attention_snapshot: 'agent.tool.getAttentionSnapshot',
+  list_priority_items: 'agent.tool.listPriorityItems',
+  list_category_items: 'agent.tool.listCategoryItems',
+  get_quiet_summary: 'agent.tool.getQuietSummary',
+  update_brief_schedule: 'agent.tool.updateBriefSchedule',
 };
 const statusLabelKeys: Record<InternalOpportunityStatus, MessageKey> = {
   pending_human: 'opportunity.status.pendingHuman',

@@ -381,6 +381,47 @@ export async function persistBriefingStatus(
   });
 }
 
+/** 按分类检索决策引用（证据标签匹配；'other' = 无概念证据）。供 list_category_items 使用。 */
+export async function readCategoryDecisionRefs(
+  database: BriefingStoreExecutor,
+  ownerId: string,
+  options: { category: string; decidedFrom: string; limit: number; offset: number },
+): Promise<Array<{ messageId: string; decision: string; reasonSummary: string; decidedAt: string }>> {
+  const conceptFilter =
+    options.category === 'other'
+      ? `AND NOT EXISTS (
+           SELECT 1 FROM json_each(evidence_json) je
+           WHERE json_extract(je.value, '$.kind') IN ('preference', 'message_signal')
+         )`
+      : `AND EXISTS (
+           SELECT 1 FROM json_each(evidence_json) je
+           WHERE json_extract(je.value, '$.label') = ?
+             AND json_extract(je.value, '$.kind') IN ('preference', 'message_signal')
+         )`;
+  const rows = await database.getAllAsync<{
+    message_id: string;
+    decision: string;
+    reason_summary: string;
+    decided_at: string;
+  }>(
+    `SELECT message_id, decision, reason_summary, decided_at FROM message_filter_decisions
+     WHERE owner_id = ? AND decided_at >= ?
+     ${conceptFilter}
+     ORDER BY decided_at DESC, message_id LIMIT ? OFFSET ?`,
+    requireUuid(ownerId, 'owner_id'),
+    options.decidedFrom,
+    ...(options.category === 'other' ? [] : [options.category]),
+    Math.min(50, Math.max(1, options.limit)),
+    Math.max(0, options.offset),
+  );
+  return rows.map((row) => ({
+    messageId: row.message_id,
+    decision: row.decision,
+    reasonSummary: row.reason_summary,
+    decidedAt: row.decided_at,
+  }));
+}
+
 // ---- 简报时间表 ------------------------------------------------------------
 
 export async function readBriefingSchedule(

@@ -4,12 +4,14 @@ export const INTERACTIVE_AGENT_READ_ONLY_SCHEMA_VERSION = 1;
 export const INTERACTIVE_AGENT_INTERNAL_TOOLS_SCHEMA_VERSION = 2;
 export const INTERACTIVE_AGENT_APPROVED_SEND_SCHEMA_VERSION = 3;
 export const INTERACTIVE_AGENT_SIGNAL_APPETITE_SCHEMA_VERSION = 4;
+export const INTERACTIVE_AGENT_BRIEFING_SCHEMA_VERSION = 5;
 // Highest schema this client package can execute. A server may still claim a v1 turn.
-export const INTERACTIVE_AGENT_SCHEMA_VERSION = INTERACTIVE_AGENT_SIGNAL_APPETITE_SCHEMA_VERSION;
+export const INTERACTIVE_AGENT_SCHEMA_VERSION = INTERACTIVE_AGENT_BRIEFING_SCHEMA_VERSION;
 export const INTERACTIVE_AGENT_READ_ONLY_POLICY_VERSION = 'interactive-read-only-v1';
 export const INTERACTIVE_AGENT_INTERNAL_POLICY_VERSION = 'interactive-internal-v2';
 export const INTERACTIVE_AGENT_APPROVED_SEND_POLICY_VERSION = 'interactive-approved-send-v3';
 export const INTERACTIVE_AGENT_SIGNAL_APPETITE_POLICY_VERSION = 'interactive-signal-appetite-v4';
+export const INTERACTIVE_AGENT_BRIEFING_POLICY_VERSION = 'interactive-briefing-v5';
 
 const OpportunityId = Type.String({
   pattern: '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
@@ -313,6 +315,108 @@ export const INTERACTIVE_SIGNAL_APPETITE_ALL_TOOLS = Object.freeze([
   ...INTERACTIVE_SIGNAL_APPETITE_TOOLS,
 ]);
 
+export const SummarizeTimeWindowParameters = Type.Object(
+  {
+    briefing_type: Type.Union([
+      Type.Literal('morning'),
+      Type.Literal('midday'),
+      Type.Literal('evening'),
+      Type.Literal('ad_hoc'),
+      Type.Literal('urgent'),
+    ]),
+  },
+  { additionalProperties: false },
+);
+export const GetAttentionSnapshotParameters = Type.Object({}, { additionalProperties: false });
+export const ListPriorityItemsParameters = Type.Object(
+  {
+    priority: Type.Optional(Type.Union([
+      Type.Literal('action_required'),
+      Type.Literal('worth_attention'),
+      Type.Literal('needs_judgment'),
+    ])),
+    limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 50 })),
+  },
+  { additionalProperties: false },
+);
+export const ListCategoryItemsParameters = Type.Object(
+  {
+    category: Type.String({ minLength: 1, maxLength: 120 }),
+    limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 50 })),
+    offset: Type.Optional(Type.Integer({ minimum: 0, maximum: 5000 })),
+  },
+  { additionalProperties: false },
+);
+export const GetQuietSummaryParameters = Type.Object(
+  { since: Type.Optional(Type.String({ minLength: 20, maxLength: 40 })) },
+  { additionalProperties: false },
+);
+export const UpdateBriefScheduleParameters = Type.Object(
+  {
+    entries: Type.Array(
+      Type.Object(
+        {
+          briefing_type: Type.Union([
+            Type.Literal('morning'),
+            Type.Literal('midday'),
+            Type.Literal('evening'),
+          ]),
+          minute_of_day: Type.Integer({ minimum: 0, maximum: 1439 }),
+          days: Type.Array(Type.Integer({ minimum: 0, maximum: 6 }), { minItems: 1, maxItems: 7 }),
+          enabled: Type.Boolean(),
+        },
+        { additionalProperties: false },
+      ),
+      { minItems: 0, maxItems: 3 },
+    ),
+  },
+  { additionalProperties: false },
+);
+
+export const INTERACTIVE_BRIEFING_TOOLS = Object.freeze([
+  Object.freeze({
+    name: 'summarize_time_window',
+    label: 'Summarize time window',
+    description: 'Generate the next incremental briefing from structured filter decisions. The window continues from the previous briefing automatically and never repeats handled items.',
+    parameters: SummarizeTimeWindowParameters,
+  }),
+  Object.freeze({
+    name: 'get_attention_snapshot',
+    label: 'Get attention snapshot',
+    description: "Read today's structured processing snapshot: totals, delivery-mode counts, boundary items, and category counts.",
+    parameters: GetAttentionSnapshotParameters,
+  }),
+  Object.freeze({
+    name: 'list_priority_items',
+    label: 'List priority items',
+    description: 'List items from the latest ready briefing, optionally filtered by priority.',
+    parameters: ListPriorityItemsParameters,
+  }),
+  Object.freeze({
+    name: 'list_category_items',
+    label: 'List category items',
+    description: 'List message references decided into one category today, with pagination.',
+    parameters: ListCategoryItemsParameters,
+  }),
+  Object.freeze({
+    name: 'get_quiet_summary',
+    label: 'Get quiet summary',
+    description: 'Aggregate quietly suppressed messages by category with counts, sources, and bounded samples.',
+    parameters: GetQuietSummaryParameters,
+  }),
+  Object.freeze({
+    name: 'update_brief_schedule',
+    label: 'Update briefing schedule',
+    description: 'Replace the briefing schedule. Call only after the user explicitly confirmed the new times.',
+    parameters: UpdateBriefScheduleParameters,
+  }),
+]);
+
+export const INTERACTIVE_BRIEFING_ALL_TOOLS = Object.freeze([
+  ...INTERACTIVE_SIGNAL_APPETITE_ALL_TOOLS,
+  ...INTERACTIVE_BRIEFING_TOOLS,
+]);
+
 export const INTERACTIVE_READ_ONLY_SYSTEM_PROMPT = `You are the Opportunity Radar assistant running on the
 user's device.
 
@@ -359,6 +463,16 @@ called only after showing the preview and the host obtains separate explicit con
 a candidate is active, a shadow hides messages, or a cloud decision succeeded unless the tool result
 confirms it. Cloud unavailability must never be used as a reason to suppress a boundary message.`;
 
+export const INTERACTIVE_BRIEFING_SYSTEM_PROMPT = `${INTERACTIVE_SIGNAL_APPETITE_SYSTEM_PROMPT}
+
+Briefings summarize a bounded time window from structured filter decisions. Counts, categories, and
+items always come from tool results; never invent, extrapolate, or restate them from memory. Briefings
+are incremental: summarize_time_window continues from the previous briefing and never repeats items
+the user already handled. When the cloud summary is unavailable the structured briefing still stands;
+describe it from the data and never claim generation failed entirely. Quiet-zone numbers are
+aggregates; reveal individual quiet items only through their dedicated listing tools. Call
+update_brief_schedule only after the user explicitly confirmed the exact new times.`;
+
 // Compatibility alias for the v1 contract.
 export const INTERACTIVE_AGENT_SYSTEM_PROMPT = INTERACTIVE_READ_ONLY_SYSTEM_PROMPT;
 
@@ -386,6 +500,12 @@ const contracts = Object.freeze({
     policyVersion: INTERACTIVE_AGENT_SIGNAL_APPETITE_POLICY_VERSION,
     systemPrompt: INTERACTIVE_SIGNAL_APPETITE_SYSTEM_PROMPT,
     tools: INTERACTIVE_SIGNAL_APPETITE_ALL_TOOLS,
+  }),
+  [INTERACTIVE_AGENT_BRIEFING_SCHEMA_VERSION]: Object.freeze({
+    schemaVersion: INTERACTIVE_AGENT_BRIEFING_SCHEMA_VERSION,
+    policyVersion: INTERACTIVE_AGENT_BRIEFING_POLICY_VERSION,
+    systemPrompt: INTERACTIVE_BRIEFING_SYSTEM_PROMPT,
+    tools: INTERACTIVE_BRIEFING_ALL_TOOLS,
   }),
 });
 
