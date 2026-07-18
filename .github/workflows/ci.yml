@@ -172,7 +172,7 @@ jobs:
     timeout-minutes: 40
     env:
       RADAR_APP_VARIANT: production
-      RADAR_APP_VERSION: 0.2.0
+      RADAR_APP_VERSION: 1.0.0
       RADAR_BUILD_NUMBER: 2
       EXPO_PUBLIC_API_BASE_URL: https://api.example.test
       EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID: 1234567890-ci-server.apps.googleusercontent.com
@@ -208,7 +208,7 @@ jobs:
     timeout-minutes: 40
     env:
       RADAR_APP_VARIANT: production
-      RADAR_APP_VERSION: 0.2.0
+      RADAR_APP_VERSION: 1.0.0
       RADAR_BUILD_NUMBER: 2
       EXPO_PUBLIC_API_BASE_URL: https://api.example.test
       EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID: 1234567890-ci-server.apps.googleusercontent.com

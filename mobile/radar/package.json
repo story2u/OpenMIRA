@@ -1,6 +1,6 @@
 {
   "name": "radar",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "packageManager": "pnpm@10.25.0",
   "main": "expo-router/entry",
   "dependencies": {
