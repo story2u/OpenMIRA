@@ -11,6 +11,7 @@ import {
 const opportunityId = '01234567-89ab-cdef-0123-456789abcdef';
 const opportunity = {
   id: opportunityId,
+  opportunityType: 'business',
   platform: 'telegram',
   contactName: 'Example Contact',
   contactAvatar: '',

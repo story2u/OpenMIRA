@@ -46,6 +46,7 @@ class TestDatabase implements SyncStoreDatabase {
 function opportunity(overrides: Partial<OpportunityDetail> = {}): OpportunityDetail {
   return {
     id: opportunityId,
+    opportunityType: 'business',
     platform: 'telegram',
     contactName: 'Customer',
     contactAvatar: '',

@@ -210,6 +210,7 @@ function applyAppetiteToolResponse() {
 function opportunity(): OpportunityDetail {
   return {
     id: opportunityId,
+    opportunityType: 'business',
     platform: 'telegram',
     contactName: 'Customer',
     contactAvatar: '',

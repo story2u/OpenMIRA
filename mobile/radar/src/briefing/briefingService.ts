@@ -11,6 +11,7 @@ import type {
   BriefingScheduleEntry,
   BriefingType,
   QuietItemSummary,
+  ScheduledBriefingType,
 } from '@story2u/radar-core/briefing/model';
 
 import { readMessageFilterDecisions } from '../attention/signalAppetiteStore';
@@ -77,6 +78,27 @@ export interface GenerateBriefingResult {
   briefing: Briefing;
   items: readonly BriefingItem[];
   snapshot: AttentionSnapshot;
+}
+
+function scheduledInstantFor(now: Date, minuteOfDay: number) {
+  const scheduled = new Date(now);
+  scheduled.setHours(Math.floor(minuteOfDay / 60), minuteOfDay % 60, 0, 0);
+  return scheduled;
+}
+
+function wasGeneratedForSchedule(
+  briefings: readonly Briefing[],
+  type: ScheduledBriefingType,
+  scheduledAt: Date,
+  now: Date,
+) {
+  const scheduledIso = scheduledAt.toISOString();
+  const nowIso = now.toISOString();
+  return briefings.some((briefing) => (
+    briefing.type === type &&
+    briefing.generatedAt >= scheduledIso &&
+    briefing.generatedAt <= nowIso
+  ));
 }
 
 /**
@@ -184,6 +206,47 @@ export async function generateBriefing(
     items: composed.items,
   });
   return { briefing, items: composed.items, snapshot };
+}
+
+export async function listDueBriefingTypes(
+  database: BriefingStoreDatabase,
+  context: BriefingServiceContext,
+): Promise<ScheduledBriefingType[]> {
+  const { ownerId, now } = resolve(context);
+  const current = now();
+  const minute = current.getHours() * 60 + current.getMinutes();
+  const day = current.getDay();
+  const schedule = await readBriefingSchedule(database, ownerId);
+  const recent = await readBriefings(database, ownerId, { limit: 50 });
+  return schedule
+    .filter((entry) => (
+      entry.enabled &&
+      entry.days.includes(day) &&
+      entry.minuteOfDay <= minute &&
+      !wasGeneratedForSchedule(
+        recent,
+        entry.briefingType,
+        scheduledInstantFor(current, entry.minuteOfDay),
+        current,
+      )
+    ))
+    .map((entry) => entry.briefingType);
+}
+
+export async function generateDueBriefings(
+  database: BriefingStoreDatabase,
+  context: BriefingServiceContext,
+  options: { summarize?: BriefingSummarizer } = {},
+): Promise<GenerateBriefingResult[]> {
+  const due = await listDueBriefingTypes(database, context);
+  const results: GenerateBriefingResult[] = [];
+  for (const type of due) {
+    results.push(await generateBriefing(database, context, {
+      type,
+      summarize: options.summarize,
+    }));
+  }
+  return results;
 }
 
 export async function getAttentionSnapshot(

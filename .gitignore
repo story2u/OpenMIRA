@@ -19,6 +19,9 @@ mobile/android/app/build/
 mobile/android/local.properties
 mobile/android/.idea/
 
+# React Native / Expo 本地构建、归档与 App Store 导出产物
+mobile/radar/build/
+
 # 可重复生成的 Demo 大型媒体；通过 GitHub Release / Actions artifact 分发
 docs/assets/demo/raw/
 docs/assets/demo/render/

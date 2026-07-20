@@ -3802,6 +3802,8 @@ export interface components {
             };
             /** Matchedkeywords */
             matchedKeywords: string[];
+            /** @default business */
+            opportunityType: components["schemas"]["OpportunityType"];
             platform: components["schemas"]["IMChannel"];
             priority: components["schemas"]["Priority"];
             /** Rawmessagelinks */
@@ -3892,6 +3894,8 @@ export interface components {
             };
             /** Matchedkeywords */
             matchedKeywords: string[];
+            /** @default business */
+            opportunityType: components["schemas"]["OpportunityType"];
             platform: components["schemas"]["IMChannel"];
             priority: components["schemas"]["Priority"];
             /** Rawmessagelinks */
@@ -3931,6 +3935,11 @@ export interface components {
             expectedVersion?: number | null;
             status: components["schemas"]["OpportunityStatus"];
         };
+        /**
+         * OpportunityType
+         * @enum {string}
+         */
+        OpportunityType: "business" | "job";
         /** PasswordActionRead */
         PasswordActionRead: {
             /** Message */

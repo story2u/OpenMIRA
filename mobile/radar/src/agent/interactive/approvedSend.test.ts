@@ -19,6 +19,7 @@ const approvalId = '41234567-89ab-4def-8123-456789abcdef';
 function opportunity(): OpportunityDetail {
   return {
     id: opportunityId,
+    opportunityType: 'business',
     platform: 'telegram',
     contactName: 'Customer',
     contactAvatar: '',

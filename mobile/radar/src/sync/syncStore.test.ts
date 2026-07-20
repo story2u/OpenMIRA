@@ -59,6 +59,7 @@ class TestDatabase implements SyncStoreDatabase {
 
 const opportunity: OpportunityDetail = {
   id: opportunityId,
+  opportunityType: 'business',
   platform: 'telegram',
   contactName: 'Customer',
   contactAvatar: '',

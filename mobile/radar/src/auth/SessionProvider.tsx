@@ -71,6 +71,7 @@ import {
   endSession,
   clearSessionTokens,
   persistReplacingLegacyToken,
+  SessionPersistenceError,
   type SessionState,
 } from './sessionCore';
 
@@ -120,6 +121,15 @@ const sessionUnavailableKeys: Record<SessionUnavailableReason, MessageKey> = {
   network: 'auth.session.networkUnavailable',
   server: 'auth.session.serverUnavailable',
 };
+
+function safePersistenceCause(error: unknown) {
+  const cause = error instanceof SessionPersistenceError ? error.cause : undefined;
+  if (!(cause instanceof Error)) return undefined;
+  return {
+    causeClass: cause.name,
+    causeSummary: cause.message.slice(0, 160),
+  };
+}
 
 export function sessionUnavailableMessage(reason: SessionUnavailableReason, t: Translator) {
   return t(sessionUnavailableKeys[reason]);
@@ -283,7 +293,16 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     if (!baseUrl) throw new MobileConfigurationError('Sign-in service is not configured.');
 
     const response = await requestPasswordLogin(baseUrl, { email, password });
-    await persistReplacingLegacyToken(currentTokenStore, legacyTokenStore, response.accessToken);
+    try {
+      await persistReplacingLegacyToken(currentTokenStore, legacyTokenStore, response.accessToken);
+    } catch (error) {
+      logEvent('session.persist_login_token_failed', {
+        stage: error instanceof SessionPersistenceError ? error.stage : 'unknown',
+        errorClass: error instanceof Error ? error.name : 'UnknownError',
+        ...safePersistenceCause(error),
+      });
+      throw error;
+    }
     setCapabilities({ ...disabledCapabilities });
     setCommandSummary(emptyCommandSummary);
     setPushEnrollmentState('disabled');
@@ -299,7 +318,17 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     if (!baseUrl) throw new MobileConfigurationError('Sign-in service is not configured.');
 
     const response = await requestNativeLogin(baseUrl, provider, { idToken });
-    await persistReplacingLegacyToken(currentTokenStore, legacyTokenStore, response.accessToken);
+    try {
+      await persistReplacingLegacyToken(currentTokenStore, legacyTokenStore, response.accessToken);
+    } catch (error) {
+      logEvent('session.persist_login_token_failed', {
+        provider,
+        stage: error instanceof SessionPersistenceError ? error.stage : 'unknown',
+        errorClass: error instanceof Error ? error.name : 'UnknownError',
+        ...safePersistenceCause(error),
+      });
+      throw error;
+    }
     setCapabilities({ ...disabledCapabilities });
     setCommandSummary(emptyCommandSummary);
     setPushEnrollmentState('disabled');

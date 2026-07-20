@@ -5,6 +5,7 @@ import {
   endSession,
   persistReplacingLegacyToken,
   persistSessionToken,
+  SessionPersistenceError,
   restoreSession,
 } from './sessionCore';
 
@@ -60,8 +61,24 @@ it('clears an unverifiable token and never exposes it as a session', async () =>
     clear,
     read: async () => 'different-token-value',
     write: async () => undefined,
-  }, 'new-access-token-value')).rejects.toThrow('could not be verified');
+  }, 'new-access-token-value')).rejects.toMatchObject({
+    name: 'SessionPersistenceError',
+    stage: 'readback-mismatch',
+  } satisfies Partial<SessionPersistenceError>);
   expect(clear).toHaveBeenCalledOnce();
+});
+
+it('classifies malformed runtime tokens before touching storage', async () => {
+  const write = vi.fn(async () => undefined);
+  await expect(persistSessionToken({
+    clear: vi.fn(async () => undefined),
+    read: async () => null,
+    write,
+  }, undefined as unknown as string)).rejects.toMatchObject({
+    name: 'SessionPersistenceError',
+    stage: 'token-validation',
+  } satisfies Partial<SessionPersistenceError>);
+  expect(write).not.toHaveBeenCalled();
 });
 
 it('never writes a new token when legacy credentials cannot be retired', async () => {
@@ -75,7 +92,10 @@ it('never writes a new token when legacy credentials cannot be retired', async (
     current,
     { clear: async () => Promise.reject(new Error('keychain unavailable')) },
     'new-access-token-value',
-  )).rejects.toThrow('keychain unavailable');
+  )).rejects.toMatchObject({
+    name: 'SessionPersistenceError',
+    stage: 'legacy-clear',
+  } satisfies Partial<SessionPersistenceError>);
   expect(write).not.toHaveBeenCalled();
   expect(current.clear).not.toHaveBeenCalled();
 });

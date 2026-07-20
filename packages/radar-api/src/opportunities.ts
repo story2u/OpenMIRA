@@ -41,6 +41,7 @@ const AgentActionSchema = Type.Object(
 
 const opportunityProperties = {
     id: Type.String({ pattern: uuidPattern }),
+    opportunityType: Type.Union([Type.Literal('business'), Type.Literal('job')]),
     platform: Type.Union([Type.Literal('telegram'), Type.Literal('wecom')]),
     contactName: Type.String(),
     contactAvatar: Type.String(),

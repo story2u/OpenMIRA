@@ -19,6 +19,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
+  SafeAreaView,
   StyleSheet,
   Text,
   TextInput,
@@ -578,7 +579,17 @@ export default function AgentScreen() {
     t,
   ]);
 
-  if (!ownerId || !capabilities.agentToolsAvailable) return null;
+  if (!ownerId) return null;
+  if (!capabilities.agentToolsAvailable) {
+    return (
+      <SafeAreaView style={styles.screen}>
+        <View style={styles.unavailable}>
+          <Text style={styles.title}>{t('agent.unavailable.title')}</Text>
+          <Text style={styles.subtitle}>{t('agent.unavailable.body')}</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <KeyboardAvoidingView
@@ -655,6 +666,7 @@ export default function AgentScreen() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
+  unavailable: { flex: 1, justifyContent: 'center', gap: 10, padding: 24 },
   messages: { flexGrow: 1, gap: 10, padding: 16, paddingBottom: 24 },
   headerRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
   headerCopy: { flex: 1 },

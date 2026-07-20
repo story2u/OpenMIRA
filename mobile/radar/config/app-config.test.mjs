@@ -50,6 +50,9 @@ describe('Expo application config', () => {
     const config = resolveExpoConfig({ config: baseConfig });
 
     expect(notificationsMode(config)).toBe('development');
+    expect(config.ios.entitlements['keychain-access-groups']).toEqual([
+      '$(AppIdentifierPrefix)$(CFBundleIdentifier)',
+    ]);
   });
 
   it('uses the production APNs entitlement and controlled FCM file for store builds', () => {
@@ -61,6 +64,7 @@ describe('Expo application config', () => {
 
     const config = resolveExpoConfig({ config: baseConfig });
 
+    expect(config.name).toBe('OpenMIRA：智能消息管家');
     expect(notificationsMode(config)).toBe('production');
     expect(config.android.googleServicesFile).toBe('/run/secrets/google-services.json');
   });

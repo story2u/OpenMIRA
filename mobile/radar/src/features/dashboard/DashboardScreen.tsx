@@ -564,7 +564,7 @@ function Separator() {
   return <View style={styles.separator} />;
 }
 
-export default function DashboardScreen() {
+export default function DashboardScreen({ initialFilters }: { initialFilters?: DashboardFilters } = {}) {
   const router = useRouter();
   const {
     capabilities,
@@ -575,7 +575,9 @@ export default function DashboardScreen() {
     synchronize,
   } = useSession();
   const { t } = useI18n();
-  const [filters, setFilters] = useState(createDefaultDashboardFilters);
+  const [filters, setFilters] = useState(() => (
+    initialFilters ? cloneDashboardFilters(initialFilters) : createDefaultDashboardFilters()
+  ));
   const [page, setPage] = useState(0);
   const [filtersVisible, setFiltersVisible] = useState(false);
   const ownerId = sessionState.status === 'authenticated' ? sessionState.user.id : '';

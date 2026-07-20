@@ -10,10 +10,12 @@ import { clearLocalUserDataInDatabase } from '../storage/userData';
 import {
   dismissBriefing,
   generateBriefing,
+  generateDueBriefings,
   getAttentionSnapshot,
   getBriefing,
   getBriefingSchedule,
   getQuietSummary,
+  listDueBriefingTypes,
   markBriefingItemHandled,
   updateBriefingSchedule,
 } from './briefingService';
@@ -119,6 +121,15 @@ const context = (nowIso: string) => ({
   ownerId,
   deviceId,
   now: () => new Date(nowIso),
+  createId: nextId,
+});
+
+const localDate = (hour: number, minute: number) => new Date(2026, 6, 20, hour, minute, 0, 0);
+
+const localContext = (hour: number, minute: number) => ({
+  ownerId,
+  deviceId,
+  now: () => localDate(hour, minute),
   createId: nextId,
 });
 
@@ -261,5 +272,40 @@ describe('简报时间表', () => {
     expect(updated[0]).toMatchObject({ briefingType: 'morning', minuteOfDay: 540 });
     const events = await readBriefingEvents(database, ownerId);
     expect(events.at(-1)?.type).toBe('BriefingScheduleUpdated');
+  });
+
+  it('到点触发简报并按同一日同一时段去重，L2 summarizer 从调度入口透传', async () => {
+    const database = await createDatabase();
+    const messageId = nextId();
+    await insertDecision(database, {
+      messageId,
+      decidedAt: localDate(8, 10).toISOString(),
+      decision: 'immediate',
+    });
+
+    expect(await listDueBriefingTypes(database, localContext(8, 29))).toEqual([]);
+    expect(await listDueBriefingTypes(database, localContext(8, 31))).toEqual(['morning']);
+
+    const generated = await generateDueBriefings(database, localContext(8, 31), {
+      summarize: async ({ briefing }) => `整理了 ${briefing.totalMessages} 条`,
+    });
+    expect(generated).toHaveLength(1);
+    expect(generated[0].briefing.type).toBe('morning');
+    expect(generated[0].briefing.summary).toBe('整理了 1 条');
+    expect(generated[0].briefing.includedMessageIds).toEqual([messageId]);
+
+    const duplicate = await generateDueBriefings(database, localContext(8, 45));
+    expect(duplicate).toEqual([]);
+  });
+
+  it('停用时段或非生效日期不会触发简报', async () => {
+    const database = await createDatabase();
+    const ctx = localContext(12, 10);
+    await updateBriefingSchedule(database, ctx, [
+      { briefingType: 'morning', minuteOfDay: 8 * 60, days: [2], enabled: true },
+      { briefingType: 'midday', minuteOfDay: 12 * 60, days: [1], enabled: false },
+    ]);
+
+    expect(await listDueBriefingTypes(database, ctx)).toEqual([]);
   });
 });

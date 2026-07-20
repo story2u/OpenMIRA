@@ -66,7 +66,11 @@ async function requireReady(database: SyncStoreExecutor, ownerId: string) {
 
 function decodeOpportunity(row: ProjectionRow): OpportunityDetail {
   try {
-    return decodeOpportunityDetailResponse(JSON.parse(row.payload_json));
+    const payload = JSON.parse(row.payload_json);
+    if (payload && typeof payload === 'object' && !Array.isArray(payload) && !('opportunityType' in payload)) {
+      payload.opportunityType = 'business';
+    }
+    return decodeOpportunityDetailResponse(payload);
   } catch {
     throw new LocalProjectionCorruptError('opportunity');
   }

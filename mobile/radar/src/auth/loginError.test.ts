@@ -14,6 +14,11 @@ it.each([
     .toBe(expected);
 });
 
+it('maps fetch network failures separately from secure storage failures', () => {
+  expect(loginErrorMessage(new TypeError('Network request failed')))
+    .toBe('暂时无法连接登录服务，请稍后重试。');
+});
+
 describe('nativeLoginErrorMessage', () => {
   it('never exposes provider or server error details', () => {
     expect(nativeLoginErrorMessage('google', new NativeIdentityFailure('state-mismatch')))
@@ -30,6 +35,11 @@ describe('nativeLoginErrorMessage', () => {
       'google',
       new NativeIdentityFailure('native-module-unavailable'),
     )).toBe('Google 登录需要开发版或正式版 App。');
+  });
+
+  it('maps server reachability failures separately from provider failures', () => {
+    expect(nativeLoginErrorMessage('apple', new TypeError('Network request failed')))
+      .toBe('暂时无法连接登录服务，请稍后重试。');
   });
 });
 

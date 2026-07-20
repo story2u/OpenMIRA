@@ -70,6 +70,10 @@ def test_interactive_agent_accepts_only_reviewed_schema_policy_pairs() -> None:
         schema_version=4,
         policy_version="interactive-signal-appetite-v4",
     )
+    assert supports_interactive_agent_contract(
+        schema_version=5,
+        policy_version="interactive-briefing-v5",
+    )
     assert not supports_interactive_agent_contract(
         schema_version=2,
         policy_version="interactive-read-only-v1",
@@ -81,6 +85,10 @@ def test_interactive_agent_accepts_only_reviewed_schema_policy_pairs() -> None:
     assert not supports_interactive_agent_contract(
         schema_version=4,
         policy_version="interactive-approved-send-v3",
+    )
+    assert not supports_interactive_agent_contract(
+        schema_version=5,
+        policy_version="interactive-signal-appetite-v4",
     )
 
 

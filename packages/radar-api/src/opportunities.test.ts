@@ -10,6 +10,7 @@ import {
 
 const opportunity = {
   id: '01234567-89ab-cdef-0123-456789abcdef',
+  opportunityType: 'business',
   platform: 'telegram',
   contactName: 'Example Contact',
   contactAvatar: '',
@@ -91,6 +92,7 @@ describe('opportunities API', () => {
   it('strictly decodes dashboard and list responses', async () => {
     await expect(fixture(dashboard).api.getDashboard()).resolves.toMatchObject({ total: 1 });
     await expect(fixture([opportunity]).api.list({ archive: 'all', limit: 200 })).resolves.toHaveLength(1);
+    await expect(fixture([{ ...opportunity, opportunityType: 'job' }]).api.list()).resolves.toHaveLength(1);
 
     await expect(fixture({ ...dashboard, extra: true }).api.getDashboard()).rejects.toThrow();
     await expect(fixture([{ ...opportunity, trustScore: 101 }]).api.list()).rejects.toThrow();

@@ -31,6 +31,7 @@ from app.domain.enums import (
     JobWorkMode,
     MessageSource,
     OpportunityStatus,
+    OpportunityType,
     PlanCode,
     Priority,
     PushEnvironment,
@@ -65,6 +66,7 @@ class AgentActionRead(BaseModel):
 
 class OpportunityRead(BaseModel):
     id: UUID
+    opportunityType: OpportunityType = OpportunityType.BUSINESS
     platform: IMChannel
     contactName: str
     contactAvatar: str
@@ -185,7 +187,9 @@ class JobSearchProfileUpdate(BaseModel):
             "minimumMatchScore",
             "notificationEnabled",
         }
-        null_fields = [name for name in required & self.model_fields_set if getattr(self, name) is None]
+        null_fields = [
+            name for name in required & self.model_fields_set if getattr(self, name) is None
+        ]
         if null_fields:
             raise ValueError(f"fields cannot be null: {', '.join(sorted(null_fields))}")
         return self

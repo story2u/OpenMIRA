@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 
 from app.api.deps import get_message_repo, get_opportunity_repo, require_user
 from app.api.v1.routes import messages, opportunities
-from app.domain.enums import IMChannel, MessageDirection, MessageSource
+from app.domain.enums import IMChannel, MessageDirection, MessageSource, OpportunityType
 from app.infrastructure.db.models import Message, Opportunity, User
 
 
@@ -52,10 +52,14 @@ class FakeMessageRepo:
         return sum(item.opportunity_id == opportunity_id for item in self.items)
 
 
-def make_opportunity(owner_id: UUID) -> Opportunity:
+def make_opportunity(
+    owner_id: UUID,
+    opportunity_type: OpportunityType = OpportunityType.BUSINESS,
+) -> Opportunity:
     return Opportunity(
         id=uuid4(),
         owner_user_id=owner_id,
+        opportunity_type=opportunity_type,
         channel=IMChannel.TELEGRAM,
         conversation_id="fixture-conversation",
         title="采购咨询",
@@ -108,10 +112,22 @@ def test_detail_returns_owned_resource_and_hides_foreign_resource() -> None:
 
     assert response.status_code == 200
     assert response.json()["id"] == str(opportunity.id)
+    assert response.json()["opportunityType"] == "business"
 
     foreign = User(id=uuid4(), email="foreign@example.test")
     foreign_client = build_client(foreign, repo, FakeMessageRepo([]))
     assert foreign_client.get(f"/opportunities/{opportunity.id}").status_code == 404
+
+
+def test_detail_exposes_job_opportunity_type_for_mobile_templates() -> None:
+    owner = User(id=uuid4(), email="owner@example.test")
+    opportunity = make_opportunity(owner.id, OpportunityType.JOB)
+    client = build_client(owner, FakeOpportunityRepo(opportunity), FakeMessageRepo([]))
+
+    response = client.get(f"/opportunities/{opportunity.id}")
+
+    assert response.status_code == 200
+    assert response.json()["opportunityType"] == "job"
 
 
 def test_message_page_is_bounded_and_keeps_chronological_metadata() -> None:
