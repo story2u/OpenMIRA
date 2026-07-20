@@ -34,14 +34,16 @@ from app.domain.enums import (
     InteractiveAgentTurnStatus,
 )
 from app.domain.services.interactive_agent_gateway import (
+    INTERACTIVE_AGENT_SYSTEM_PROMPT,
     INTERACTIVE_APPROVED_SEND_SYSTEM_PROMPT,
     INTERACTIVE_APPROVED_SEND_TOOLS,
-    INTERACTIVE_SIGNAL_APPETITE_ALL_TOOLS,
-    INTERACTIVE_SIGNAL_APPETITE_SYSTEM_PROMPT,
-    INTERACTIVE_AGENT_SYSTEM_PROMPT,
+    INTERACTIVE_BRIEFING_ALL_TOOLS,
+    INTERACTIVE_BRIEFING_SYSTEM_PROMPT,
     INTERACTIVE_INTERNAL_SYSTEM_PROMPT,
     INTERACTIVE_INTERNAL_TOOLS,
     INTERACTIVE_READ_ONLY_TOOLS,
+    INTERACTIVE_SIGNAL_APPETITE_ALL_TOOLS,
+    INTERACTIVE_SIGNAL_APPETITE_SYSTEM_PROMPT,
     InteractiveAgentGatewayContractError,
     InteractiveAgentGatewayProviderError,
     InteractiveAgentGatewayRateLimitError,
@@ -531,6 +533,84 @@ def test_v4_contract_adds_strict_signal_appetite_tools_without_model_confirmatio
         )
 
 
+def test_v5_contract_adds_strict_briefing_tools_without_window_or_schedule_smuggling() -> None:
+    payload = {
+        **valid_gateway_payload(),
+        "messages": [
+            {"role": "system", "content": INTERACTIVE_BRIEFING_SYSTEM_PROMPT},
+            {"role": "user", "content": "Generate the noon briefing."},
+            {
+                "role": "assistant",
+                "content": None,
+                "tool_calls": [
+                    {
+                        "id": "call-brief",
+                        "type": "function",
+                        "function": {
+                            "name": "summarize_time_window",
+                            "arguments": json.dumps({"briefing_type": "midday"}),
+                        },
+                    }
+                ],
+            },
+            {"role": "tool", "tool_call_id": "call-brief", "content": '{"state":"generated"}'},
+        ],
+        "tools": list(INTERACTIVE_BRIEFING_ALL_TOOLS),
+    }
+    validate_interactive_gateway_contract(
+        payload,
+        expected_model_alias="radar-interactive-v1",
+        max_prompt_chars=64_000,
+        max_completion_tokens=4_096,
+        schema_version=5,
+        policy_version="interactive-briefing-v5",
+    )
+
+    smuggled_window = json.loads(json.dumps(payload))
+    smuggled_window["messages"][2]["tool_calls"][0]["function"]["arguments"] = json.dumps(
+        {
+            "briefing_type": "midday",
+            "from": "2026-07-20T00:00:00Z",
+            "to": "2026-07-20T12:00:00Z",
+        }
+    )
+    with pytest.raises(InteractiveAgentGatewayContractError):
+        validate_interactive_gateway_contract(
+            smuggled_window,
+            expected_model_alias="radar-interactive-v1",
+            max_prompt_chars=64_000,
+            max_completion_tokens=4_096,
+            schema_version=5,
+            policy_version="interactive-briefing-v5",
+        )
+
+    unsafe_schedule = json.loads(json.dumps(payload))
+    unsafe_schedule["messages"][2]["tool_calls"][0]["function"] = {
+        "name": "update_brief_schedule",
+        "arguments": json.dumps(
+            {
+                "entries": [
+                    {
+                        "briefing_type": "urgent",
+                        "minute_of_day": 12 * 60,
+                        "days": [1, 2, 3, 4, 5],
+                        "enabled": True,
+                    }
+                ]
+            }
+        ),
+    }
+    with pytest.raises(InteractiveAgentGatewayContractError):
+        validate_interactive_gateway_contract(
+            unsafe_schedule,
+            expected_model_alias="radar-interactive-v1",
+            max_prompt_chars=64_000,
+            max_completion_tokens=4_096,
+            schema_version=5,
+            policy_version="interactive-briefing-v5",
+        )
+
+
 def test_v4_python_gateway_contract_matches_shared_typescript_contract() -> None:
     module_path = (
         Path(__file__).resolve().parents[2]
@@ -567,6 +647,45 @@ def test_v4_python_gateway_contract_matches_shared_typescript_contract() -> None
             "parameters": tool["function"]["parameters"],
         }
         for tool in INTERACTIVE_SIGNAL_APPETITE_ALL_TOOLS
+    ]
+
+
+def test_v5_python_gateway_contract_matches_shared_typescript_contract() -> None:
+    module_path = (
+        Path(__file__).resolve().parents[2]
+        / "packages"
+        / "radar-agent"
+        / "src"
+        / "interactive.mjs"
+    )
+    script = (
+        f"import({json.dumps(module_path.as_uri())}).then(m => "
+        "console.log(JSON.stringify(m.interactiveAgentContractForSchema(5))))"
+    )
+    completed = subprocess.run(  # noqa: S603
+        ["node", "--input-type=module", "-e", script],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    shared = json.loads(completed.stdout)
+    assert shared["schemaVersion"] == 5
+    assert shared["policyVersion"] == "interactive-briefing-v5"
+    assert shared["systemPrompt"] == INTERACTIVE_BRIEFING_SYSTEM_PROMPT
+    assert [
+        {
+            "name": tool["name"],
+            "description": tool["description"],
+            "parameters": tool["parameters"],
+        }
+        for tool in shared["tools"]
+    ] == [
+        {
+            "name": tool["function"]["name"],
+            "description": tool["function"]["description"],
+            "parameters": tool["function"]["parameters"],
+        }
+        for tool in INTERACTIVE_BRIEFING_ALL_TOOLS
     ]
 
 

@@ -35,7 +35,7 @@ describe('device registration metadata', () => {
         'agent.streaming': true,
         'agent.submitAnalysis': true,
         'agent.interactive': true,
-        'agent.interactiveSchema': 4,
+        'agent.interactiveSchema': 5,
         'push.environment': 'production',
         'sqlite.schema': 7,
       },

@@ -66,7 +66,7 @@ function resolveAppVariant(env = process.env) {
   return {
     variant,
     isProduction: true,
-    name: '商机雷达',
+    name: 'OpenMIRA：智能消息管家',
     slug: 'opportunity-radar',
     scheme: 'opportunity-radar',
     applicationId: 'com.codeiy.im',

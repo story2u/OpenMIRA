@@ -1,4 +1,5 @@
 import type { DeviceRegistrationRequest } from '@story2u/radar-contracts/devices';
+import { INTERACTIVE_AGENT_SCHEMA_VERSION } from '@story2u/radar-agent/interactive';
 
 export interface DeviceRuntimeMetadata {
   appBuild: string;
@@ -33,7 +34,7 @@ export function buildDeviceRegistration(
       'agent.schema': 1,
       'agent.submitAnalysis': true,
       'agent.interactive': true,
-      'agent.interactiveSchema': 4,
+      'agent.interactiveSchema': INTERACTIVE_AGENT_SCHEMA_VERSION,
       ...(runtime.pushEnvironment === null
         ? {}
         : { 'push.environment': runtime.pushEnvironment }),

@@ -21,14 +21,56 @@ export interface ClearableTokenStore {
   clear(): Promise<void>;
 }
 
-export async function persistSessionToken(store: SessionTokenStore, token: string) {
-  if (token.length < 16 || token.length > 16_384 || /[\r\n]/.test(token)) {
-    throw new Error('Invalid access token');
+export type SessionPersistenceStage =
+  | 'current-clear'
+  | 'current-read'
+  | 'current-write'
+  | 'legacy-clear'
+  | 'readback-mismatch'
+  | 'token-validation';
+
+export class SessionPersistenceError extends Error {
+  constructor(
+    readonly stage: SessionPersistenceStage,
+    cause?: unknown,
+  ) {
+    super(`Session token persistence failed at ${stage}`);
+    this.name = 'SessionPersistenceError';
+    this.cause = cause;
   }
-  await store.write(token);
-  if ((await store.read()) !== token) {
-    await store.clear();
-    throw new Error('Secure token write could not be verified');
+}
+
+function persistenceError(stage: SessionPersistenceStage, cause?: unknown) {
+  return new SessionPersistenceError(stage, cause);
+}
+
+export async function persistSessionToken(store: SessionTokenStore, token: string) {
+  if (
+    typeof token !== 'string'
+    || token.length < 16
+    || token.length > 16_384
+    || /[\r\n]/.test(token)
+  ) {
+    throw persistenceError('token-validation');
+  }
+  try {
+    await store.write(token);
+  } catch (error) {
+    throw persistenceError('current-write', error);
+  }
+  let stored: string | null;
+  try {
+    stored = await store.read();
+  } catch (error) {
+    throw persistenceError('current-read', error);
+  }
+  if (stored !== token) {
+    try {
+      await store.clear();
+    } catch (error) {
+      throw persistenceError('current-clear', error);
+    }
+    throw persistenceError('readback-mismatch');
   }
 }
 
@@ -39,7 +81,11 @@ export async function persistReplacingLegacyToken(
 ) {
   // Retire the old credential before accepting the replacement. If this fails,
   // the new token is never written and cannot appear after a failed login.
-  await legacy.clear();
+  try {
+    await legacy.clear();
+  } catch (error) {
+    throw persistenceError('legacy-clear', error);
+  }
   await persistSessionToken(current, token);
 }
 

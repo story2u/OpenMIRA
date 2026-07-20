@@ -90,7 +90,7 @@ test('interactive v4 adds reviewed Signal Appetite tools and keeps apply behind 
   );
   assert.match(v4.systemPrompt, /separate explicit confirmation/);
   assert.match(v4.systemPrompt, /never be used as a reason to suppress a boundary message/i);
-  assert.throws(() => interactiveAgentContractForSchema(5), /unsupported/);
+  assert.throws(() => interactiveAgentContractForSchema(6), /unsupported/);
 });
 
 test('interactive tool parameters are strict and bounded', () => {

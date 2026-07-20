@@ -13,6 +13,7 @@
   [端上交互式 Agent、只读领域工具与本地会话](2026-07-17-p5-interactive-agent.md)，P5 S5 实施见
   [Agent 草稿与内部命令工具](../completed/2026-07-18-p5-agent-draft-internal-tools.md)，P5 S6 实施见
   [Agent 明确批准后外发](../completed/2026-07-18-p5-agent-approved-send.md)
+- [OpenMIRA · Mira 消息管家体验重构](2026-07-18-mira-message-concierge.md)
 - [RevenueCat + Paddle 统一订阅计费](2026-07-12-revenuecat-paddle-billing.md)
 
 - [订阅体系与 pi Agent 用量额度](2026-07-11-subscriptions-and-agent-quotas.md)

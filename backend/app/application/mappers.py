@@ -13,9 +13,9 @@ from app.application.dto import (
     TelegramMonitorRead,
     TelegramSourceRead,
     TelegramUserConfigRead,
-    WeComConnectionRead,
     WeComArchiveConnectionRead,
     WeComArchiveMemberBindingRead,
+    WeComConnectionRead,
     WeComSourceRead,
     WorkScheduleRead,
     WorkScheduleSlot,
@@ -28,8 +28,8 @@ from app.domain.enums import (
     TelegramSourceType,
 )
 from app.infrastructure.db.models import (
-    Message,
     Device,
+    Message,
     Opportunity,
     ReplyTemplate,
     TelegramConnection,
@@ -41,10 +41,10 @@ from app.infrastructure.db.models import (
     UserDetectionPreference,
     UserNotificationPreference,
     UserWorkSchedule,
-    WeComConnection,
     WeComArchiveConnection,
     WeComArchiveCursor,
     WeComArchiveMemberBinding,
+    WeComConnection,
     WeComSource,
 )
 
@@ -70,6 +70,7 @@ def frontend_status(status: OpportunityStatus) -> FrontendOpportunityStatus:
 def to_opportunity_read(opportunity: Opportunity) -> OpportunityRead:
     return OpportunityRead(
         id=opportunity.id,
+        opportunityType=opportunity.opportunity_type,
         platform=opportunity.channel,
         contactName=opportunity.contact_name,
         contactAvatar=opportunity.contact_avatar,

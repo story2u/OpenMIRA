@@ -17,6 +17,7 @@ import {
   ActivityIndicator,
   FlatList,
   KeyboardAvoidingView,
+  Linking,
   Platform,
   Pressable,
   SafeAreaView,
@@ -73,7 +74,6 @@ const actionLabelKeys: Record<AgentAction['actionType'], MessageKey> = {
   private_message: 'opportunity.agentAction.privateMessage',
   notify_user: 'opportunity.agentAction.notifyUser',
 };
-const MAX_FINDING_FIELDS = 12;
 const MAX_AGENT_ACTIONS = 12;
 
 function formatTimestamp(value: string, locale: AppLocale, t: Translator) {
@@ -85,21 +85,6 @@ function formatTimestamp(value: string, locale: AppLocale, t: Translator) {
     hour: '2-digit',
     minute: '2-digit',
   });
-}
-
-function displayUnknown(value: unknown, locale: AppLocale, t: Translator): string {
-  if (value === null || value === undefined || value === '') return '—';
-  if (typeof value === 'string') return value.slice(0, 240);
-  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
-  if (Array.isArray(value)) {
-    const separator = locale === 'zh-CN' ? '、' : ', ';
-    return value.slice(0, 6).map((item) => displayUnknown(item, locale, t)).join(separator).slice(0, 240) || '—';
-  }
-  try {
-    return JSON.stringify(value).slice(0, 240);
-  } catch {
-    return t('opportunity.value.unavailable');
-  }
 }
 
 function DetailRow({ label, value }: { label: string; value: string }) {
@@ -125,23 +110,31 @@ const DetailHeader = memo(function DetailHeader({
   onRetry(): void;
 }) {
   const { locale, t } = useI18n();
-  const allLinkEntries = Object.entries(detail.linkVerification ?? {}).sort(([left], [right]) =>
-    left.localeCompare(right),
-  );
-  const allContactEntries = Object.entries(detail.extractedContacts ?? {}).sort(([left], [right]) =>
-    left.localeCompare(right),
-  );
   const allAgentActions = detail.agentActions ?? [];
-  const linkEntries = allLinkEntries.slice(0, MAX_FINDING_FIELDS);
-  const contactEntries = allContactEntries.slice(0, MAX_FINDING_FIELDS);
   const agentActions = allAgentActions.slice(0, MAX_AGENT_ACTIONS);
-  const hasAgentFindings = Boolean(
-    detail.attentionRequired ||
-    detail.agentAnalysisError ||
-    allLinkEntries.length > 0 ||
-    allContactEntries.length > 0 ||
-    allAgentActions.length > 0,
-  );
+  const isJob = detail.opportunityType === 'job';
+  const rawMessageLinks = detail.rawMessageLinks ?? [];
+  const sourceLabel = detail.sourceType === 'group'
+    ? (detail.groupName ? `${t('dashboard.source.group')} · ${detail.groupName}` : t('dashboard.source.group'))
+    : t('dashboard.source.private');
+  const reasons = [
+    detail.attentionRequired ? t('opportunity.reason.attention') : null,
+    detail.detectionReason,
+    detail.matchedKeywords.length > 0 ? t('opportunity.keywords', {
+      keywords: detail.matchedKeywords.join(locale === 'zh-CN' ? '、' : ', '),
+    }) : null,
+    ...agentActions.map((action) => action.reason),
+  ].filter((value): value is string => Boolean(value));
+  const risks = [
+    detail.agentAnalysisError ? t('opportunity.analysisIncomplete') : null,
+    detail.agentAnalysisStatus !== 'completed'
+      ? t('opportunity.risk.analysisState', { status: t(analysisLabelKeys[detail.agentAnalysisStatus]) })
+      : null,
+    detail.trustScore < 50 ? t('opportunity.risk.lowTrust') : null,
+    rawMessageLinks.length > 0
+      ? t('opportunity.evidence.linkCount', { count: rawMessageLinks.length })
+      : null,
+  ].filter((value): value is string => Boolean(value));
 
   return (
     <View>
@@ -165,6 +158,9 @@ const DetailHeader = memo(function DetailHeader({
       ) : null}
 
       <View style={[styles.sectionCard, detail.attentionRequired && styles.attentionCard]}>
+        <Text style={styles.kindLabel}>
+          {t(isJob ? 'opportunity.kind.job' : 'opportunity.kind.business')}
+        </Text>
         <View style={styles.contactRow}>
           <View style={styles.avatar}>
             <Text style={styles.avatarText}>{detail.contactName.trim().slice(0, 1) || '?'}</Text>
@@ -186,55 +182,58 @@ const DetailHeader = memo(function DetailHeader({
           <Text style={styles.attentionText}>{t('opportunity.attention')}</Text>
         ) : null}
         <Text style={styles.summary}>{detail.summary}</Text>
-        {detail.matchedKeywords.length > 0 ? (
-          <Text style={styles.keywords}>{t('opportunity.keywords', {
-            keywords: detail.matchedKeywords.join(locale === 'zh-CN' ? '、' : ', '),
-          })}</Text>
-        ) : null}
       </View>
 
       <View style={styles.sectionCard}>
-        <SectionTitle>{t('opportunity.summary')}</SectionTitle>
+        <SectionTitle>{t('opportunity.miraConclusion')}</SectionTitle>
+        <Text style={styles.conclusionText}>{detail.summary}</Text>
+      </View>
+
+      <View style={styles.sectionCard}>
+        <SectionTitle>{t('opportunity.keyFacts')}</SectionTitle>
         <DetailRow label={t('opportunity.field.status')} value={t(internalStatusLabelKeys[detail.internalStatus])} />
         <DetailRow label={t('opportunity.field.priority')} value={t(priorityLabelKeys[detail.priority])} />
         <DetailRow label={t('opportunity.field.trust')} value={`${detail.trustScore} / 100`} />
-        {detail.groupName ? <DetailRow label={t('opportunity.field.group')} value={detail.groupName} /> : null}
-        {detail.detectionReason ? <DetailRow label={t('opportunity.field.detectionReason')} value={detail.detectionReason} /> : null}
+        <DetailRow label={t('opportunity.field.source')} value={sourceLabel} />
         <DetailRow label={t('opportunity.field.updatedAt')} value={formatTimestamp(detail.updatedAt, locale, t)} />
       </View>
 
       <View style={styles.sectionCard}>
-        <SectionTitle>{t('opportunity.agentFindings', { status: t(analysisLabelKeys[detail.agentAnalysisStatus]) })}</SectionTitle>
-        {detail.agentAnalysisError ? (
-          <Text accessibilityRole="alert" style={styles.agentError}>{t('opportunity.analysisIncomplete')}</Text>
-        ) : null}
-        {linkEntries.map(([key, value]) => (
-          <DetailRow key={`link-${key}`} label={t('opportunity.linkVerification', { key })} value={displayUnknown(value, locale, t)} />
-        ))}
-        {allLinkEntries.length > linkEntries.length ? (
-          <Text style={styles.omittedCopy}>{t('opportunity.omittedLinks', { count: allLinkEntries.length - linkEntries.length })}</Text>
-        ) : null}
-        {contactEntries.map(([key, value]) => (
-          <DetailRow key={`contact-${key}`} label={t('opportunity.contact', { key })} value={displayUnknown(value, locale, t)} />
-        ))}
-        {allContactEntries.length > contactEntries.length ? (
-          <Text style={styles.omittedCopy}>{t('opportunity.omittedContacts', { count: allContactEntries.length - contactEntries.length })}</Text>
-        ) : null}
-        {agentActions.map((action, index) => (
-          <View key={`${action.actionType}-${index}`} style={styles.actionCard}>
-            <View style={styles.actionTitleRow}>
-              <Text style={styles.actionTitle}>{t(actionLabelKeys[action.actionType])}</Text>
-              {action.requiresApproval ? <Text style={styles.approvalBadge}>{t('opportunity.approvalRequired')}</Text> : null}
-            </View>
-            <Text style={styles.actionReason}>{action.reason}</Text>
-            {action.draft ? <Text style={styles.actionDraft}>{action.draft}</Text> : null}
-          </View>
-        ))}
-        {allAgentActions.length > agentActions.length ? (
-          <Text style={styles.omittedCopy}>{t('opportunity.omittedActions', { count: allAgentActions.length - agentActions.length })}</Text>
-        ) : null}
-        {!hasAgentFindings ? <Text style={styles.emptyCopy}>{t('opportunity.noFindings')}</Text> : null}
+        <SectionTitle>{t('opportunity.whyRelevant')}</SectionTitle>
+        {reasons.length > 0 ? reasons.slice(0, 8).map((reason, index) => (
+          <Text key={`${reason}-${index}`} style={styles.bulletText}>• {reason}</Text>
+        )) : (
+          <Text style={styles.emptyCopy}>{t('opportunity.noFindings')}</Text>
+        )}
       </View>
+
+      <View style={styles.sectionCard}>
+        <SectionTitle>{t('opportunity.riskReview')}</SectionTitle>
+        {risks.length > 0 ? risks.map((risk, index) => (
+          <Text key={`${risk}-${index}`} style={styles.bulletText}>• {risk}</Text>
+        )) : (
+          <Text style={styles.emptyCopy}>{t('opportunity.risk.none')}</Text>
+        )}
+      </View>
+
+      {agentActions.length > 0 ? (
+        <View style={styles.sectionCard}>
+          <SectionTitle>{t('opportunity.nextSteps')}</SectionTitle>
+          {agentActions.map((action, index) => (
+            <View key={`${action.actionType}-${index}`} style={styles.actionCard}>
+              <View style={styles.actionTitleRow}>
+                <Text style={styles.actionTitle}>{t(actionLabelKeys[action.actionType])}</Text>
+                {action.requiresApproval ? <Text style={styles.approvalBadge}>{t('opportunity.approvalRequired')}</Text> : null}
+              </View>
+              <Text style={styles.actionReason}>{action.reason}</Text>
+              {action.draft && !isJob ? <Text style={styles.actionDraft}>{action.draft}</Text> : null}
+            </View>
+          ))}
+          {allAgentActions.length > agentActions.length ? (
+            <Text style={styles.omittedCopy}>{t('opportunity.omittedActions', { count: allAgentActions.length - agentActions.length })}</Text>
+          ) : null}
+        </View>
+      ) : null}
 
       {detail.aiReplyDraft || detail.finalReply ? (
         <View style={styles.sectionCard}>
@@ -322,6 +321,77 @@ const OpportunityActions = memo(function OpportunityActions({
           ))}
         </View>
       ) : null}
+    </View>
+  );
+});
+
+const JobActionPanel = memo(function JobActionPanel({
+  actionError,
+  actionKind,
+  detail,
+  onStatus,
+}: {
+  actionError: string | null;
+  actionKind: OpportunityActionKind | null;
+  detail: OpportunityDetail;
+  onStatus(status: InternalOpportunityStatus): Promise<boolean>;
+}) {
+  const router = useRouter();
+  const { t } = useI18n();
+  const busy = actionKind !== null;
+  const sourceUrl = detail.rawMessageLinks?.[0] ?? null;
+  const openPrepAdvice = () => {
+    const prompt = t('agent.context.prepareJob', { opportunityId: detail.id });
+    router.push(`/(tabs)/agent?prompt=${encodeURIComponent(prompt)}` as Href);
+  };
+  return (
+    <View style={styles.sectionCard}>
+      <SectionTitle>{t('opportunity.job.actions.title')}</SectionTitle>
+      <Text style={styles.jobActionDetail}>{t('opportunity.job.actions.detail')}</Text>
+      {actionError ? (
+        <Text accessibilityRole="alert" style={styles.actionError}>{actionError}</Text>
+      ) : null}
+      <View style={styles.jobActionGrid}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityState={{ disabled: busy }}
+          disabled={busy}
+          onPress={() => void onStatus('following')}
+          style={styles.jobActionButton}
+        >
+          <Text style={styles.jobActionText}>{t('opportunity.job.save')}</Text>
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityState={{ disabled: busy }}
+          disabled={busy}
+          onPress={openPrepAdvice}
+          style={styles.jobActionButton}
+        >
+          <Text style={styles.jobActionText}>{t('opportunity.job.prepare')}</Text>
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityState={{ disabled: !sourceUrl }}
+          disabled={!sourceUrl}
+          onPress={() => {
+            if (sourceUrl) void Linking.openURL(sourceUrl);
+          }}
+          style={[styles.jobActionButton, !sourceUrl && styles.disabled]}
+        >
+          <Text style={styles.jobActionText}>{t('opportunity.job.source')}</Text>
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityState={{ disabled: busy }}
+          disabled={busy}
+          onPress={() => void onStatus('ignored')}
+          style={[styles.jobActionButton, styles.jobDismissButton]}
+        >
+          <Text style={styles.jobActionText}>{t('opportunity.job.notInterested')}</Text>
+        </Pressable>
+      </View>
+      {!sourceUrl ? <Text style={styles.omittedCopy}>{t('opportunity.job.sourceUnavailable')}</Text> : null}
     </View>
   );
 });
@@ -615,6 +685,7 @@ export default function OpportunityDetailScreen({ opportunityId }: { opportunity
   const replyActionError = state.actionErrorKind === 'draft' || state.actionErrorKind === 'reply'
     ? state.actionError
     : null;
+  const isJob = data.detail.opportunityType === 'job';
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.topBar}>
@@ -666,18 +737,20 @@ export default function OpportunityDetailScreen({ opportunityId }: { opportunity
                   </Pressable>
                 ) : null}
               </View>
-              <ReplyComposer
-                actionError={replyActionError}
-                actionKind={state.actionKind}
-                detail={data.detail}
-                onGenerate={generateDraft}
-                onLoadTemplates={loadTemplates}
-                onSend={sendReply}
-                templateError={state.templateError}
-                templates={state.templates}
-                templatesLoaded={state.templatesLoaded}
-                templatesLoading={state.templatesLoading}
-              />
+              {isJob ? null : (
+                <ReplyComposer
+                  actionError={replyActionError}
+                  actionKind={state.actionKind}
+                  detail={data.detail}
+                  onGenerate={generateDraft}
+                  onLoadTemplates={loadTemplates}
+                  onSend={sendReply}
+                  templateError={state.templateError}
+                  templates={state.templates}
+                  templatesLoaded={state.templatesLoaded}
+                  templatesLoading={state.templatesLoading}
+                />
+              )}
             </View>
           )}
           ListHeaderComponent={(
@@ -692,6 +765,14 @@ export default function OpportunityDetailScreen({ opportunityId }: { opportunity
                 onClaim={claim}
                 onStatus={setStatus}
               />
+              {isJob ? (
+                <JobActionPanel
+                  actionError={statusActionError}
+                  actionKind={state.actionKind}
+                  detail={data.detail}
+                  onStatus={setStatus}
+                />
+              ) : null}
               <Pressable
                 accessibilityRole="button"
                 onPress={() => {
@@ -743,6 +824,7 @@ const styles = StyleSheet.create({
   contactCopy: { flex: 1 },
   contactName: { color: colors.text, fontSize: 17, fontWeight: '800' },
   contactMeta: { marginTop: 4, color: colors.mutedText, fontSize: 12 },
+  kindLabel: { marginBottom: 10, color: colors.accent, fontSize: 11, fontWeight: '900', letterSpacing: 1 },
   confidenceBadge: { alignItems: 'center', borderRadius: 12, backgroundColor: colors.background, paddingHorizontal: 10, paddingVertical: 7 },
   confidenceValue: { color: colors.accent, fontSize: 16, fontWeight: '900' },
   confidenceLabel: { color: colors.subtleText, fontSize: 10 },
@@ -750,6 +832,8 @@ const styles = StyleSheet.create({
   summary: { marginTop: 12, color: colors.text, fontSize: 14, lineHeight: 21 },
   keywords: { marginTop: 10, color: colors.mutedText, fontSize: 12, lineHeight: 18 },
   sectionTitle: { marginBottom: 12, color: colors.text, fontSize: 16, fontWeight: '800' },
+  conclusionText: { color: colors.text, fontSize: 14, lineHeight: 21 },
+  bulletText: { marginBottom: 8, color: colors.mutedText, fontSize: 13, lineHeight: 19 },
   detailRow: { marginBottom: 9, gap: 3 },
   detailLabel: { color: colors.subtleText, fontSize: 11, fontWeight: '700' },
   detailValue: { color: colors.text, fontSize: 13, lineHeight: 19 },
@@ -765,10 +849,16 @@ const styles = StyleSheet.create({
   actionNotice: { marginVertical: 8, color: colors.noticeText, fontSize: 12, lineHeight: 18 },
   primaryActionButton: { minHeight: 42, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 12, backgroundColor: colors.button, paddingHorizontal: 16, paddingVertical: 10 },
   primaryActionText: { color: colors.text, fontSize: 13, fontWeight: '800' },
+  disabled: { opacity: 0.38 },
   statusActionRow: { marginTop: 10, flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   statusActionButton: { minHeight: 38, justifyContent: 'center', borderWidth: 1, borderColor: colors.border, borderRadius: 11, paddingHorizontal: 12, paddingVertical: 8 },
   dangerActionButton: { borderColor: colors.danger },
   statusActionText: { color: colors.text, fontSize: 12, fontWeight: '700' },
+  jobActionDetail: { marginBottom: 12, color: colors.mutedText, fontSize: 12, lineHeight: 18 },
+  jobActionGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 9 },
+  jobActionButton: { width: '48%', flexGrow: 1, minHeight: 44, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.border, borderRadius: 12, backgroundColor: colors.background, paddingHorizontal: 10, paddingVertical: 10 },
+  jobDismissButton: { borderColor: colors.danger },
+  jobActionText: { color: colors.text, fontSize: 12, fontWeight: '800', textAlign: 'center' },
   teachPiCard: { minHeight: 70, flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 16, borderWidth: 1, borderColor: '#27516a', borderRadius: 16, backgroundColor: '#0b1b2d', padding: 14 },
   teachPiCopy: { flex: 1, gap: 4 },
   teachPiTitle: { color: colors.text, fontSize: 14, fontWeight: '900' },

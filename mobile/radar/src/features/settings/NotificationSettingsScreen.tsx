@@ -101,6 +101,11 @@ function NotificationEditor({
       )}
 
       <SettingsCard>
+        <Text style={settingsStyles.label}>{t('settings.notifications.briefingStyle')}</Text>
+        <Text style={settingsStyles.body}>{t('settings.notifications.briefingStyleDetail')}</Text>
+      </SettingsCard>
+
+      <SettingsCard>
         <ToggleRow
           detail={t('settings.notifications.newOpportunityDetail')}
           label={t('settings.notifications.newOpportunity')}

@@ -69,6 +69,7 @@ function opportunity(
 ): OpportunityDetail {
   return {
     id,
+    opportunityType: 'business',
     platform: 'telegram',
     contactName: 'Customer',
     contactAvatar: '',
@@ -182,6 +183,7 @@ describe('offline projection repository', () => {
     });
 
     expect(dashboard.items.map((entry) => entry.id)).toEqual([opportunityId]);
+    expect(dashboard.items[0].opportunityType).toBe('business');
     expect(dashboard.total).toBe(1);
     expect(dashboard.pendingCount).toBe(1);
     expect(dashboard.attentionItems?.map((entry) => entry.id)).toEqual([opportunityId]);
@@ -194,6 +196,7 @@ describe('offline projection repository', () => {
     const settings = await readOfflineSettings(database, ownerId);
 
     expect(detail?.id).toBe(opportunityId);
+    expect(detail?.opportunityType).toBe('business');
     expect(messages).toMatchObject({ total: 1, limit: 20, offset: 0 });
     expect(messages.items[0]).toMatchObject({ id: messageId, content: 'Please quote' });
     expect(settings.detection.keywords).toEqual(['quote']);
@@ -201,6 +204,26 @@ describe('offline projection repository', () => {
       pushAvailable: false,
       wecomUserBindingAvailable: false,
     });
+  });
+
+  it('backfills missing opportunityType for pre-upgrade offline projections', async () => {
+    const row = await database.getFirstAsync<{ payload_json: string }>(
+      'SELECT payload_json FROM opportunity_projection WHERE owner_id = ? AND id = ?',
+      ownerId,
+      opportunityId,
+    );
+    const payload = JSON.parse(row!.payload_json);
+    delete payload.opportunityType;
+    await database.runAsync(
+      'UPDATE opportunity_projection SET payload_json = ? WHERE owner_id = ? AND id = ?',
+      JSON.stringify(payload),
+      ownerId,
+      opportunityId,
+    );
+
+    const detail = await readOfflineOpportunityDetail(database, ownerId, opportunityId);
+
+    expect(detail?.opportunityType).toBe('business');
   });
 
   it('serves owner-bound bounded search and the three read-only Agent tools', async () => {

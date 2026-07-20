@@ -19,6 +19,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
+  SafeAreaView,
   StyleSheet,
   Text,
   TextInput,
@@ -82,6 +83,12 @@ const toolLabelKeys: Record<InteractiveToolName, MessageKey> = {
   update_attention_schedule: 'agent.tool.updateSchedule',
   undo_preference_change: 'agent.tool.undoAppetite',
   compare_preference_versions: 'agent.tool.compareAppetite',
+  summarize_time_window: 'agent.tool.summarizeTimeWindow',
+  get_attention_snapshot: 'agent.tool.getAttentionSnapshot',
+  list_priority_items: 'agent.tool.listPriorityItems',
+  list_category_items: 'agent.tool.listCategoryItems',
+  get_quiet_summary: 'agent.tool.getQuietSummary',
+  update_brief_schedule: 'agent.tool.updateBriefSchedule',
 };
 const statusLabelKeys: Record<InternalOpportunityStatus, MessageKey> = {
   pending_human: 'opportunity.status.pendingHuman',
@@ -572,7 +579,17 @@ export default function AgentScreen() {
     t,
   ]);
 
-  if (!ownerId || !capabilities.agentToolsAvailable) return null;
+  if (!ownerId) return null;
+  if (!capabilities.agentToolsAvailable) {
+    return (
+      <SafeAreaView style={styles.screen}>
+        <View style={styles.unavailable}>
+          <Text style={styles.title}>{t('agent.unavailable.title')}</Text>
+          <Text style={styles.subtitle}>{t('agent.unavailable.body')}</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <KeyboardAvoidingView
@@ -649,6 +666,7 @@ export default function AgentScreen() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
+  unavailable: { flex: 1, justifyContent: 'center', gap: 10, padding: 24 },
   messages: { flexGrow: 1, gap: 10, padding: 16, paddingBottom: 24 },
   headerRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
   headerCopy: { flex: 1 },

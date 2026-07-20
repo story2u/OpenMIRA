@@ -5577,6 +5577,10 @@
             "title": "Matchedkeywords",
             "type": "array"
           },
+          "opportunityType": {
+            "$ref": "#/components/schemas/OpportunityType",
+            "default": "business"
+          },
           "platform": {
             "$ref": "#/components/schemas/IMChannel"
           },
@@ -5779,6 +5783,10 @@
             "title": "Matchedkeywords",
             "type": "array"
           },
+          "opportunityType": {
+            "$ref": "#/components/schemas/OpportunityType",
+            "default": "business"
+          },
           "platform": {
             "$ref": "#/components/schemas/IMChannel"
           },
@@ -5873,6 +5881,14 @@
         ],
         "title": "OpportunityStatusUpdate",
         "type": "object"
+      },
+      "OpportunityType": {
+        "enum": [
+          "business",
+          "job"
+        ],
+        "title": "OpportunityType",
+        "type": "string"
       },
       "PasswordActionRead": {
         "properties": {

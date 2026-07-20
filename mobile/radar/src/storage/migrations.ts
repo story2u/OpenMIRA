@@ -379,6 +379,97 @@ const signalAppetiteUiSchema = `
   ) WITHOUT ROWID;
 `;
 
+const briefingSchema = `
+  CREATE TABLE briefing_events (
+    local_sequence INTEGER PRIMARY KEY AUTOINCREMENT,
+    owner_id TEXT NOT NULL,
+    event_id TEXT NOT NULL,
+    device_id TEXT NOT NULL,
+    event_type TEXT NOT NULL CHECK (event_type IN (
+      'BriefingScheduled',
+      'BriefingGenerationStarted',
+      'BriefingGenerated',
+      'BriefingOpened',
+      'BriefingItemHandled',
+      'BriefingDismissed',
+      'AttentionSnapshotUpdated',
+      'QuietItemAdded',
+      'QuietItemRestored',
+      'BriefingScheduleUpdated'
+    )),
+    aggregate_id TEXT NOT NULL,
+    aggregate_version INTEGER NOT NULL CHECK (aggregate_version > 0),
+    schema_version INTEGER NOT NULL CHECK (schema_version = 1),
+    payload_json TEXT NOT NULL CHECK (json_valid(payload_json) AND length(payload_json) <= 262144),
+    occurred_at TEXT NOT NULL,
+    sync_status TEXT NOT NULL DEFAULT 'pending'
+      CHECK (sync_status IN ('pending', 'synced', 'error')),
+    server_cursor INTEGER CHECK (server_cursor IS NULL OR server_cursor > 0),
+    UNIQUE (owner_id, event_id)
+  );
+
+  CREATE INDEX briefing_events_owner_sequence_idx
+    ON briefing_events (owner_id, local_sequence);
+  CREATE INDEX briefing_events_pending_idx
+    ON briefing_events (owner_id, local_sequence)
+    WHERE sync_status IN ('pending', 'error');
+
+  CREATE TABLE briefings (
+    owner_id TEXT NOT NULL,
+    id TEXT NOT NULL,
+    briefing_type TEXT NOT NULL CHECK (briefing_type IN ('morning', 'midday', 'evening', 'ad_hoc', 'urgent')),
+    title TEXT NOT NULL CHECK (length(title) BETWEEN 1 AND 200),
+    summary TEXT CHECK (summary IS NULL OR length(summary) <= 4000),
+    covered_from TEXT NOT NULL,
+    covered_to TEXT NOT NULL,
+    generated_at TEXT NOT NULL,
+    generated_by TEXT NOT NULL CHECK (generated_by IN ('local', 'cloud')),
+    status TEXT NOT NULL CHECK (status IN ('scheduled', 'generating', 'ready', 'dismissed')),
+    total_messages INTEGER NOT NULL CHECK (total_messages >= 0),
+    immediate_count INTEGER NOT NULL CHECK (immediate_count >= 0),
+    inbox_count INTEGER NOT NULL CHECK (inbox_count >= 0),
+    digest_count INTEGER NOT NULL CHECK (digest_count >= 0),
+    suppressed_count INTEGER NOT NULL CHECK (suppressed_count >= 0),
+    included_message_ids_json TEXT NOT NULL CHECK (json_valid(included_message_ids_json)),
+    included_opportunity_ids_json TEXT NOT NULL CHECK (json_valid(included_opportunity_ids_json)),
+    excluded_handled_ids_json TEXT NOT NULL CHECK (json_valid(excluded_handled_ids_json)),
+    category_summaries_json TEXT NOT NULL CHECK (json_valid(category_summaries_json)),
+    evidence_refs_json TEXT NOT NULL CHECK (json_valid(evidence_refs_json)),
+    PRIMARY KEY (owner_id, id)
+  ) WITHOUT ROWID;
+
+  CREATE INDEX briefings_owner_covered_idx
+    ON briefings (owner_id, covered_to DESC);
+
+  CREATE TABLE briefing_items (
+    owner_id TEXT NOT NULL,
+    id TEXT NOT NULL,
+    briefing_id TEXT NOT NULL,
+    item_type TEXT NOT NULL CHECK (item_type IN ('message', 'opportunity')),
+    entity_id TEXT NOT NULL,
+    priority TEXT NOT NULL CHECK (priority IN ('action_required', 'worth_attention', 'needs_judgment', 'later')),
+    reason_summary TEXT NOT NULL CHECK (length(reason_summary) <= 1000),
+    action_required INTEGER NOT NULL CHECK (action_required IN (0, 1)),
+    handled INTEGER NOT NULL DEFAULT 0 CHECK (handled IN (0, 1)),
+    order_index INTEGER NOT NULL CHECK (order_index >= 0),
+    PRIMARY KEY (owner_id, id),
+    FOREIGN KEY (owner_id, briefing_id) REFERENCES briefings (owner_id, id) ON DELETE CASCADE
+  ) WITHOUT ROWID;
+
+  CREATE INDEX briefing_items_briefing_idx
+    ON briefing_items (owner_id, briefing_id, order_index);
+
+  CREATE TABLE briefing_schedules (
+    owner_id TEXT NOT NULL,
+    briefing_type TEXT NOT NULL CHECK (briefing_type IN ('morning', 'midday', 'evening')),
+    minute_of_day INTEGER NOT NULL CHECK (minute_of_day BETWEEN 0 AND 1439),
+    days_json TEXT NOT NULL CHECK (json_valid(days_json)),
+    enabled INTEGER NOT NULL CHECK (enabled IN (0, 1)),
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (owner_id, briefing_type)
+  ) WITHOUT ROWID;
+`;
+
 export const radarMigrations: readonly RadarMigration[] = Object.freeze([
   {
     version: 1,
@@ -414,6 +505,11 @@ export const radarMigrations: readonly RadarMigration[] = Object.freeze([
     version: 7,
     name: 'signal_appetite_local_ui_state',
     up: (executor) => executor.execAsync(signalAppetiteUiSchema),
+  },
+  {
+    version: 8,
+    name: 'mira_briefing_event_log_and_projections',
+    up: (executor) => executor.execAsync(briefingSchema),
   },
 ]);
 

@@ -47,7 +47,7 @@ describe('runRadarMigrations', () => {
     await runRadarMigrations(database);
     await runRadarMigrations(database);
 
-    expect([...database.versions.keys()]).toEqual([1, 2, 3, 4, 5, 6, 7]);
+    expect([...database.versions.keys()]).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
     const schema = database.statements.join('\n');
     expect(schema).toContain('CREATE TABLE change_inbox');
     expect(schema).toContain('CREATE TABLE opportunity_projection');

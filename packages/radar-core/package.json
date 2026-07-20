@@ -36,6 +36,22 @@
     "./sync/change-projection": {
       "types": "./src/sync/change-projection.ts",
       "default": "./src/sync/change-projection.ts"
+    },
+    "./briefing/model": {
+      "types": "./src/briefing/model.ts",
+      "default": "./src/briefing/model.ts"
+    },
+    "./briefing/events": {
+      "types": "./src/briefing/events.ts",
+      "default": "./src/briefing/events.ts"
+    },
+    "./briefing/compose": {
+      "types": "./src/briefing/compose.ts",
+      "default": "./src/briefing/compose.ts"
+    },
+    "./briefing/fold": {
+      "types": "./src/briefing/fold.ts",
+      "default": "./src/briefing/fold.ts"
     }
   },
   "scripts": {

@@ -10,6 +10,7 @@ const user = Object.freeze({
   displayName: 'Fixture Developer',
   avatarUrl: '',
   isAdmin: false,
+  hasPassword: true,
 });
 
 // Ephemeral development-only device state. Production persists hashes in PostgreSQL;
@@ -149,6 +150,7 @@ function rotateFixtureCredential(request) {
 function opportunity(overrides) {
   return Object.freeze({
     id: '11111111-1111-4111-8111-111111111111',
+    opportunityType: 'business',
     platform: 'telegram',
     contactName: '星海科技采购群',
     contactAvatar: '',

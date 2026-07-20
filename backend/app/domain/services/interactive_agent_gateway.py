@@ -11,6 +11,8 @@ from uuid import UUID
 from app.domain.services.interactive_agent import (
     INTERACTIVE_AGENT_APPROVED_SEND_POLICY_VERSION,
     INTERACTIVE_AGENT_APPROVED_SEND_SCHEMA_VERSION,
+    INTERACTIVE_AGENT_BRIEFING_POLICY_VERSION,
+    INTERACTIVE_AGENT_BRIEFING_SCHEMA_VERSION,
     INTERACTIVE_AGENT_INTERNAL_POLICY_VERSION,
     INTERACTIVE_AGENT_INTERNAL_TOOLS_SCHEMA_VERSION,
     INTERACTIVE_AGENT_READ_ONLY_POLICY_VERSION,
@@ -65,6 +67,16 @@ Capture, summarize, propose, and simulate never activate a preference. apply_app
 called only after showing the preview and the host obtains separate explicit confirmation. Never claim
 a candidate is active, a shadow hides messages, or a cloud decision succeeded unless the tool result
 confirms it. Cloud unavailability must never be used as a reason to suppress a boundary message."""
+
+INTERACTIVE_BRIEFING_SYSTEM_PROMPT = f"""{INTERACTIVE_SIGNAL_APPETITE_SYSTEM_PROMPT}
+
+Briefings summarize a bounded time window from structured filter decisions. Counts, categories, and
+items always come from tool results; never invent, extrapolate, or restate them from memory. Briefings
+are incremental: summarize_time_window continues from the previous briefing and never repeats items
+the user already handled. When the cloud summary is unavailable the structured briefing still stands;
+describe it from the data and never claim generation failed entirely. Quiet-zone numbers are
+aggregates; reveal individual quiet items only through their dedicated listing tools. Call
+update_brief_schedule only after the user explicitly confirmed the exact new times."""
 
 # Compatibility alias for tests and callers pinned to the v1 contract.
 INTERACTIVE_AGENT_SYSTEM_PROMPT = INTERACTIVE_READ_ONLY_SYSTEM_PROMPT
@@ -399,6 +411,96 @@ INTERACTIVE_SIGNAL_APPETITE_TOOL_NAMES = frozenset(
     tool["function"]["name"] for tool in INTERACTIVE_SIGNAL_APPETITE_ALL_TOOLS
 )
 
+_BRIEFING_TYPE_SCHEMA = {
+    "anyOf": [
+        {"const": value, "type": "string"}
+        for value in ("morning", "midday", "evening", "ad_hoc", "urgent")
+    ]
+}
+_SCHEDULED_BRIEFING_TYPE_SCHEMA = {
+    "anyOf": [
+        {"const": value, "type": "string"} for value in ("morning", "midday", "evening")
+    ]
+}
+_BRIEFING_PRIORITY_SCHEMA = {
+    "anyOf": [
+        {"const": value, "type": "string"}
+        for value in ("action_required", "worth_attention", "needs_judgment")
+    ]
+}
+
+INTERACTIVE_BRIEFING_TOOLS: tuple[dict[str, Any], ...] = (
+    _appetite_tool(
+        "summarize_time_window",
+        (
+            "Generate the next incremental briefing from structured filter decisions. The window "
+            "continues from the previous briefing automatically and never repeats handled items."
+        ),
+        {"briefing_type": _BRIEFING_TYPE_SCHEMA},
+        ["briefing_type"],
+    ),
+    _appetite_tool(
+        "get_attention_snapshot",
+        "Read today's structured processing snapshot: totals, delivery-mode counts, boundary items, and category counts.",
+        {},
+    ),
+    _appetite_tool(
+        "list_priority_items",
+        "List items from the latest ready briefing, optionally filtered by priority.",
+        {
+            "priority": _BRIEFING_PRIORITY_SCHEMA,
+            "limit": {"type": "integer", "minimum": 1, "maximum": 50},
+        },
+    ),
+    _appetite_tool(
+        "list_category_items",
+        "List message references decided into one category today, with pagination.",
+        {
+            "category": {"type": "string", "minLength": 1, "maxLength": 120},
+            "limit": {"type": "integer", "minimum": 1, "maximum": 50},
+            "offset": {"type": "integer", "minimum": 0, "maximum": 5000},
+        },
+        ["category"],
+    ),
+    _appetite_tool(
+        "get_quiet_summary",
+        "Aggregate quietly suppressed messages by category with counts, sources, and bounded samples.",
+        {"since": {"type": "string", "minLength": 20, "maxLength": 40}},
+    ),
+    _appetite_tool(
+        "update_brief_schedule",
+        "Replace the briefing schedule. Call only after the user explicitly confirmed the new times.",
+        {
+            "entries": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "briefing_type": _SCHEDULED_BRIEFING_TYPE_SCHEMA,
+                        "minute_of_day": {"type": "integer", "minimum": 0, "maximum": 1439},
+                        "days": {
+                            "type": "array",
+                            "items": {"type": "integer", "minimum": 0, "maximum": 6},
+                            "minItems": 1,
+                            "maxItems": 7,
+                        },
+                        "enabled": {"type": "boolean"},
+                    },
+                    "required": ["briefing_type", "minute_of_day", "days", "enabled"],
+                    "additionalProperties": False,
+                },
+                "minItems": 0,
+                "maxItems": 3,
+            }
+        },
+        ["entries"],
+    ),
+)
+INTERACTIVE_BRIEFING_ALL_TOOLS = INTERACTIVE_SIGNAL_APPETITE_ALL_TOOLS + INTERACTIVE_BRIEFING_TOOLS
+INTERACTIVE_BRIEFING_TOOL_NAMES = frozenset(
+    tool["function"]["name"] for tool in INTERACTIVE_BRIEFING_ALL_TOOLS
+)
+
 
 @dataclass(frozen=True, slots=True)
 class InteractiveAgentGatewayContract:
@@ -450,6 +552,14 @@ def interactive_agent_gateway_contract(
             system_prompt=INTERACTIVE_SIGNAL_APPETITE_SYSTEM_PROMPT,
             tools=INTERACTIVE_SIGNAL_APPETITE_ALL_TOOLS,
             tool_names=INTERACTIVE_SIGNAL_APPETITE_TOOL_NAMES,
+        )
+    if schema_version == INTERACTIVE_AGENT_BRIEFING_SCHEMA_VERSION:
+        return InteractiveAgentGatewayContract(
+            schema_version=schema_version,
+            policy_version=INTERACTIVE_AGENT_BRIEFING_POLICY_VERSION,
+            system_prompt=INTERACTIVE_BRIEFING_SYSTEM_PROMPT,
+            tools=INTERACTIVE_BRIEFING_ALL_TOOLS,
+            tool_names=INTERACTIVE_BRIEFING_TOOL_NAMES,
         )
     raise InteractiveAgentGatewayContractError()
 
@@ -671,6 +781,62 @@ def _valid_tool_arguments(name: str, arguments: str) -> bool:
             _bounded_integer(value[key], minimum=1, maximum=1_000_000)
             for key in ("from_version", "to_version")
         )
+    if name == "summarize_time_window":
+        return set(value) == {"briefing_type"} and value["briefing_type"] in {
+            "morning",
+            "midday",
+            "evening",
+            "ad_hoc",
+            "urgent",
+        }
+    if name == "get_attention_snapshot":
+        return not value
+    if name == "list_priority_items":
+        return set(value) <= {"priority", "limit"} and (
+            "priority" not in value
+            or value["priority"] in {"action_required", "worth_attention", "needs_judgment"}
+        ) and (
+            "limit" not in value or _bounded_integer(value["limit"], minimum=1, maximum=50)
+        )
+    if name == "list_category_items":
+        category = value.get("category")
+        return (
+            "category" in value
+            and not set(value) - {"category", "limit", "offset"}
+            and isinstance(category, str)
+            and 1 <= len(category) <= 120
+            and (
+                "limit" not in value or _bounded_integer(value["limit"], minimum=1, maximum=50)
+            )
+            and (
+                "offset" not in value
+                or _bounded_integer(value["offset"], minimum=0, maximum=5000)
+            )
+        )
+    if name == "get_quiet_summary":
+        since = value.get("since")
+        return not value or (
+            set(value) == {"since"} and isinstance(since, str) and 20 <= len(since) <= 40
+        )
+    if name == "update_brief_schedule":
+        if set(value) != {"entries"} or not isinstance(value["entries"], list):
+            return False
+        entries = value["entries"]
+        if len(entries) > 3:
+            return False
+        for entry in entries:
+            if (
+                not isinstance(entry, dict)
+                or set(entry) != {"briefing_type", "minute_of_day", "days", "enabled"}
+                or entry["briefing_type"] not in {"morning", "midday", "evening"}
+                or not _bounded_integer(entry["minute_of_day"], minimum=0, maximum=1439)
+                or not isinstance(entry["enabled"], bool)
+                or not isinstance(entry["days"], list)
+                or not 1 <= len(entry["days"]) <= 7
+                or not all(_bounded_integer(day, minimum=0, maximum=6) for day in entry["days"])
+            ):
+                return False
+        return True
     return False
 
 

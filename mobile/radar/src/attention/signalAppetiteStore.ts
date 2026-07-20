@@ -837,7 +837,12 @@ export async function readLatestPreferenceVersion(
 export async function readMessageFilterDecisions(
   database: SignalAppetiteStoreExecutor,
   ownerId: string,
-  options: { decision?: MessageFilterDecision['decision']; limit?: number } = {},
+  options: {
+    decision?: MessageFilterDecision['decision'];
+    limit?: number;
+    decidedFrom?: string;
+    decidedTo?: string;
+  } = {},
 ): Promise<MessageFilterDecision[]> {
   const limit = Math.min(500, Math.max(1, options.limit ?? 100));
   const rows = await database.getAllAsync<{
@@ -853,9 +858,13 @@ export async function readMessageFilterDecisions(
   }>(
     `SELECT * FROM message_filter_decisions WHERE owner_id = ?
      ${options.decision ? 'AND decision = ?' : ''}
+     ${options.decidedFrom ? 'AND decided_at >= ?' : ''}
+     ${options.decidedTo ? 'AND decided_at <= ?' : ''}
      ORDER BY decided_at DESC, message_id LIMIT ?`,
     requireUuid(ownerId, 'owner_id'),
     ...(options.decision ? [options.decision] : []),
+    ...(options.decidedFrom ? [options.decidedFrom] : []),
+    ...(options.decidedTo ? [options.decidedTo] : []),
     limit,
   );
   return rows.map((row) => ({

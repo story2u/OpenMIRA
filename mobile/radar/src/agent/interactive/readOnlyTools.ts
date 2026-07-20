@@ -43,6 +43,7 @@ export class InteractiveReadToolError extends Error {
 function compactOpportunity(opportunity: OpportunityDetail) {
   return {
     id: opportunity.id,
+    opportunityType: opportunity.opportunityType,
     platform: opportunity.platform,
     contactName: opportunity.contactName.slice(0, 160),
     summary: opportunity.summary.slice(0, 1_000),

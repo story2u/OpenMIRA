@@ -62,6 +62,10 @@ module.exports = ({ config }) => {
       ...config.ios,
       bundleIdentifier: appVariant.applicationId,
       buildNumber: appVariant.buildNumber ?? config.ios?.buildNumber,
+      entitlements: {
+        ...(config.ios?.entitlements ?? {}),
+        'keychain-access-groups': ['$(AppIdentifierPrefix)$(CFBundleIdentifier)'],
+      },
       infoPlist,
     },
     android: {
